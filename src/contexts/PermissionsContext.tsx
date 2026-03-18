@@ -150,14 +150,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Connect sockets on app load if token exists
+  // Connect sockets on app load if token exists (apenas na montagem)
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (token) {
       chatSocket.connect();
       rtcSocket.connect();
     }
-  }, [currentUser]);
+  }, []);
 
   const login = (token: string, refreshToken: string, permissions: UserPermissions) => {
     localStorage.setItem('accessToken', token);

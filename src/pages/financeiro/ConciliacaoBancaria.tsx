@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { 
-  fetchContasPagar, 
-  fetchContasReceber, 
-  importarOfxNovo, 
-  conciliarLancamento,
-  TransacaoBancaria,
+import {
+  fetchConciliacoes,
+  fetchConciliacaoParaConciliar,
+  efetivarConciliacaoBancaria,
+  importarOfxNovo,
+  Conciliacao,
+  ConciliacaoParaConciliar,
   ContaPagar,
-  ContaReceber
+  ContaReceber,
 } from "@/services/financeiro";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,70 +15,99 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  FileUp, 
-  CheckCircle2, 
-  AlertCircle, 
+import {
+  FileUp,
+  CheckCircle2,
+  AlertCircle,
   ArrowRightLeft,
   Loader2,
   Calendar,
-  Wallet,
+  Building2,
+  Check,
+  Search,
   ArrowUpRight,
   ArrowDownLeft,
-  Search,
-  Check
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+const isEntrada = (valor: number) => valor >= 0;
+
 const ConciliacaoBancaria = () => {
-  const [ofxTransactions, setOfxTransactions] = useState<TransacaoBancaria[]>([]);
-  const [payableAccounts, setPayableAccounts] = useState<any[]>([]);
-  const [receivableAccounts, setReceivableAccounts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [conciliacoes, setConciliacoes] = useState<Conciliacao[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [detalhes, setDetalhes] = useState<ConciliacaoParaConciliar | null>(null);
+  const [selectedConta, setSelectedConta] = useState<{
+    tipo: "receber" | "pagar";
+    id: number;
+  } | null>(null);
+
+  const [loadingLista, setLoadingLista] = useState(false);
+  const [loadingDetalhes, setLoadingDetalhes] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [selectedOfx, setSelectedOfx] = useState<number | null>(null);
-  const [selectedSystem, setSelectedSystem] = useState<{ id: number, type: 'contas_pagar' | 'contas_receber' } | null>(null);
+  const [efetuando, setEfetuando] = useState(false);
+
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchData();
+    carregarLista();
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const carregarLista = async () => {
+    setLoadingLista(true);
     try {
-      const [pagar, receber] = await Promise.all([
-        fetchContasPagar(),
-        fetchContasReceber()
-      ]);
-      
-      setPayableAccounts(pagar.filter(p => p.status !== "Efetuado").map(p => ({ ...p, type: 'contas_pagar' as const })));
-      setReceivableAccounts(receber.filter(r => r.status !== "Efetuado").map(r => ({ ...r, type: 'contas_receber' as const })));
-    } catch (error) {
-      toast({
-        title: "Erro ao carregar dados",
-        description: "Não foi possível carregar as contas do sistema.",
-        variant: "destructive",
-      });
+      const all = await fetchConciliacoes();
+      setConciliacoes(all.filter((c) => c.conciliacao !== "Efetuado"));
+    } catch {
+      toast({ title: "Erro ao carregar conciliações", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setLoadingLista(false);
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelecionar = async (id: number) => {
+    if (selectedId === id) {
+      setSelectedId(null);
+      setDetalhes(null);
+      setSelectedConta(null);
+      return;
+    }
+
+    setSelectedId(id);
+    setDetalhes(null);
+    setSelectedConta(null);
+    setLoadingDetalhes(true);
+
+    try {
+      const data = await fetchConciliacaoParaConciliar(id);
+      setDetalhes(data);
+    } catch {
+      toast({
+        title: "Erro ao buscar correspondências",
+        description: "Não foi possível obter as sugestões para esta conciliação.",
+        variant: "destructive",
+      });
+      setSelectedId(null);
+    } finally {
+      setLoadingDetalhes(false);
+    }
+  };
+
+  const handleImportarOfx = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setImporting(true);
     try {
-      const data = await importarOfxNovo(file);
-      setOfxTransactions(data);
+      await importarOfxNovo(file);
+      const all = await fetchConciliacoes();
+      const pendentes = all.filter((c) => c.conciliacao !== "Efetuado");
+      setConciliacoes(pendentes);
       toast({
-        title: "OFX Importado",
-        description: `${data.length} transações pendentes carregadas.`,
+        title: "OFX importado",
+        description: `${pendentes.length} conciliações pendentes.`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: "Erro na importação",
         description: "Verifique o arquivo OFX e tente novamente.",
@@ -85,279 +115,380 @@ const ConciliacaoBancaria = () => {
       });
     } finally {
       setImporting(false);
+      event.target.value = "";
     }
   };
 
-  const handleConciliar = async () => {
-    if (selectedOfx === null || selectedSystem === null) return;
+  const handleEfetivar = async () => {
+    if (!selectedId || !selectedConta) return;
 
-    setLoading(true);
+    setEfetuando(true);
     try {
-      await conciliarLancamento(
-        selectedOfx,
-        selectedSystem.id,
-        selectedSystem.type
-      );
-
-      toast({
-        title: "Conciliação realizada",
-        description: "O lançamento foi marcado como efetuado com sucesso.",
+      await efetivarConciliacaoBancaria(selectedId, {
+        conta_tipo: selectedConta.tipo,
+        conta_id: selectedConta.id,
       });
 
-      // Refresh lists
-      setOfxTransactions(prev => prev.filter(t => t.id !== selectedOfx));
-      if (selectedSystem.type === 'contas_pagar') {
-        setPayableAccounts(prev => prev.filter(s => s.id !== selectedSystem.id));
-      } else {
-        setReceivableAccounts(prev => prev.filter(s => s.id !== selectedSystem.id));
-      }
-      setSelectedOfx(null);
-      setSelectedSystem(null);
-    } catch (error) {
-      toast({
-        title: "Erro na conciliação",
-        description: "Não foi possível realizar a conciliação.",
-        variant: "destructive",
-      });
+      toast({ title: "Conciliação efetivada com sucesso!" });
+      setConciliacoes((prev) => prev.filter((c) => c.id !== selectedId));
+      setSelectedId(null);
+      setDetalhes(null);
+      setSelectedConta(null);
+    } catch {
+      toast({ title: "Erro ao efetivar conciliação", variant: "destructive" });
     } finally {
-      setLoading(false);
+      setEfetuando(false);
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    }).format(value);
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
+      Math.abs(value)
+    );
+
+  const renderContaItem = (
+    acc: ContaReceber | ContaPagar,
+    tipo: "receber" | "pagar",
+    label: string
+  ) => {
+    const isSelected = selectedConta?.tipo === tipo && selectedConta?.id === acc.id;
+    const entrada = tipo === "receber";
+    const valor = Number((acc as any).valor_total ?? (acc as any).valor_do_titulo ?? 0);
+
+    return (
+      <div
+        key={`${tipo}-${acc.id}`}
+        onClick={() => setSelectedConta(isSelected ? null : { tipo, id: acc.id })}
+        className={`group p-4 rounded-lg border transition-all cursor-pointer bg-card ${
+          isSelected
+            ? entrada
+              ? "border-green-500"
+              : "border-red-500"
+            : entrada
+            ? "border-border hover:border-green-400"
+            : "border-border hover:border-red-400"
+        }`}
+      >
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            {/* Checkbox */}
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
+                isSelected
+                  ? entrada
+                    ? "bg-green-500 border-green-500 text-white"
+                    : "bg-red-500 border-red-500 text-white"
+                  : "bg-background border-border"
+              }`}
+            >
+              <Check size={14} className={isSelected ? "opacity-100" : "opacity-0"} />
+            </div>
+
+            {/* Ícone de tipo + info */}
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span
+                  className={`flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
+                    entrada
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {entrada ? (
+                    <ArrowUpRight size={11} />
+                  ) : (
+                    <ArrowDownLeft size={11} />
+                  )}
+                  {entrada ? "Entrada" : "Saída"}
+                </span>
+                <span className="font-semibold text-sm">{label}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                {(acc as any).data_de_vencimento && (
+                  <span className="flex items-center gap-1">
+                    <Calendar size={11} />
+                    Venc:{" "}
+                    {format(new Date((acc as any).data_de_vencimento), "dd/MM/yyyy", {
+                      locale: ptBR,
+                    })}
+                  </span>
+                )}
+                {(acc as any).documento && (
+                  <span className="italic">Doc: {(acc as any).documento}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <span
+            className={`font-bold text-sm ml-2 ${
+              entrada ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {entrada ? "+" : "-"} {formatCurrency(valor)}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden p-6 gap-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
             <Search className="w-8 h-8 text-primary" />
             Conciliação Bancária
           </h1>
-          <p className="text-muted-foreground mt-1">Importe seu extrato OFX e concilie com os lançamentos do sistema.</p>
+          <p className="text-muted-foreground mt-1">
+            Importe um extrato OFX ou selecione uma conciliação para encontrar correspondências.
+          </p>
         </div>
-        
+
         <div className="flex items-center gap-3">
           <Input
             id="ofx-upload"
             type="file"
             accept=".ofx"
             className="hidden"
-            onChange={handleFileUpload}
+            onChange={handleImportarOfx}
             disabled={importing}
           />
-          <Button 
-            onClick={() => document.getElementById('ofx-upload')?.click()}
+          <Button
+            onClick={() => document.getElementById("ofx-upload")?.click()}
             disabled={importing}
             variant="outline"
-            className="gap-2 border-border"
+            className="gap-2"
           >
-            {importing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
+            {importing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="w-4 h-4" />}
             Importar OFX
           </Button>
 
-          <Button 
-            onClick={handleConciliar}
-            disabled={selectedOfx === null || selectedSystem === null || loading}
+          <Button
+            onClick={handleEfetivar}
+            disabled={!selectedId || !selectedConta || efetuando}
             className="gap-2"
           >
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            Conciliar Selecionados
+            {efetuando ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4" />
+            )}
+            Efetivar Conciliação
           </Button>
         </div>
       </div>
 
+      {/* Body */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow overflow-hidden min-h-0">
-        {/* Lado Esquerdo: OFX */}
+
+        {/* Esquerda: lista de conciliações pendentes */}
         <Card className="flex flex-col min-h-0 shadow-sm border-border overflow-hidden">
           <CardHeader className="border-b bg-muted/30 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Wallet className="h-5 w-5 text-primary" />
-                  Transações do Banco (OFX)
+                  <Building2 className="h-5 w-5 text-primary" />
+                  Conciliações Pendentes
                 </CardTitle>
-                <CardDescription>Selecione uma transação</CardDescription>
+                <CardDescription>Selecione uma para buscar correspondências</CardDescription>
               </div>
               <Badge variant="secondary" className="font-medium text-xs">
-                {ofxTransactions.length} Pendentes
+                {conciliacoes.length} pendentes
               </Badge>
             </div>
           </CardHeader>
           <CardContent className="p-0 flex-grow overflow-hidden">
             <ScrollArea className="h-full">
               <div className="p-4 space-y-3">
-                {ofxTransactions.length === 0 ? (
+                {loadingLista ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : conciliacoes.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground italic">
-                    <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
-                    <p>Nenhuma transação importada ou pendente.</p>
+                    <CheckCircle2 className="h-8 w-8 mb-2 opacity-20" />
+                    <p>Nenhuma conciliação pendente.</p>
+                    <p className="text-xs mt-1">Importe um arquivo OFX para começar.</p>
                   </div>
                 ) : (
-                  ofxTransactions.map((tx) => (
-                    <div
-                      key={tx.id}
-                      onClick={() => setSelectedOfx(selectedOfx === tx.id ? null : tx.id)}
-                      className={`group p-4 rounded-lg border transition-all cursor-pointer ${
-                        selectedOfx === tx.id 
-                        ? "bg-primary/5 border-primary" 
-                        : "bg-card border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all ${
-                            selectedOfx === tx.id 
-                            ? "bg-primary border-primary text-primary-foreground" 
-                            : "bg-background border-border group-hover:border-primary/50 text-transparent"
-                          }`}>
-                            <Check size={14} className={selectedOfx === tx.id ? "opacity-100" : "opacity-0"} />
-                          </div>
-                          <div>
-                            <span className="font-semibold text-sm block">{tx.descricao}</span>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Calendar size={12} />
-                                {format(new Date(tx.data_transacao), "dd/MM/yyyy", { locale: ptBR })}
-                              </span>
-                              <span className={`flex items-center gap-1 ${tx.tipo === 'credito' ? 'text-green-600' : 'text-red-600'}`}>
-                                {tx.tipo === 'credito' ? <ArrowUpRight size={12} /> : <ArrowDownLeft size={12} />}
-                                {tx.tipo === 'credito' ? 'Crédito' : 'Débito'}
-                              </span>
+                  conciliacoes.map((c) => {
+                    const entrada = isEntrada(Number(c.valor_total));
+                    const isSelected = selectedId === c.id;
+
+                    return (
+                      <div
+                        key={c.id}
+                        onClick={() => handleSelecionar(c.id)}
+                        className={`group p-4 rounded-lg border transition-all cursor-pointer bg-card ${
+                          isSelected
+                            ? "border-primary"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3">
+                            {/* Checkbox */}
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
+                                isSelected
+                                  ? entrada
+                                    ? "bg-green-500 border-green-500 text-white"
+                                    : "bg-red-500 border-red-500 text-white"
+                                  : "bg-background border-border group-hover:border-primary/50"
+                              }`}
+                            >
+                              <Check
+                                size={14}
+                                className={isSelected ? "opacity-100 text-white" : "opacity-0"}
+                              />
+                            </div>
+
+                            <div>
+                              {/* Badge Entrada / Saída */}
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span
+                                  className={`flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
+                                    entrada
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-red-100 text-red-700"
+                                  }`}
+                                >
+                                  {entrada ? (
+                                    <ArrowUpRight size={11} />
+                                  ) : (
+                                    <ArrowDownLeft size={11} />
+                                  )}
+                                  {entrada ? "Entrada" : "Saída"}
+                                </span>
+                                <span className="font-semibold text-sm truncate max-w-[180px]">
+                                  {c.descricao || c.conta_nome || `Conciliação #${c.id}`}
+                                </span>
+                              </div>
+
+                              {/* Meta info */}
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={11} />
+                                  {format(new Date(c.data), "dd/MM/yyyy", { locale: ptBR })}
+                                </span>
+                                {c.numero_conta && (
+                                  <span className="italic">Conta: {c.numero_conta}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
+
+                          {/* Valor colorido */}
+                          <span
+                            className={`font-bold text-sm ml-2 flex-shrink-0 ${
+                              entrada ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
+                            {entrada ? "+" : "-"} {formatCurrency(Number(c.valor_total))}
+                          </span>
                         </div>
-                        <span className={`font-bold text-sm ${tx.tipo === 'credito' ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatCurrency(Number(tx.valor))}
-                        </span>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </ScrollArea>
           </CardContent>
         </Card>
 
-        {/* Lado Direito: Sistema */}
+        {/* Direita: correspondências */}
         <Card className="flex flex-col min-h-0 shadow-sm border-border overflow-hidden">
           <CardHeader className="border-b bg-muted/30 py-4 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <ArrowRightLeft className="h-5 w-5 text-primary" />
-                  Lançamentos do Sistema
-                </CardTitle>
-                <CardDescription>Contas a Pagar e Receber</CardDescription>
-              </div>
-              <Badge variant="outline" className="font-medium text-xs">
-                {payableAccounts.length + receivableAccounts.length} Pendentes
-              </Badge>
+            <div>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5 text-primary" />
+                Correspondências
+              </CardTitle>
+              <CardDescription>
+                {detalhes
+                  ? "Selecione a conta correspondente e clique em Efetivar"
+                  : "Selecione uma conciliação ao lado para ver as sugestões"}
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="p-0 flex-grow overflow-hidden">
             <ScrollArea className="h-full">
               <div className="p-4 space-y-6">
-                {payableAccounts.length === 0 && receivableAccounts.length === 0 ? (
+                {loadingDetalhes ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : !detalhes ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground italic">
                     <AlertCircle className="h-8 w-8 mb-2 opacity-20" />
-                    <p>Nenhum lançamento pendente encontrado.</p>
+                    <p>Nenhuma conciliação selecionada.</p>
                   </div>
                 ) : (
                   <>
-                    {payableAccounts.length > 0 && (
+                    {/* Contas a Receber sugeridas */}
+                    {detalhes.contas_a_receber.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 border-b pb-2">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-red-600">Contas a Pagar</h3>
-                          <Badge variant="outline" className="text-[10px] py-0 border-red-200 text-red-600">{payableAccounts.length}</Badge>
-                        </div>
-                        {payableAccounts.map((acc) => (
-                          <div
-                            key={`pagar-${acc.id}`}
-                            onClick={() => setSelectedSystem(selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_pagar' ? null : { id: acc.id, type: 'contas_pagar' })}
-                            className={`group p-4 rounded-lg border transition-all cursor-pointer ${
-                              selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_pagar'
-                              ? "bg-primary/5 border-primary" 
-                              : "bg-card border-border hover:border-primary/50"
-                            }`}
+                          <ArrowUpRight size={14} className="text-green-600" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-green-600">
+                            Entradas — Contas a Receber
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] py-0 border-green-200 text-green-600"
                           >
-                            <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all ${
-                                  selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_pagar'
-                                  ? "bg-primary border-primary text-primary-foreground" 
-                                  : "bg-background border-border group-hover:border-primary/50 text-transparent"
-                                }`}>
-                                  <Check size={14} className={selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_pagar' ? "opacity-100" : "opacity-0"} />
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-sm block">{acc.fornecedor_nome}</span>
-                                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <Calendar size={12} />
-                                      Venc: {format(new Date(acc.data_de_vencimento), "dd/MM/yyyy", { locale: ptBR })}
-                                    </span>
-                                    {acc.documento && <span className="italic">Doc: {acc.documento}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                              <span className="font-bold text-sm">
-                                {formatCurrency(acc.valor_total || acc.valor_do_titulo)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                            {detalhes.contas_a_receber.length}
+                          </Badge>
+                        </div>
+                        {detalhes.contas_a_receber.map((acc) =>
+                          renderContaItem(
+                            acc,
+                            "receber",
+                            (acc as any).cliente_nome || `Cliente #${(acc as any).cliente}`
+                          )
+                        )}
                       </div>
                     )}
 
-                    {receivableAccounts.length > 0 && (
+                    {/* Contas a Pagar sugeridas */}
+                    {detalhes.contas_a_pagar.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 border-b pb-2">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-green-600">Contas a Receber</h3>
-                          <Badge variant="outline" className="text-[10px] py-0 border-green-200 text-green-600">{receivableAccounts.length}</Badge>
-                        </div>
-                        {receivableAccounts.map((acc) => (
-                          <div
-                            key={`receber-${acc.id}`}
-                            onClick={() => setSelectedSystem(selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_receber' ? null : { id: acc.id, type: 'contas_receber' })}
-                            className={`group p-4 rounded-lg border transition-all cursor-pointer ${
-                              selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_receber'
-                              ? "bg-primary/5 border-primary" 
-                              : "bg-card border-border hover:border-primary/50"
-                            }`}
+                          <ArrowDownLeft size={14} className="text-red-600" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-red-600">
+                            Saídas — Contas a Pagar
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] py-0 border-red-200 text-red-600"
                           >
-                            <div className="flex justify-between items-start">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all ${
-                                  selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_receber'
-                                  ? "bg-primary border-primary text-primary-foreground" 
-                                  : "bg-background border-border group-hover:border-primary/50 text-transparent"
-                                }`}>
-                                  <Check size={14} className={selectedSystem?.id === acc.id && selectedSystem?.type === 'contas_receber' ? "opacity-100" : "opacity-0"} />
-                                </div>
-                                <div>
-                                  <span className="font-semibold text-sm block">{acc.cliente_nome}</span>
-                                  <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <Calendar size={12} />
-                                      Venc: {format(new Date(acc.data_de_vencimento), "dd/MM/yyyy", { locale: ptBR })}
-                                    </span>
-                                    {acc.documento && <span className="italic">Doc: {acc.documento}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                              <span className="font-bold text-sm">
-                                {formatCurrency(acc.valor_total || acc.valor_do_titulo)}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
+                            {detalhes.contas_a_pagar.length}
+                          </Badge>
+                        </div>
+                        {detalhes.contas_a_pagar.map((acc) =>
+                          renderContaItem(
+                            acc,
+                            "pagar",
+                            (acc as any).fornecedor_nome ||
+                              `Fornecedor #${(acc as any).beneficiario}`
+                          )
+                        )}
                       </div>
                     )}
+
+                    {detalhes.contas_a_receber.length === 0 &&
+                      detalhes.contas_a_pagar.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground italic">
+                          <AlertCircle className="h-6 w-6 mb-2 opacity-30" />
+                          <p className="text-sm text-center">
+                            Nenhuma conta sugerida para esta conciliação.
+                            <br />
+                            Verifique se há lançamentos compatíveis no sistema.
+                          </p>
+                        </div>
+                      )}
                   </>
                 )}
               </div>
