@@ -315,8 +315,27 @@ export const deletePlanoContas = async (id: number): Promise<void> => {
 
 // ─── Conciliações ─────────────────────────────────────────────────────────────
 
+export interface ConciliacaoParaConciliar {
+    conciliacao: Conciliacao;
+    contas_a_receber: ContaReceber[];
+    contas_a_pagar: ContaPagar[];
+}
+
 export const fetchConciliacoes = async (): Promise<Conciliacao[]> => {
     const res = await api.get('/api/financial/conciliacoes/');
+    return res.data;
+};
+
+export const fetchConciliacaoParaConciliar = async (id: number): Promise<ConciliacaoParaConciliar> => {
+    const res = await api.get(`/api/financial/conciliacao/${id}/conciliar/`);
+    return res.data;
+};
+
+export const efetivarConciliacaoBancaria = async (
+    conciliacaoId: number,
+    payload: { conta_tipo: 'receber' | 'pagar'; conta_id: number }
+): Promise<any> => {
+    const res = await api.post(`/api/financial/conciliacao/${conciliacaoId}/conciliar/efetivar/`, payload);
     return res.data;
 };
 export const deleteConciliacao = async (id: number): Promise<void> => {
@@ -344,7 +363,7 @@ export const deleteTransferencia = async (id: number): Promise<void> => {
 
 // ─── Conciliação Bancária (Nova) ─────────────────────────────────────────────
 
-export const importarOfxNovo = async (file: File): Promise<TransacaoBancaria[]> => {
+export const importarOfxNovo = async (file: File): Promise<Conciliacao[]> => {
     const formData = new FormData();
     formData.append('file', file);
     const res = await api.post('/api/financial/importar-ofx-novo/', formData, {

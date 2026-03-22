@@ -25,6 +25,18 @@ api.interceptors.request.use(
     }
 );
 
+// ── Token refresh lock ────────────────────────────────────────────────────────
+// Prevents concurrent 401s from each triggering an independent refresh request.
+// With ROTATE_REFRESH_TOKENS=True, only the first refresh succeeds; the rest
+// would use a blacklisted token and cause a redirect-to-login loop.
+let isRefreshing = false;
+let pendingRequests: Array<(token: string) => void> = [];
+
+const notifyPending = (token: string) => {
+    pendingRequests.forEach((cb) => cb(token));
+    pendingRequests = [];
+};
+
 // Response interceptor to handle 401s and token refreshing
 api.interceptors.response.use(
     (response) => {
@@ -36,17 +48,29 @@ api.interceptors.response.use(
         // Se o erro for 401 (Unauthorized) e ainda nao tentamos dar retry
         if (error.response?.status === 401 && !originalRequest._retry) {
 
-            // Skip interceptor if the user is trying to login
+            // Skip interceptor if the user is trying to login (not the refresh endpoint)
             if (originalRequest.url?.includes('/api/token/') && !originalRequest.url?.includes('refresh')) {
                 return Promise.reject(error);
             }
 
+            // Another refresh is already in flight — queue this request
+            if (isRefreshing) {
+                return new Promise((resolve) => {
+                    pendingRequests.push((token: string) => {
+                        originalRequest._retry = true;
+                        originalRequest.headers.Authorization = `Bearer ${token}`;
+                        resolve(api(originalRequest));
+                    });
+                });
+            }
+
             originalRequest._retry = true;
+            isRefreshing = true;
 
             try {
                 const refreshToken = localStorage.getItem("refreshToken");
                 if (!refreshToken) {
-                    // No refresh token available, redirect to login
+                    isRefreshing = false;
                     localStorage.removeItem("accessToken");
                     localStorage.removeItem("userPermissions");
                     window.location.href = "/login";
@@ -61,10 +85,21 @@ api.interceptors.response.use(
                 const newAccessToken = response.data.access;
                 localStorage.setItem("accessToken", newAccessToken);
 
+                // CRÍTICO: salva o novo refresh token quando ROTATE_REFRESH_TOKENS=True.
+                // Sem isso, o token antigo fica na blacklist e o próximo refresh falha.
+                if (response.data.refresh) {
+                    localStorage.setItem("refreshToken", response.data.refresh);
+                }
+
+                isRefreshing = false;
+                notifyPending(newAccessToken);
+
                 // Atualiza o header da requisicao que falhou e tenta de novo
                 originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
                 return api(originalRequest);
             } catch (refreshError) {
+                isRefreshing = false;
+                pendingRequests = [];
                 // Se falhar o refresh (ex: token expirou mesmo), desloga e manda pro login
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("refreshToken");

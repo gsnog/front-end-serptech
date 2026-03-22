@@ -13,6 +13,7 @@ class SocketManager {
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 5;
     private reconnectTimeout: NodeJS.Timeout | null = null;
+    private stableTimeout: NodeJS.Timeout | null = null;
     private isConnecting = false;
 
     constructor(url: string) {
@@ -39,7 +40,11 @@ class SocketManager {
             this.socket.onopen = () => {
                 console.log(`[Socket] Connected to ${this.url}`);
                 this.isConnecting = false;
-                this.reconnectAttempts = 0;
+                // Só reseta tentativas após 5s estável — evita loop quando
+                // o servidor aceita a conexão mas a fecha imediatamente
+                this.stableTimeout = setTimeout(() => {
+                    this.reconnectAttempts = 0;
+                }, 5000);
             };
 
             this.socket.onmessage = (event) => {
@@ -61,6 +66,7 @@ class SocketManager {
 
             this.socket.onclose = () => {
                 console.log(`[Socket] Disconnected from ${this.url}`);
+                if (this.stableTimeout) clearTimeout(this.stableTimeout);
                 this.isConnecting = false;
                 this.socket = null;
                 this.handleReconnect();
@@ -93,9 +99,8 @@ class SocketManager {
     }
 
     public disconnect(): void {
-        if (this.reconnectTimeout) {
-            clearTimeout(this.reconnectTimeout);
-        }
+        if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+        if (this.stableTimeout) clearTimeout(this.stableTimeout);
         this.reconnectAttempts = this.maxReconnectAttempts;
 
         if (this.socket) {
