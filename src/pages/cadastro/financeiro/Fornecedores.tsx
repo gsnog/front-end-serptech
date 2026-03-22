@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
-import api from "@/lib/api";
+import { fetchFornecedores as fetchFornecedoresService, updateFornecedor as updateFornecedorService, deleteFornecedor as deleteFornecedorService } from "@/services/estoque";
 
 interface Fornecedor {
   id: number;
@@ -23,21 +23,10 @@ interface Fornecedor {
   telefone?: string;
 }
 
-const fetchFornecedores = async (): Promise<Fornecedor[]> => {
-  const res = await api.get("/api/estoque/fornecedores/");
-  return res.data;
-};
-const updateFornecedor = async (id: number, data: Partial<Fornecedor>): Promise<Fornecedor> => {
-  const res = await api.put(`/api/estoque/fornecedores/${id}/`, data);
-  return res.data;
-};
-const deleteFornecedor = async (id: number): Promise<void> => {
-  await api.delete(`/api/estoque/fornecedores/${id}/`);
-};
-
 const FornecedoresFinanceiro = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [currentPage, setCurrentPage] = useState(1);
   const [searchNome, setSearchNome] = useState("");
   const [searchCnpj, setSearchCnpj] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -45,17 +34,23 @@ const FornecedoresFinanceiro = () => {
   const [editItem, setEditItem] = useState<Fornecedor | null>(null);
   const [editData, setEditData] = useState<Partial<Fornecedor>>({});
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["fornecedores"], queryFn: fetchFornecedores });
+  const { data: response, isLoading } = useQuery({
+    queryKey: ["fornecedores_fin", currentPage],
+    queryFn: () => fetchFornecedoresService(currentPage),
+  });
+  const items: Fornecedor[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const updateMut = useMutation({
-    mutationFn: (d: { id: number; payload: Partial<Fornecedor> }) => updateFornecedor(d.id, d.payload),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fornecedores"] }); setEditItem(null); toast({ title: "Salvo", description: "Fornecedor atualizado." }); },
+    mutationFn: (d: { id: number; payload: Partial<Fornecedor> }) => updateFornecedorService(d.id, d.payload),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fornecedores_fin"] }); setEditItem(null); toast({ title: "Salvo", description: "Fornecedor atualizado." }); },
     onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
-    mutationFn: deleteFornecedor,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fornecedores"] }); setDeleteId(null); toast({ title: "Removido", description: "Fornecedor excluído." }); },
+    mutationFn: deleteFornecedorService,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["fornecedores_fin"] }); setDeleteId(null); toast({ title: "Removido", description: "Fornecedor excluído." }); },
     onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
   });
 
@@ -76,7 +71,7 @@ const FornecedoresFinanceiro = () => {
       <FilterSection fields={[
         { type: "text" as const, label: "Nome do Fornecedor", placeholder: "Buscar fornecedor...", value: searchNome, onChange: setSearchNome, width: "flex-1 min-w-[200px]" },
         { type: "text" as const, label: "CNPJ", placeholder: "Buscar por CNPJ...", value: searchCnpj, onChange: setSearchCnpj, width: "min-w-[180px]" }
-      ]} resultsCount={filtered.length} />
+      ]} resultsCount={totalCount} />
       <div className="rounded border border-border overflow-hidden"><Table><TableHeader><TableRow className="bg-table-header">
         <TableHead className="text-center font-semibold">Fornecedor</TableHead><TableHead className="text-center font-semibold">CNPJ/CPF</TableHead><TableHead className="text-center font-semibold">Razão Social</TableHead><TableHead className="text-center font-semibold">Email</TableHead><TableHead className="text-center font-semibold">Telefone</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
       </TableRow></TableHeader><TableBody>
@@ -94,7 +89,17 @@ const FornecedoresFinanceiro = () => {
               <TableCell className="text-center"><TableActions onView={() => setViewItem(f)} onEdit={() => openEdit(f)} onDelete={() => setDeleteId(f.id)} /></TableCell>
             </TableRow>
           ))}
-        </TableBody></Table></div>
+        </TableBody></Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
+        </div>
     </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent><DialogHeader><DialogTitle>{viewItem?.nome}</DialogTitle></DialogHeader>

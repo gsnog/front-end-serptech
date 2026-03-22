@@ -48,6 +48,7 @@ api.interceptors.response.use(
                 if (!refreshToken) {
                     // No refresh token available, redirect to login
                     localStorage.removeItem("accessToken");
+                    localStorage.removeItem("userPermissions");
                     window.location.href = "/login";
                     return Promise.reject(error);
                 }
@@ -67,6 +68,7 @@ api.interceptors.response.use(
                 // Se falhar o refresh (ex: token expirou mesmo), desloga e manda pro login
                 localStorage.removeItem("accessToken");
                 localStorage.removeItem("refreshToken");
+                localStorage.removeItem("userPermissions");
                 window.location.href = "/login";
                 return Promise.reject(refreshError);
             }
@@ -89,5 +91,12 @@ api.interceptors.response.use(
         return Promise.reject(error);
     }
 );
+
+export interface PaginatedResponse<T> {
+    count: number;
+    next: string | null;
+    previous: string | null;
+    results: T[];
+}
 
 export default api;

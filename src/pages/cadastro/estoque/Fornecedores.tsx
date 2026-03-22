@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,19 +16,24 @@ import { fetchFornecedores } from "@/services/estoque";
 
 const FornecedoresEstoque = () => {
   const navigate = useNavigate();
-  const { data: fornecedoresApi, isLoading } = useQuery({
-    queryKey: ['fornecedores'],
-    queryFn: fetchFornecedores
-  });
-
   const [searchNome, setSearchNome] = useState("");
   const [searchCnpj, setSearchCnpj] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchNome, searchCnpj]);
+  const search = searchNome || searchCnpj || undefined;
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['fornecedores', currentPage, search],
+    queryFn: () => fetchFornecedores(currentPage, search),
+  });
+  const fornecedoresApi = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<any>(null);
   const [editItem, setEditItem] = useState<any>(null);
   const [editData, setEditData] = useState({ fornecedor: "", cnpj: "", razaoSocial: "", vendedor: "", email: "", telefone: "" });
 
-  const items = (fornecedoresApi || []).map(f => ({
+  const items = fornecedoresApi.map(f => ({
     id: f.id,
     fornecedor: f.nome,
     cnpj: f.cnpj || "-",
@@ -42,7 +47,7 @@ const FornecedoresEstoque = () => {
     { type: "text" as const, label: "Nome do Fornecedor", placeholder: "Buscar fornecedor...", value: searchNome, onChange: setSearchNome, width: "flex-1 min-w-[200px]" },
     { type: "text" as const, label: "CNPJ", placeholder: "Buscar por CNPJ...", value: searchCnpj, onChange: setSearchCnpj, width: "min-w-[180px]" }
   ];
-  const filtered = items.filter(f => f.fornecedor.toLowerCase().includes(searchNome.toLowerCase()) && f.cnpj.includes(searchCnpj));
+  const filtered = items;
   const getExportData = () => filtered.map(f => ({ Fornecedor: f.fornecedor, CNPJ: f.cnpj, "Razão Social": f.razaoSocial, Vendedor: f.vendedor, Email: f.email, Telefone: f.telefone }));
   const handleDelete = () => { if (deleteId !== null) { toast({ title: "Esta funcionalidade ainda não foi ligada à API" }); setDeleteId(null); } };
   const deleteItem = items.find(i => i.id === deleteId);
@@ -59,7 +64,7 @@ const FornecedoresEstoque = () => {
           <Button onClick={() => navigate("/cadastro/estoque/fornecedores/novo")} className="gap-2"><Plus className="w-4 h-4" />Novo Fornecedor</Button>
           <ExportButton getData={getExportData} fileName="fornecedores-estoque" />
         </div>
-        <FilterSection fields={filterFields} resultsCount={filtered.length} />
+        <FilterSection fields={filterFields} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
@@ -87,6 +92,15 @@ const FornecedoresEstoque = () => {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

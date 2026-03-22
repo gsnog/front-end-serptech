@@ -29,7 +29,14 @@ export default function Campanhas() {
   const [statusFilter, setStatusFilter] = useState("__all__");
   const [canalFilter, setCanalFilter] = useState("__all__");
 
-  const { data: fetchedCampanhas = [] as any[] } = useQuery({ queryKey: campanhasQueryKey, queryFn: fetchCampanhas });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: pageResponse } = useQuery({
+    queryKey: [...campanhasQueryKey, currentPage],
+    queryFn: () => fetchCampanhas(currentPage),
+  });
+  const fetchedCampanhas = Array.isArray(pageResponse) ? pageResponse : (pageResponse?.results ?? []);
+  const totalCount = Array.isArray(pageResponse) ? pageResponse.length : (pageResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
   const { data: canaisData = [] as any[] } = useQuery({ queryKey: canaisQueryKey, queryFn: fetchCanais });
   const [campanhas, setCampanhas] = useState<any[]>([]);
 
@@ -208,6 +215,15 @@ export default function Campanhas() {
             })}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

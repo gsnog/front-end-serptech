@@ -22,7 +22,14 @@ const OrdemServicoPage = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<OrdemServico | null>(null);
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ordensServicoQueryKey, queryFn: fetchOrdensServico });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...ordensServicoQueryKey, currentPage],
+    queryFn: () => fetchOrdensServico(currentPage),
+  });
+  const items = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const deleteMutation = useMutation({
     mutationFn: deleteOrdemServico,
@@ -75,6 +82,15 @@ const OrdemServicoPage = () => {
               }
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

@@ -11,22 +11,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, FileText } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
 
-type Sub = { id: number; nome: string; categoria: string; };
+type Sub = { id: number; nome: string; categoria?: number; categoria_nome?: string; };
 
 const Subcategorias = () => {
   const navigate = useNavigate();
-  const [items] = useState<Sub[]>([]);
+  const { data: items = [], isLoading } = useQuery<Sub[]>({
+    queryKey: ["subcategorias_financeiras"],
+    queryFn: async () => {
+      const res = await api.get("/api/financial/subcategorias/");
+      return Array.isArray(res.data) ? res.data : (res.data?.results ?? []);
+    },
+  });
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<Sub | null>(null);
   const [editItem, setEditItem] = useState<Sub | null>(null);
   const [editData, setEditData] = useState({ nome: "", categoria: "" });
   const filtered = items.filter(s => s.nome.toLowerCase().includes(search.toLowerCase()));
-  const getExportData = () => filtered.map(s => ({ Subcategoria: s.nome, Categoria: s.categoria }));
+  const getExportData = () => filtered.map(s => ({ Subcategoria: s.nome, Categoria: s.categoria_nome || s.categoria || "" }));
   const handleDelete = () => { setDeleteId(null); toast({ title: "Aguardando API", description: "Endpoint ainda não configurado." }); };
   const deleteItem = items.find(i => i.id === deleteId);
-  const openEdit = (s: Sub) => { setEditItem(s); setEditData({ nome: s.nome, categoria: s.categoria }); };
+  const openEdit = (s: Sub) => { setEditItem(s); setEditData({ nome: s.nome, categoria: s.categoria_nome || String(s.categoria || "") }); };
 
   return (
     <div className="flex flex-col h-full bg-background"><div className="space-y-6">
@@ -36,11 +44,12 @@ const Subcategorias = () => {
       </div>
       <FilterSection fields={[{ type: "text" as const, label: "Subcategoria", placeholder: "Buscar subcategoria...", value: search, onChange: setSearch, width: "flex-1 min-w-[200px]" }]} resultsCount={filtered.length} />
       <div className="rounded border border-border overflow-hidden"><Table><TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Subcategoria</TableHead><TableHead className="text-center font-semibold">Categoria</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader><TableBody>
-        {filtered.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhuma subcategoria encontrada.</TableCell></TableRow> :
-          filtered.map(s => <TableRow key={s.id} className="hover:bg-table-hover transition-colors"><TableCell className="text-center font-medium">{s.nome}</TableCell><TableCell className="text-center">{s.categoria}</TableCell><TableCell className="text-center"><TableActions onView={() => setViewItem(s)} onEdit={() => openEdit(s)} onDelete={() => setDeleteId(s.id)} /></TableCell></TableRow>)}
+        {isLoading ? <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow> :
+          filtered.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhuma subcategoria encontrada.</TableCell></TableRow> :
+          filtered.map(s => <TableRow key={s.id} className="hover:bg-table-hover transition-colors"><TableCell className="text-center font-medium">{s.nome}</TableCell><TableCell className="text-center">{s.categoria_nome || "—"}</TableCell><TableCell className="text-center"><TableActions onView={() => setViewItem(s)} onEdit={() => openEdit(s)} onDelete={() => setDeleteId(s.id)} /></TableCell></TableRow>)}
       </TableBody></Table></div>
     </div>
-      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent><DialogHeader><DialogTitle>{viewItem?.nome}</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Subcategoria" value={viewItem.nome} /><InfoRow label="Categoria" value={viewItem.categoria} /></div>}</DialogContent></Dialog>
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent><DialogHeader><DialogTitle>{viewItem?.nome}</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Subcategoria" value={viewItem.nome} /><InfoRow label="Categoria" value={viewItem.categoria_nome || String(viewItem.categoria || "—")} /></div>}</DialogContent></Dialog>
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Subcategoria</DialogTitle></DialogHeader>

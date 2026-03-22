@@ -19,10 +19,14 @@ import { Loader2 } from "lucide-react"
 
 const FluxoCaixa = () => {
   const navigate = useNavigate()
-  const { data: parcelas, isLoading: isLoadingParcelas } = useQuery({
-    queryKey: ['parcelas'],
-    queryFn: fetchParcelas
+  const [currentPage, setCurrentPage] = useState(1)
+  const { data: response, isLoading: isLoadingParcelas } = useQuery({
+    queryKey: ['parcelas', currentPage],
+    queryFn: () => fetchParcelas(currentPage),
   })
+  const parcelas = Array.isArray(response) ? response : (response?.results ?? [])
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0)
+  const totalPages = Math.ceil(totalCount / 5)
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['estatisticasFinanceiras'],
@@ -95,7 +99,7 @@ const FluxoCaixa = () => {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={totalCount}
         />
 
         <Table>
@@ -118,6 +122,15 @@ const FluxoCaixa = () => {
             )}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,15 @@ export default function Contatos() {
   const [searchTerm, setSearchTerm] = useState("");
   const [papelFilter, setPapelFilter] = useState("");
 
-  const { data: contatosData = [], isLoading: isLoadingContatos } = useQuery({ queryKey: ['crm_contatos'], queryFn: fetchContatos });
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const { data: contatosResponse, isLoading: isLoadingContatos } = useQuery({
+    queryKey: ['crm_contatos', currentPage, searchTerm],
+    queryFn: () => fetchContatos(currentPage, searchTerm),
+  });
+  const contatosData = Array.isArray(contatosResponse) ? contatosResponse : (contatosResponse?.results ?? []);
+  const totalCount = Array.isArray(contatosResponse) ? contatosResponse.length : (contatosResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
   const { data: contasData = [] } = useQuery({ queryKey: ['crm_contas'], queryFn: fetchContas });
 
   const getContaNome = (contaId: number) => {
@@ -33,13 +41,7 @@ export default function Contatos() {
   const [viewItem, setViewItem] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
-  const filteredContatos = contatosData.filter(contato => {
-    const matchSearch = !searchTerm ||
-      contato.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (contato.email && contato.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (contato.cargo && contato.cargo.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchSearch;
-  });
+  const filteredContatos = contatosData;
 
   const getPapelLabel = (papel: string) => { const labels: Record<string, string> = { 'decisor': 'Decisor', 'influenciador': 'Influenciador', 'usuario': 'Usuário', 'compras': 'Compras' }; return labels[papel] || papel; };
   const getPapelVariant = (papel: string): "default" | "secondary" | "outline" | "destructive" => { switch (papel) { case 'decisor': return 'default'; case 'influenciador': return 'secondary'; default: return 'outline'; } };
@@ -74,7 +76,7 @@ export default function Contatos() {
             ], width: "min-w-[160px]"
           }
         ]}
-        resultsCount={filteredContatos.length}
+        resultsCount={totalCount}
       />
 
       <div className="rounded border border-border">
@@ -107,6 +109,15 @@ export default function Contatos() {
             )}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
@@ -14,6 +15,9 @@ import { ValidatedSelect } from "@/components/ui/validated-select";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFornecedores, type Fornecedor } from "@/services/estoque";
+import api from "@/lib/api";
 
 const validationFields = [
   { name: "nome", label: "Nome", required: true, minLength: 2 },
@@ -29,9 +33,19 @@ const NovoItem = () => {
   const [countdown, setCountdown] = useState(3);
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
-    { nome: "", data: "", nomenclatura: "", apresentacao: "", fornecedor: "", setor: "", frequenciaCompra: "", frequenciaSaida: "", descricao: "" },
+    { nome: "", data: "", nomenclatura: "", apresentacao: "", setor: "", frequenciaCompra: "", frequenciaSaida: "", descricao: "" },
     validationFields
   );
+
+  const [selectedFornecedores, setSelectedFornecedores] = useState<number[]>([]);
+
+  const { data: fornecedoresResponse } = useQuery({
+    queryKey: ['fornecedores'],
+    queryFn: () => fetchFornecedores(),
+  });
+  const fornecedoresData: Fornecedor[] = Array.isArray(fornecedoresResponse)
+    ? fornecedoresResponse
+    : (fornecedoresResponse?.results ?? []);
 
   const [nomenclaturaOptions, setNomenclaturaOptions] = useState([
     { value: "nom1", label: "Nomenclatura 1" }, { value: "nom2", label: "Nomenclatura 2" }
@@ -41,12 +55,15 @@ const NovoItem = () => {
     { value: "caixa", label: "Caixa" }, { value: "unidade", label: "Unidade" }, { value: "pacote", label: "Pacote" }, { value: "litro", label: "Litro" }, { value: "kg", label: "Kg" }
   ]);
 
-  const fornecedorOptions = [
-    { value: "forn1", label: "Fornecedor 1" }, { value: "forn2", label: "Fornecedor 2" }
-  ];
   const setorOptions = [
     { value: "setor1", label: "Setor 1" }, { value: "setor2", label: "Setor 2" }
   ];
+
+  const toggleFornecedor = (id: number) => {
+    setSelectedFornecedores(prev =>
+      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
+    );
+  };
 
   // Countdown effect
   useEffect(() => {
@@ -62,27 +79,23 @@ const NovoItem = () => {
 
   const handleSalvar = async () => {
     if (validateAll()) {
-      // Save item to sessionStorage so dropdowns pick it up
-      const newItem = {
-        value: formData.nome.toLowerCase().replace(/\s+/g, "-"),
-        label: formData.nome,
-        id: Date.now(),
-        codigo: `EST${String(Date.now()).slice(-3)}`,
-        dataCadastro: new Date().toLocaleDateString("pt-BR"),
-        formaApresentacao: apresentacaoOptions.find(o => o.value === formData.apresentacao)?.label || "",
-        setores: setorOptions.find(o => o.value === formData.setor)?.label || "",
-      };
-
-      const existingItems = JSON.parse(sessionStorage.getItem("novos_itens_cadastrados") || "[]");
-      existingItems.push(newItem);
-      sessionStorage.setItem("novos_itens_cadastrados", JSON.stringify(existingItems));
-
-      toast({ title: "Item cadastrado com sucesso!", description: `"${formData.nome}" foi adicionado ao sistema.` });
-
-      if (returnTo) {
-        setShowCountdown(true);
-      } else {
-        navigate("/cadastro/estoque/itens");
+      try {
+        await api.post('/api/estoque/itens/', {
+          itens_do_estoque: formData.nome,
+          data: formData.data,
+          fornecedores: selectedFornecedores,
+          descricao: formData.descricao,
+          frequencia_compra: formData.frequenciaCompra,
+          frequencia_de_saida: formData.frequenciaSaida,
+        });
+        toast({ title: "Item cadastrado com sucesso!", description: `"${formData.nome}" foi adicionado ao sistema.` });
+        if (returnTo) {
+          setShowCountdown(true);
+        } else {
+          navigate("/cadastro/estoque/itens");
+        }
+      } catch {
+        toast({ title: "Erro ao salvar", description: "Não foi possível cadastrar o item.", variant: "destructive" });
       }
     }
   };
@@ -145,12 +158,30 @@ const NovoItem = () => {
                 options={nomenclaturaOptions} onAddNew={(item) => setNomenclaturaOptions(prev => [...prev, { value: item.toLowerCase().replace(/\s+/g, '_'), label: item }])} />
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Fornecedores</Label>
-                <Select value={formData.fornecedor} onValueChange={(v) => setFieldValue("fornecedor", v)}>
-                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {fornecedorOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="border border-input rounded-md p-2 max-h-36 overflow-y-auto space-y-1 bg-background">
+                  {fornecedoresData.length === 0 && (
+                    <p className="text-sm text-muted-foreground px-1 py-1">Nenhum fornecedor disponível</p>
+                  )}
+                  {fornecedoresData.map(forn => (
+                    <label key={forn.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 px-1 py-0.5 rounded text-sm">
+                      <input
+                        type="checkbox"
+                        className="accent-primary"
+                        checked={selectedFornecedores.includes(forn.id)}
+                        onChange={() => toggleFornecedor(forn.id)}
+                      />
+                      {forn.nome}
+                    </label>
+                  ))}
+                </div>
+                {selectedFornecedores.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedFornecedores.map(id => {
+                      const forn = fornecedoresData.find(f => f.id === id);
+                      return forn ? <Badge key={id} variant="secondary" className="text-xs">{forn.nome}</Badge> : null;
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 

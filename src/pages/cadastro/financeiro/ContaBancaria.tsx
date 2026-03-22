@@ -24,7 +24,11 @@ const ContaBancaria = () => {
   const [editItem, setEditItem] = useState<CB | null>(null);
   const [editData, setEditData] = useState<Partial<CB>>({});
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["contas_bancarias"], queryFn: fetchContasBancarias });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({ queryKey: ["contas_bancarias", currentPage], queryFn: () => fetchContasBancarias(currentPage) });
+  const items: CB[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const updateMut = useMutation({
     mutationFn: (d: { id: number; payload: Partial<CB> }) => updateContaBancaria(d.id, d.payload),
@@ -56,7 +60,7 @@ const ContaBancaria = () => {
         <FilterSection fields={[
           { type: "text" as const, label: "Nome do Banco", placeholder: "Buscar banco...", value: searchBanco, onChange: setSearchBanco, width: "flex-1 min-w-[200px]" },
           { type: "text" as const, label: "Número da Conta", placeholder: "Buscar por conta...", value: searchConta, onChange: setSearchConta, width: "min-w-[180px]" }
-        ]} resultsCount={filtered.length} />
+        ]} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
@@ -86,6 +90,15 @@ const ContaBancaria = () => {
               ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

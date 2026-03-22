@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,23 +19,26 @@ export default function PessoasVisao360() {
   const [searchTerm, setSearchTerm] = useState("");
   const [setorFilter, setSetorFilter] = useState("all");
 
-  const { data: pessoas = [], isLoading } = useQuery<Pessoa[]>({
-    queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas,
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const { data: pessoasResponse, isLoading } = useQuery({
+    queryKey: [...pessoasQueryKey, currentPage, searchTerm],
+    queryFn: () => fetchPessoas(currentPage, searchTerm),
   });
+  const pessoas: Pessoa[] = Array.isArray(pessoasResponse) ? pessoasResponse : (pessoasResponse?.results ?? []);
+  const totalCount = Array.isArray(pessoasResponse) ? pessoasResponse.length : (pessoasResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
-  const { data: setores = [] } = useQuery({
+  const { data: setoresResponse } = useQuery({
     queryKey: setoresQueryKey,
     queryFn: fetchSetores,
   });
+  const setores = Array.isArray(setoresResponse) ? setoresResponse : (setoresResponse?.results ?? []);
 
   const filteredPessoas = useMemo(() => pessoas.filter((pessoa) => {
-    const matchesSearch =
-      pessoa.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pessoa.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSetor = setorFilter === "all" || String(pessoa.setor_id) === setorFilter;
-    return matchesSearch && matchesSetor;
-  }), [pessoas, searchTerm, setorFilter]);
+    return matchesSetor;
+  }), [pessoas, setorFilter]);
 
   return (
     <div className="space-y-6">
@@ -128,10 +131,15 @@ export default function PessoasVisao360() {
             )}
           </TableBody>
         </Table>
-      </div>
-
-      <div className="text-sm text-muted-foreground">
-        Exibindo {filteredPessoas.length} de {pessoas.length} pessoas
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

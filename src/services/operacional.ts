@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import api, { type PaginatedResponse } from '@/lib/api';
 
 export interface Projeto {
     id: number;
@@ -23,13 +23,15 @@ export interface Tarefa {
     prazo: string;
 }
 
-export const fetchProjetos = async (): Promise<Projeto[]> => {
-    const res = await api.get('/api/operacional/projetos/');
+export const fetchProjetos = async (page?: number): Promise<Projeto[] | PaginatedResponse<Projeto>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/operacional/projetos/', { params });
     return res.data;
 };
 
-export const fetchTarefas = async (): Promise<Tarefa[]> => {
-    const res = await api.get('/api/operacional/tarefas/');
+export const fetchTarefas = async (page?: number): Promise<Tarefa[] | PaginatedResponse<Tarefa>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/operacional/tarefas/', { params });
     return res.data;
 };
 
@@ -52,8 +54,9 @@ export interface Embarcacao {
     dimensoes: string | null;
 }
 
-export const fetchEmbarcacoes = async (): Promise<Embarcacao[]> => {
-    const res = await api.get('/api/operacional/embarcacoes/');
+export const fetchEmbarcacoes = async (page?: number): Promise<Embarcacao[] | PaginatedResponse<Embarcacao>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/operacional/embarcacoes/', { params });
     return res.data;
 };
 

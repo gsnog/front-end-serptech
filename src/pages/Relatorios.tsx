@@ -56,10 +56,14 @@ export default function Relatorios() {
   const [status, setStatus] = useState("")
 
   const [showPopup, setShowPopup] = useState(false)
+  const [reportPage, setReportPage] = useState(1)
+  const REPORT_PAGE_SIZE = 5
 
-  // Real API data
-  const { data: contasReceberApi = [] } = useQuery({ queryKey: contasReceberQueryKey, queryFn: fetchContasReceber })
-  const { data: contasPagarApi = [] } = useQuery({ queryKey: contasPagarQueryKey, queryFn: fetchContasPagar })
+  // Real API data — fetch all (no page param) for totals/sums
+  const { data: contasReceberRaw } = useQuery({ queryKey: contasReceberQueryKey, queryFn: fetchContasReceber })
+  const { data: contasPagarRaw } = useQuery({ queryKey: contasPagarQueryKey, queryFn: fetchContasPagar })
+  const contasReceberApi = Array.isArray(contasReceberRaw) ? contasReceberRaw : (contasReceberRaw?.results ?? [])
+  const contasPagarApi = Array.isArray(contasPagarRaw) ? contasPagarRaw : (contasPagarRaw?.results ?? [])
 
   // Map API data to display format
   const contasReceberDisplay = contasReceberApi.map(cr => ({
@@ -93,6 +97,13 @@ export default function Relatorios() {
     if (tipo === "contas-pagar") return contasPagarDisplay
     return mockFluxoCaixa
   }
+
+  const getPagedData = () => {
+    const all = getData()
+    const start = (reportPage - 1) * REPORT_PAGE_SIZE
+    return all.slice(start, start + REPORT_PAGE_SIZE)
+  }
+  const reportTotalPages = Math.ceil(getData().length / REPORT_PAGE_SIZE)
 
   const getExportData = () => {
     const data = getData()
@@ -233,7 +244,7 @@ export default function Relatorios() {
             </div>
 
             <div className="pt-4">
-              <Button onClick={() => setShowPopup(true)} className="gap-2">
+              <Button onClick={() => { setShowPopup(true); setReportPage(1); }} className="gap-2">
                 <FileText className="h-4 w-4" />
                 Gerar
               </Button>
@@ -309,7 +320,7 @@ export default function Relatorios() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {contasReceberDisplay.map((item) => (
+                    {(getPagedData() as typeof contasReceberDisplay).map((item) => (
                       <TableRow key={item.codigo}>
                         <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                         <TableCell>{item.cliente}</TableCell>
@@ -336,7 +347,7 @@ export default function Relatorios() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {contasPagarDisplay.map((item) => (
+                    {(getPagedData() as typeof contasPagarDisplay).map((item) => (
                       <TableRow key={item.codigo}>
                         <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                         <TableCell>{item.beneficiario}</TableCell>
@@ -373,6 +384,15 @@ export default function Relatorios() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+              {reportTotalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 border-t border-border mt-4">
+                  <span className="text-sm text-muted-foreground">Página {reportPage} de {reportTotalPages} ({getData().length} registros)</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setReportPage(p => Math.max(1, p - 1))} disabled={reportPage === 1}>Anterior</Button>
+                    <Button variant="outline" size="sm" onClick={() => setReportPage(p => Math.min(reportTotalPages, p + 1))} disabled={reportPage === reportTotalPages}>Próxima</Button>
+                  </div>
+                </div>
               )}
             </div>
           </div>

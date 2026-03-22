@@ -29,7 +29,15 @@ export default function Contas() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [segmentoFilter, setSegmentoFilter] = useState("");
-  const { data: contas = [], isLoading } = useQuery({ queryKey: contasQueryKey, queryFn: fetchContas });
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...contasQueryKey, currentPage, searchTerm],
+    queryFn: () => fetchContas(currentPage, searchTerm),
+  });
+  const contas = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const [viewItem, setViewItem] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -39,12 +47,8 @@ export default function Contas() {
   const segmentos = [...new Set(contas.map((c: any) => c.setor_atuacao))].filter(Boolean);
 
   const filteredContas = contas.filter((conta: any) => {
-    const matchSearch = !searchTerm ||
-      (conta.razao_social || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (conta.nome_fantasia || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (conta.cnpj || '').includes(searchTerm);
     const matchSegmento = !segmentoFilter || conta.setor_atuacao === segmentoFilter;
-    return matchSearch && matchSegmento;
+    return matchSegmento;
   });
 
   const getStatusBadgeStatus = (status: string): string => 'Em aberto';
@@ -85,7 +89,7 @@ export default function Contas() {
             options: segmentos.map(s => ({ value: s, label: s })), width: "min-w-[160px]"
           }
         ]}
-        resultsCount={filteredContas.length}
+        resultsCount={totalCount}
       />
 
       <div className="rounded border border-border">
@@ -109,6 +113,15 @@ export default function Contas() {
             ))}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

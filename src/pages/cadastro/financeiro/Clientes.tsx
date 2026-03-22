@@ -16,9 +16,9 @@ import api from "@/lib/api";
 
 interface Cliente { id: number; nome?: string; razao_social?: string; cnpj?: string; email?: string; telefone?: string; }
 
-const fetchClientes = async (): Promise<Cliente[]> => { const res = await api.get("/api/crm/contas/"); return res.data; };
-const updateCliente = async (id: number, data: Partial<Cliente>): Promise<Cliente> => { const res = await api.put(`/api/crm/contas/${id}/`, data); return res.data; };
-const deleteCliente = async (id: number): Promise<void> => { await api.delete(`/api/crm/contas/${id}/`); };
+const fetchClientes = async (): Promise<Cliente[]> => { const res = await api.get("/api/lab/clientes/"); return res.data; };
+const updateCliente = async (id: number, data: Partial<Cliente>): Promise<Cliente> => { const res = await api.put(`/api/lab/clientes/${id}/`, data); return res.data; };
+const deleteCliente = async (id: number): Promise<void> => { await api.delete(`/api/lab/clientes/${id}/`); };
 
 const Clientes = () => {
   const navigate = useNavigate();

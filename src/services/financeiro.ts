@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import api, { type PaginatedResponse } from '@/lib/api';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -149,15 +149,17 @@ export const fetchDashboardFull = async (): Promise<any> => {
 
 // ─── Parcelas ─────────────────────────────────────────────────────────────────
 
-export const fetchParcelas = async (): Promise<Parcela[]> => {
-    const res = await api.get('/api/financial/parcelas/');
+export const fetchParcelas = async (page?: number): Promise<Parcela[] | PaginatedResponse<Parcela>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/parcelas/', { params });
     return res.data;
 };
 
 // ─── Contas a Pagar ───────────────────────────────────────────────────────────
 
-export const fetchContasPagar = async (): Promise<ContaPagar[]> => {
-    const res = await api.get('/api/financial/contas_pagar/');
+export const fetchContasPagar = async (page?: number): Promise<ContaPagar[] | PaginatedResponse<ContaPagar>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/contas_pagar/', { params });
     return res.data;
 };
 export const createContaPagar = async (data: Partial<ContaPagar>): Promise<ContaPagar> => {
@@ -174,8 +176,9 @@ export const deleteContaPagar = async (id: number): Promise<void> => {
 
 // ─── Contas a Receber ─────────────────────────────────────────────────────────
 
-export const fetchContasReceber = async (): Promise<ContaReceber[]> => {
-    const res = await api.get('/api/financial/contas_receber/');
+export const fetchContasReceber = async (page?: number): Promise<ContaReceber[] | PaginatedResponse<ContaReceber>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/contas_receber/', { params });
     return res.data;
 };
 export const createContaReceber = async (data: Partial<ContaReceber>): Promise<ContaReceber> => {
@@ -192,8 +195,9 @@ export const deleteContaReceber = async (id: number): Promise<void> => {
 
 // ─── Conta Bancária ───────────────────────────────────────────────────────────
 
-export const fetchContasBancarias = async (): Promise<ContaBancaria[]> => {
-    const res = await api.get('/api/financial/contas_bancarias/');
+export const fetchContasBancarias = async (page?: number): Promise<ContaBancaria[] | PaginatedResponse<ContaBancaria>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/contas_bancarias/', { params });
     return res.data;
 };
 export const createContaBancaria = async (data: Partial<ContaBancaria>): Promise<ContaBancaria> => {
@@ -210,8 +214,9 @@ export const deleteContaBancaria = async (id: number): Promise<void> => {
 
 // ─── Centro de Custo ──────────────────────────────────────────────────────────
 
-export const fetchCentrosCusto = async (): Promise<CentroCusto[]> => {
-    const res = await api.get('/api/financial/centro-custo/');
+export const fetchCentrosCusto = async (page?: number): Promise<CentroCusto[] | PaginatedResponse<CentroCusto>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/centro-custo/', { params });
     return res.data;
 };
 export const createCentroCusto = async (data: Partial<CentroCusto>): Promise<CentroCusto> => {
@@ -228,8 +233,9 @@ export const deleteCentroCusto = async (id: number): Promise<void> => {
 
 // ─── Centro de Receita ────────────────────────────────────────────────────────
 
-export const fetchCentrosReceita = async (): Promise<CentroReceita[]> => {
-    const res = await api.get('/api/financial/centro-receita/');
+export const fetchCentrosReceita = async (page?: number): Promise<CentroReceita[] | PaginatedResponse<CentroReceita>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/centro-receita/', { params });
     return res.data;
 };
 export const createCentroReceita = async (data: Partial<CentroReceita>): Promise<CentroReceita> => {
@@ -253,8 +259,9 @@ export const fetchAreas = async (): Promise<Area[]> => {
 
 // ─── Categorias Financeiras ───────────────────────────────────────────────────
 
-export const fetchCategoriasFinanceiras = async (): Promise<CategoriaFinanceira[]> => {
-    const res = await api.get('/api/financial/categorias/');
+export const fetchCategoriasFinanceiras = async (page?: number): Promise<CategoriaFinanceira[] | PaginatedResponse<CategoriaFinanceira>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/categorias/', { params });
     return res.data;
 };
 export const createCategoriaFinanceira = async (data: Partial<CategoriaFinanceira>): Promise<CategoriaFinanceira> => {
@@ -289,8 +296,9 @@ export const deleteClassificacaoFinanceira = async (id: number): Promise<void> =
 
 // ─── Plano de Contas ──────────────────────────────────────────────────────────
 
-export const fetchPlanoContas = async (): Promise<PlanoContas[]> => {
-    const res = await api.get('/api/financial/plano-contas/');
+export const fetchPlanoContas = async (page?: number): Promise<PlanoContas[] | PaginatedResponse<PlanoContas>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/plano-contas/', { params });
     return res.data;
 };
 export const createPlanoContas = async (data: Partial<PlanoContas>): Promise<PlanoContas> => {
@@ -317,8 +325,9 @@ export const deleteConciliacao = async (id: number): Promise<void> => {
 
 // ─── Transferências ───────────────────────────────────────────────────────────
 
-export const fetchTransferencias = async (): Promise<Transacao[]> => {
-    const res = await api.get('/api/financial/transferencias/');
+export const fetchTransferencias = async (page?: number): Promise<Transacao[] | PaginatedResponse<Transacao>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/financial/transferencias/', { params });
     return res.data;
 };
 export const createTransferencia = async (data: Partial<Transacao>): Promise<Transacao> => {

@@ -69,13 +69,17 @@ export default function EstoqueEntradas() {
   const canApprove = APPROVAL_ROLES.includes(currentRole);
 
   // Fetch reais da API
-  const { data: entradasApi = [], isLoading, isError } = useQuery<Entradas[]>({
-    queryKey: ['entradas_estoque'],
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: entradasResponse, isLoading, isError } = useQuery({
+    queryKey: ['entradas_estoque', currentPage],
     queryFn: async () => {
-      const response = await api.get('/api/estoque/entradas/');
-      return response.data;
+      const res = await api.get('/api/estoque/entradas/', { params: { page: currentPage } });
+      return res.data;
     }
   });
+  const entradasApi = Array.isArray(entradasResponse) ? entradasResponse : (entradasResponse?.results ?? []);
+  const totalCount = Array.isArray(entradasResponse) ? entradasResponse.length : (entradasResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const { data: itensEstoque = [] } = useQuery({
     queryKey: ['itens_estoque'],
@@ -317,7 +321,7 @@ export default function EstoqueEntradas() {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={totalCount}
         />
 
         <div className="rounded overflow-hidden">
@@ -450,6 +454,15 @@ export default function EstoqueEntradas() {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

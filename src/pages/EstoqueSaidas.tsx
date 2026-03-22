@@ -22,7 +22,14 @@ export default function EstoqueSaidas() {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: saidasQueryKey, queryFn: fetchSaidas })
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...saidasQueryKey, currentPage],
+    queryFn: () => fetchSaidas(currentPage),
+  });
+  const items = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const deleteMutation = useMutation({
     mutationFn: deleteSaida,
@@ -54,7 +61,7 @@ export default function EstoqueSaidas() {
           { type: "text", label: "Buscar", placeholder: "Setor ou usuário...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" },
           { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
           { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
-        ]} resultsCount={filtered.length} />
+        ]} resultsCount={totalCount} />
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
@@ -89,6 +96,15 @@ export default function EstoqueSaidas() {
               }
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

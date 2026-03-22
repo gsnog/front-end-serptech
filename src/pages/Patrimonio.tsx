@@ -32,10 +32,14 @@ const Patrimonio = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [formData, setFormData] = useState({ item: '', data_de_aquisicao: '', valor: '', descricao: '', unidade: '', codigo: '' })
 
-  const { data: assets = [], isLoading, isError } = useQuery({
-    queryKey: ['patrimonio'],
-    queryFn: fetchPatrimonio,
-  })
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading, isError } = useQuery({
+    queryKey: ['patrimonio', currentPage],
+    queryFn: () => fetchPatrimonio(currentPage),
+  });
+  const assets = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const { data: itensEstoque = [] } = useQuery({
     queryKey: ['itens'],
@@ -147,6 +151,15 @@ const Patrimonio = () => {
                 )}
               </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

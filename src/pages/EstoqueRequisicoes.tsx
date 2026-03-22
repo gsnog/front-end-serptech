@@ -36,10 +36,14 @@ export default function EstoqueRequisicoes() {
   const [rejectJustificativa, setRejectJustificativa] = useState("")
   const [entregarItem, setEntregarItem] = useState<Requisicao | null>(null)
 
-  const { data: items = [], isLoading, isError } = useQuery({
-    queryKey: requisicoesQueryKey,
-    queryFn: fetchRequisicoes,
-  })
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading, isError } = useQuery({
+    queryKey: [...requisicoesQueryKey, currentPage],
+    queryFn: () => fetchRequisicoes(currentPage),
+  });
+  const items = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const { data: setores = [] } = useQuery({
     queryKey: setoresQueryKey,
@@ -83,7 +87,7 @@ export default function EstoqueRequisicoes() {
     return items.filter(req => {
       const matchItem = req.itens?.some(i => i.item_nome?.toLowerCase().includes(filterItem.toLowerCase())) ||
         req.requisitante_nome?.toLowerCase().includes(filterItem.toLowerCase())
-      const matchSetor = filterSetor && filterSetor !== "todos" ? req.setor_nome?.toLowerCase().includes(filterSetor.toLowerCase()) : true
+      const matchSetor = filterSetor && filterSetor !== "todos" ? String(req.setor_requisicao) === filterSetor : true
       const matchDataInicio = filterDataInicio ? (req.data || "") >= filterDataInicio : true
       const matchDataFim = filterDataFim ? (req.data || "") <= filterDataFim : true
       return matchItem && matchSetor && matchDataInicio && matchDataFim
@@ -133,7 +137,7 @@ export default function EstoqueRequisicoes() {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={totalCount}
         />
 
         <div className="rounded overflow-hidden">

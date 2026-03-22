@@ -27,7 +27,11 @@ const PlanoContasPage = () => {
   const [editItem, setEditItem] = useState<PlanoContas | null>(null);
   const [editForm, setEditForm] = useState({ id_plano: "", categoria: 0, classificacao: 0 });
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: planoContasQueryKey, queryFn: fetchPlanoContas });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({ queryKey: [...planoContasQueryKey, currentPage], queryFn: () => fetchPlanoContas(currentPage) });
+  const items: PlanoContas[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
   const { data: categorias = [] } = useQuery({ queryKey: ['categoriasFinanceiras'], queryFn: fetchCategoriasFinanceiras });
   const { data: classificacoes = [] } = useQuery({ queryKey: ['classificacoesFinanceiras'], queryFn: fetchClassificacoesFinanceiras });
 
@@ -56,7 +60,7 @@ const PlanoContasPage = () => {
           <Button onClick={() => { setEditItem({ id: 0, id_plano: "" }); setEditForm({ id_plano: "", categoria: 0, classificacao: 0 }); }} className="gap-2"><Plus className="w-4 h-4" />Novo Plano</Button>
           <ExportButton getData={getExportData} fileName="plano-contas" />
         </div>
-        <FilterSection fields={filterFields} resultsCount={filtered.length} />
+        <FilterSection fields={filterFields} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
@@ -79,6 +83,15 @@ const PlanoContasPage = () => {
                 )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

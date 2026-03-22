@@ -27,7 +27,15 @@ export default function Leads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [origemFilter, setOrigemFilter] = useState("");
-  const { data: leads = [], isLoading } = useQuery({ queryKey: leadsQueryKey, queryFn: fetchLeads });
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...leadsQueryKey, currentPage, searchTerm],
+    queryFn: () => fetchLeads(currentPage, searchTerm),
+  });
+  const leads = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const [viewItem, setViewItem] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -35,12 +43,9 @@ export default function Leads() {
   const [editData, setEditData] = useState({ nome: "", empresa: "", email: "", telefone: "" });
 
   const filteredLeads = leads.filter(lead => {
-    const matchSearch = !searchTerm || lead.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      lead.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = !statusFilter || lead.status === statusFilter;
     const matchOrigem = !origemFilter || lead.origem === origemFilter;
-    return matchSearch && matchStatus && matchOrigem;
+    return matchStatus && matchOrigem;
   });
 
   const getStatusLabel = (status: string) => {
@@ -106,7 +111,7 @@ export default function Leads() {
             options: origensLead.map(o => ({ value: o, label: o })), width: "min-w-[160px]"
           }
         ]}
-        resultsCount={filteredLeads.length}
+        resultsCount={totalCount}
       />
 
       <div className="rounded border border-border">
@@ -135,6 +140,15 @@ export default function Leads() {
             ))}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

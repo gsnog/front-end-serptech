@@ -32,7 +32,11 @@ const Transferencias = () => {
   const [editItem, setEditItem] = useState<Transacao | null>(null);
   const [editForm, setEditForm] = useState({ valor: 0, descricao: "", conta_origem: 0, conta_destino: 0 });
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: transferenciasQueryKey, queryFn: fetchTransferencias });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({ queryKey: [...transferenciasQueryKey, currentPage], queryFn: () => fetchTransferencias(currentPage) });
+  const items: Transacao[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
   const { data: contas = [] } = useQuery({ queryKey: ['contasBancarias'], queryFn: fetchContasBancarias });
 
   const deleteMutation = useMutation({
@@ -63,7 +67,7 @@ const Transferencias = () => {
       <FilterSection fields={[
         { type: "text" as const, label: "Conta", placeholder: "Buscar conta...", value: searchConta, onChange: setSearchConta, width: "flex-1 min-w-[200px]" },
         { type: "date" as const, label: "Data", value: searchData, onChange: setSearchData, width: "min-w-[160px]" }
-      ]} resultsCount={filtered.length} />
+      ]} resultsCount={totalCount} />
       <div className="rounded border border-border overflow-hidden"><Table><TableHeader><TableRow className="bg-table-header">
         <TableHead className="text-center font-semibold">Data</TableHead><TableHead className="text-center font-semibold">Conta Origem</TableHead><TableHead className="text-center font-semibold">Conta Destino</TableHead><TableHead className="text-center font-semibold">Valor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
       </TableRow></TableHeader><TableBody>
@@ -76,7 +80,17 @@ const Transferencias = () => {
                 <TableCell className="text-center font-semibold">R$ {t.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                 <TableCell className="text-center"><TableActions onView={() => setViewItem(t)} onEdit={() => openEdit(t)} onDelete={() => setDeleteId(t.id)} /></TableCell>
               </TableRow>)}
-        </TableBody></Table></div>
+        </TableBody></Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent><DialogHeader><DialogTitle>Transferência</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Data" value={viewItem.data_de_lancamento} /><InfoRow label="Conta Origem" value={viewItem.conta_origem_nome || String(viewItem.conta_origem)} /><InfoRow label="Conta Destino" value={viewItem.conta_destino_nome || String(viewItem.conta_destino)} /><InfoRow label="Valor" value={`R$ ${viewItem.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /></div>}</DialogContent></Dialog>
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>

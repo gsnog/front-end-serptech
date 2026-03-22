@@ -36,10 +36,14 @@ interface DisplayLocacao {
 
 export default function EstoqueLocacoes() {
   const navigate = useNavigate()
-  const { data: locacoes, isLoading } = useQuery({
-    queryKey: ['locacoes'],
-    queryFn: fetchLocacoes
-  })
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['locacoes', currentPage],
+    queryFn: () => fetchLocacoes(currentPage),
+  });
+  const locacoes = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const [filterLocador, setFilterLocador] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
@@ -115,7 +119,7 @@ export default function EstoqueLocacoes() {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={totalCount}
         />
 
         <Table>
@@ -191,6 +195,15 @@ export default function EstoqueLocacoes() {
             )}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

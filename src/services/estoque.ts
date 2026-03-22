@@ -1,4 +1,4 @@
-import api from '@/lib/api';
+import api, { type PaginatedResponse } from '@/lib/api';
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -159,8 +159,11 @@ export interface Saida {
 
 // ─── Fornecedores ─────────────────────────────────────────────────────────────
 
-export const fetchFornecedores = async (): Promise<Fornecedor[]> => {
-    const res = await api.get('/api/estoque/fornecedores/');
+export const fetchFornecedores = async (page?: number, search?: string): Promise<Fornecedor[] | PaginatedResponse<Fornecedor>> => {
+    const params: Record<string, unknown> = {};
+    if (page !== undefined) params.page = page;
+    if (search) params.search = search;
+    const res = await api.get('/api/estoque/fornecedores/', { params });
     return res.data;
 };
 export const createFornecedor = async (data: Partial<Fornecedor>): Promise<Fornecedor> => {
@@ -177,15 +180,17 @@ export const deleteFornecedor = async (id: number): Promise<void> => {
 
 // ─── Itens ────────────────────────────────────────────────────────────────────
 
-export const fetchItensEstoque = async (): Promise<ItemEstoque[]> => {
-    const res = await api.get('/api/estoque/itens/');
+export const fetchItensEstoque = async (page?: number): Promise<ItemEstoque[] | PaginatedResponse<ItemEstoque>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/itens/', { params });
     return res.data;
 };
 
 // ─── Inventário ───────────────────────────────────────────────────────────────
 
-export const fetchInventario = async (): Promise<InventarioItem[]> => {
-    const res = await api.get('/api/estoque/inventario/');
+export const fetchInventario = async (page?: number): Promise<InventarioItem[] | PaginatedResponse<InventarioItem>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/inventario/', { params });
     return res.data;
 };
 export const createInventarioItem = async (data: Partial<InventarioItem>): Promise<InventarioItem> => {
@@ -202,15 +207,17 @@ export const deleteInventarioItem = async (id: number): Promise<void> => {
 
 // ─── Locações ─────────────────────────────────────────────────────────────────
 
-export const fetchLocacoes = async (): Promise<Locacao[]> => {
-    const res = await api.get('/api/estoque/locacoes/');
+export const fetchLocacoes = async (page?: number): Promise<Locacao[] | PaginatedResponse<Locacao>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/locacoes/', { params });
     return res.data;
 };
 
 // ─── Ordens de Compra ─────────────────────────────────────────────────────────
 
-export const fetchOrdensCompra = async (): Promise<OrdemCompra[]> => {
-    const res = await api.get('/api/estoque/ordens-compra/');
+export const fetchOrdensCompra = async (page?: number): Promise<OrdemCompra[] | PaginatedResponse<OrdemCompra>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/ordens-compra/', { params });
     return res.data;
 };
 export const createOrdemCompra = async (data: Partial<OrdemCompra>): Promise<OrdemCompra> => {
@@ -227,8 +234,9 @@ export const deleteOrdemCompra = async (id: number): Promise<void> => {
 
 // ─── Ordens de Serviço ────────────────────────────────────────────────────────
 
-export const fetchOrdensServico = async (): Promise<OrdemServico[]> => {
-    const res = await api.get('/api/estoque/ordens-servico/');
+export const fetchOrdensServico = async (page?: number): Promise<OrdemServico[] | PaginatedResponse<OrdemServico>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/ordens-servico/', { params });
     return res.data;
 };
 export const createOrdemServico = async (data: Partial<OrdemServico>): Promise<OrdemServico> => {
@@ -245,8 +253,9 @@ export const deleteOrdemServico = async (id: number): Promise<void> => {
 
 // ─── Requisições de Setor ─────────────────────────────────────────────────────
 
-export const fetchRequisicoes = async (): Promise<RequisicaoSetor[]> => {
-    const res = await api.get('/api/estoque/requisicoes/');
+export const fetchRequisicoes = async (page?: number): Promise<RequisicaoSetor[] | PaginatedResponse<RequisicaoSetor>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/requisicoes/', { params });
     return res.data;
 };
 export const createRequisicao = async (data: Partial<RequisicaoSetor>): Promise<RequisicaoSetor> => {
@@ -263,8 +272,9 @@ export const deleteRequisicao = async (id: number): Promise<void> => {
 
 // ─── Patrimônio ───────────────────────────────────────────────────────────────
 
-export const fetchPatrimonio = async (): Promise<Patrimonio[]> => {
-    const res = await api.get('/api/estoque/patrimonio/');
+export const fetchPatrimonio = async (page?: number): Promise<Patrimonio[] | PaginatedResponse<Patrimonio>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/patrimonio/', { params });
     return res.data;
 };
 export const createPatrimonio = async (data: Partial<Patrimonio>): Promise<Patrimonio> => {
@@ -281,8 +291,9 @@ export const deletePatrimonio = async (id: number): Promise<void> => {
 
 // ─── Notas Fiscais ─────────────────────────────────────────────────────────────
 
-export const fetchNotasFiscais = async (): Promise<NotaFiscal[]> => {
-    const res = await api.get('/api/estoque/notas-fiscais/');
+export const fetchNotasFiscais = async (page?: number): Promise<NotaFiscal[] | PaginatedResponse<NotaFiscal>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/notas-fiscais/', { params });
     return res.data;
 };
 export const deleteNotaFiscal = async (id: number): Promise<void> => {
@@ -291,8 +302,9 @@ export const deleteNotaFiscal = async (id: number): Promise<void> => {
 
 // ─── Saídas ───────────────────────────────────────────────────────────────────
 
-export const fetchSaidas = async (): Promise<Saida[]> => {
-    const res = await api.get('/api/estoque/saidas/');
+export const fetchSaidas = async (page?: number): Promise<Saida[] | PaginatedResponse<Saida>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/estoque/saidas/', { params });
     return res.data;
 };
 export const deleteSaida = async (id: number): Promise<void> => {

@@ -7,7 +7,7 @@
  * These types mirror the Django PessoaSerializer and SetorSerializer.
  * Use these types instead of the old Pessoa/Setor from pessoas-mock.ts.
  */
-import api from '@/lib/api';
+import api, { type PaginatedResponse } from '@/lib/api';
 
 // ─── Types (mirrors backend serializer output) ────────────────────────────
 
@@ -60,8 +60,11 @@ export const getSupervisorNome = (p: Pessoa) => p.supervisor_nome ?? null;
 // ─── API calls ────────────────────────────────────────────────────────────
 
 /** GET /api/pessoas/ — all active users with full profile */
-export const fetchPessoas = async (): Promise<Pessoa[]> => {
-    const res = await api.get('/api/pessoas/');
+export const fetchPessoas = async (page?: number, search?: string): Promise<Pessoa[] | PaginatedResponse<Pessoa>> => {
+    const params: Record<string, unknown> = {};
+    if (page !== undefined) params.page = page;
+    if (search) params.search = search;
+    const res = await api.get('/api/pessoas/', { params });
     return res.data;
 };
 
@@ -109,8 +112,16 @@ export const fetchMeuTime = async (): Promise<Pessoa[]> => {
 };
 
 /** GET /api/setores/ — all sectors */
-export const fetchSetores = async (): Promise<Setor[]> => {
-    const res = await api.get('/api/setores/');
+export const fetchSetores = async (page?: number): Promise<Setor[] | PaginatedResponse<Setor>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/setores/', { params });
+    return res.data;
+};
+
+/** GET /api/operacional/setores/ — sectors via operacional route */
+export const fetchSetoresOperacional = async (page?: number): Promise<Setor[] | PaginatedResponse<Setor>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/operacional/setores/', { params });
     return res.data;
 };
 

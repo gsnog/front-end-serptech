@@ -11,22 +11,30 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus, FileText } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
+import api from "@/lib/api";
 
-type ItemContabil = { id: number; nome: string; };
+interface ItemContabil { id: number; data?: string; descricao: string; valor?: number; tipo?: string; plano_de_contas_nome?: string; unidade_nome?: string; }
 
 const Contabil = () => {
   const navigate = useNavigate();
-  const [items] = useState<ItemContabil[]>([]);
+  const { data: items = [], isLoading } = useQuery<ItemContabil[]>({
+    queryKey: ["contabil"],
+    queryFn: async () => {
+      const res = await api.get("/api/financial/contabil/");
+      return Array.isArray(res.data) ? res.data : (res.data?.results ?? []);
+    },
+  });
   const [searchContabil, setSearchContabil] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<ItemContabil | null>(null);
   const [editItem, setEditItem] = useState<ItemContabil | null>(null);
   const [editNome, setEditNome] = useState("");
 
-  const filterFields = [{ type: "text" as const, label: "Contábil", placeholder: "Buscar contábil...", value: searchContabil, onChange: setSearchContabil, width: "flex-1 min-w-[200px]" }];
-  const filtered = items.filter(c => c.nome.toLowerCase().includes(searchContabil.toLowerCase()));
-  const getExportData = () => filtered.map(c => ({ Contábil: c.nome }));
-  const handleDelete = () => { setDeleteId(null); toast({ title: "Aguardando API", description: "Endpoint ainda não configurado." }); };
+  const filterFields = [{ type: "text" as const, label: "Contábil", placeholder: "Buscar descrição...", value: searchContabil, onChange: setSearchContabil, width: "flex-1 min-w-[200px]" }];
+  const filtered = items.filter(c => (c.descricao || "").toLowerCase().includes(searchContabil.toLowerCase()));
+  const getExportData = () => filtered.map(c => ({ Data: c.data, Descrição: c.descricao, Valor: c.valor, Tipo: c.tipo, "Plano de Contas": c.plano_de_contas_nome, Unidade: c.unidade_nome }));
+  const handleDelete = () => { setDeleteId(null); toast({ title: "Aguardando API" }); };
   const deleteItem = items.find(i => i.id === deleteId);
 
   return (
@@ -39,13 +47,25 @@ const Contabil = () => {
         <FilterSection fields={filterFields} resultsCount={filtered.length} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Contábil</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-table-header">
+              <TableHead className="text-center font-semibold">Data</TableHead>
+              <TableHead className="text-center font-semibold">Descrição</TableHead>
+              <TableHead className="text-center font-semibold">Valor</TableHead>
+              <TableHead className="text-center font-semibold">Tipo</TableHead>
+              <TableHead className="text-center font-semibold">Plano de Contas</TableHead>
+              <TableHead className="text-center font-semibold">Ações</TableHead>
+            </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow>) : (
+              {isLoading ? (<TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>) :
+              filtered.length === 0 ? (<TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow>) : (
                 filtered.map((c) => (
                   <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center font-medium">{c.nome}</TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => { setEditItem(c); setEditNome(c.nome); }} onDelete={() => setDeleteId(c.id)} /></TableCell>
+                    <TableCell className="text-center">{c.data || "—"}</TableCell>
+                    <TableCell className="text-center font-medium">{c.descricao}</TableCell>
+                    <TableCell className="text-center">{c.valor != null ? `R$ ${c.valor.toFixed(2)}` : "—"}</TableCell>
+                    <TableCell className="text-center">{c.tipo || "—"}</TableCell>
+                    <TableCell className="text-center">{c.plano_de_contas_nome || "—"}</TableCell>
+                    <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => { setEditItem(c); setEditNome(c.descricao); }} onDelete={() => setDeleteId(c.id)} /></TableCell>
                   </TableRow>
                 ))
               )}

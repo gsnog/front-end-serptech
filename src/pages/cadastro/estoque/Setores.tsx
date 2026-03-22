@@ -23,7 +23,11 @@ const SetoresCadastro = () => {
   const [editItem, setEditItem] = useState<Setor | null>(null);
   const [editNome, setEditNome] = useState("");
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["setores"], queryFn: fetchSetores });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({ queryKey: ["setores", currentPage], queryFn: () => fetchSetores(currentPage) });
+  const items: Setor[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const updateMut = useMutation({
     mutationFn: (d: { id: number; payload: Partial<Setor> }) => updateSetor(d.id, d.payload),
@@ -49,7 +53,7 @@ const SetoresCadastro = () => {
           <Button onClick={() => navigate("/cadastro/estoque/setores/novo")} className="gap-2"><Plus className="w-4 h-4" />Novo Setor</Button>
           <ExportButton getData={getExportData} fileName="setores-estoque" />
         </div>
-        <FilterSection fields={[{ type: "text" as const, label: "Setor", placeholder: "Buscar setor...", value: searchSetor, onChange: setSearchSetor, width: "flex-1 min-w-[200px]" }]} resultsCount={filtered.length} />
+        <FilterSection fields={[{ type: "text" as const, label: "Setor", placeholder: "Buscar setor...", value: searchSetor, onChange: setSearchSetor, width: "flex-1 min-w-[200px]" }]} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Setor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
@@ -66,6 +70,15 @@ const SetoresCadastro = () => {
               ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

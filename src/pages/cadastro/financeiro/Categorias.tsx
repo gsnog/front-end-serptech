@@ -28,10 +28,14 @@ const Categorias = () => {
   const [editItem, setEditItem] = useState<CategoriaFinanceira | null>(null);
   const [editNome, setEditNome] = useState("");
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: categoriasFinanceirasQueryKey,
-    queryFn: fetchCategoriasFinanceiras,
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...categoriasFinanceirasQueryKey, currentPage],
+    queryFn: () => fetchCategoriasFinanceiras(currentPage),
   });
+  const items: CategoriaFinanceira[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const deleteMutation = useMutation({
     mutationFn: deleteCategoriaFinanceira,
@@ -66,7 +70,7 @@ const Categorias = () => {
           <Button onClick={() => { setEditItem({ id: 0, nome: "" }); setEditNome(""); }} className="gap-2"><Plus className="w-4 h-4" />Nova Categoria</Button>
           <ExportButton getData={getExportData} fileName="categorias" />
         </div>
-        <FilterSection fields={filterFields} resultsCount={filtered.length} />
+        <FilterSection fields={filterFields} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Categoria</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
@@ -82,6 +86,15 @@ const Categorias = () => {
                 )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

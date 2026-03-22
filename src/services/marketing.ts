@@ -4,7 +4,7 @@
  * Structural/config constants for the Marketing module.
  * Feeds from actual Django API endpoints.
  */
-import api from '@/lib/api';
+import api, { type PaginatedResponse } from '@/lib/api';
 
 export const canaisMarketing = [
     { id: 'canal-1', nome: 'Google Ads', tipo: 'pago' },
@@ -30,16 +30,18 @@ interface Evento { id: string; nome: string; tipo: string; data: string; custo: 
 interface OrcamentoMarketing { id: string; periodo: string; orcado: number; realizado: number; categoria: string; }
 
 // API fetchers
-export const fetchCampanhas = async (): Promise<Campanha[]> => {
-    const res = await api.get('/api/marketing/campanhas/');
+export const fetchCampanhas = async (page?: number): Promise<Campanha[] | PaginatedResponse<Campanha>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/marketing/campanhas/', { params });
     return res.data;
 };
 export const fetchCanais = async (): Promise<Canal[]> => {
     const res = await api.get('/api/marketing/canais/');
     return res.data;
 };
-export const fetchLeadsMarketing = async (): Promise<LeadMarketing[]> => {
-    const res = await api.get('/api/marketing/leads/');
+export const fetchLeadsMarketing = async (page?: number): Promise<LeadMarketing[] | PaginatedResponse<LeadMarketing>> => {
+    const params = page !== undefined ? { page } : {};
+    const res = await api.get('/api/marketing/leads/', { params });
     return res.data;
 };
 

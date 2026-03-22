@@ -18,15 +18,19 @@ import { fetchNotasFiscais, deleteNotaFiscal, type NotaFiscal as Nfe, notasFisca
 const NFe = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [currentPage, setCurrentPage] = useState(1)
   const [filterNumero, setFilterNumero] = useState("")
   const [filterData, setFilterData] = useState("")
   const [viewItem, setViewItem] = useState<Nfe | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
 
-  const { data: nfes = [], isLoading, isError } = useQuery({
-    queryKey: notasFiscaisQueryKey,
-    queryFn: fetchNotasFiscais,
+  const { data: response, isLoading, isError } = useQuery({
+    queryKey: [...notasFiscaisQueryKey, currentPage],
+    queryFn: () => fetchNotasFiscais(currentPage),
   })
+  const nfes = Array.isArray(response) ? response : (response?.results ?? [])
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0)
+  const totalPages = Math.ceil(totalCount / 5)
 
   const deleteMutation = useMutation({
     mutationFn: deleteNotaFiscal,
@@ -63,7 +67,7 @@ const NFe = () => {
             { type: "text", label: "Número NF-e", placeholder: "Buscar número...", value: filterNumero, onChange: setFilterNumero, width: "flex-1 min-w-[200px]" },
             { type: "date", label: "Data Emissão", value: filterData, onChange: setFilterData, width: "min-w-[160px]" }
           ]}
-          resultsCount={filteredNfes.length}
+          resultsCount={totalCount}
         />
 
         <div className="rounded border border-border overflow-hidden">
@@ -114,6 +118,15 @@ const NFe = () => {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchSetores, createSetor, updateSetor, deleteSetor, type Setor as SetorType } from "@/services/pessoas";
+import { fetchSetoresOperacional, createSetor, updateSetor, deleteSetor, type Setor as SetorType } from "@/services/pessoas";
 
 
 const Setor = () => {
@@ -24,15 +24,19 @@ const Setor = () => {
   const [editItem, setEditItem] = useState<SetorType | null>(null);
   const [editData, setEditData] = useState({ nome: "" });
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ['setores'],
-    queryFn: fetchSetores,
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['setores_operacional', currentPage],
+    queryFn: () => fetchSetoresOperacional(currentPage),
   });
+  const items: SetorType[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; payload: Partial<SetorType> }) => updateSetor(data.id, data.payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      queryClient.invalidateQueries({ queryKey: ['setores_operacional'] });
       setEditItem(null);
       toast({ title: "Salvo", description: "Setor atualizado." });
     },
@@ -42,7 +46,7 @@ const Setor = () => {
   const deleteMutation = useMutation({
     mutationFn: deleteSetor,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      queryClient.invalidateQueries({ queryKey: ['setores_operacional'] });
       setDeleteId(null);
       toast({ title: "Removido", description: "Setor excluído." });
     },
@@ -65,7 +69,7 @@ const Setor = () => {
           <ExportButton getData={getExportData} fileName="setores-operacional" />
         </div>
 
-        <FilterSection fields={[{ type: "text", label: "Setor", placeholder: "Buscar setor...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" }]} resultsCount={filtered.length} />
+        <FilterSection fields={[{ type: "text", label: "Setor", placeholder: "Buscar setor...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" }]} resultsCount={totalCount} />
 
         <div className="rounded overflow-hidden">
           <Table>
@@ -87,6 +91,15 @@ const Setor = () => {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

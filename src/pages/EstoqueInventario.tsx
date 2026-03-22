@@ -12,15 +12,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { useQuery } from "@tanstack/react-query"
-import { fetchInventario } from "@/services/estoque"
+import { fetchInventario, fetchUnidades } from "@/services/estoque"
 import { Loader2 } from "lucide-react"
 
 export default function EstoqueInventario() {
   const navigate = useNavigate()
-  const { data: inventario, isLoading } = useQuery({
-    queryKey: ['inventario'],
-    queryFn: fetchInventario
-  })
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['inventario', currentPage],
+    queryFn: () => fetchInventario(currentPage),
+  });
+  const inventario = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
+
+  const { data: unidades = [] } = useQuery({ queryKey: ['unidades'], queryFn: fetchUnidades })
+  const unidadeOptions = [
+    { value: "todos", label: "Todos" },
+    ...unidades.map(u => ({ value: u.unidade, label: u.unidade }))
+  ]
 
   const [filterNome, setFilterNome] = useState("")
   const [filterCidade, setFilterCidade] = useState("")
@@ -41,7 +51,7 @@ export default function EstoqueInventario() {
   const filtered = useMemo(() => {
     return items.filter(item => {
       const matchNome = item.item.toLowerCase().includes(filterNome.toLowerCase())
-      const matchCidade = filterCidade && filterCidade !== "todos" ? item.unidade.toLowerCase().includes(filterCidade.toLowerCase()) : true
+      const matchCidade = filterCidade && filterCidade !== "todos" ? item.unidade === filterCidade : true
       return matchNome && matchCidade
     })
   }, [items, filterNome, filterCidade])
@@ -67,9 +77,9 @@ export default function EstoqueInventario() {
         <FilterSection
           fields={[
             { type: "text", label: "Nome do Item", placeholder: "Buscar item...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" },
-            { type: "select", label: "Unidade", placeholder: "Selecione...", value: filterCidade, onChange: setFilterCidade, options: [{ value: "todos", label: "Todos" }, { value: "almoxarifado-sp", label: "Almoxarifado SP" }, { value: "ti-central", label: "TI Central" }, { value: "manutencao", label: "Manutenção" }], width: "min-w-[180px]" }
+            { type: "select", label: "Unidade", placeholder: "Selecione...", value: filterCidade, onChange: setFilterCidade, options: unidadeOptions, width: "min-w-[180px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={totalCount}
         />
 
         <Table>
@@ -85,6 +95,15 @@ export default function EstoqueInventario() {
             )}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

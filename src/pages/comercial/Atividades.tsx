@@ -29,7 +29,14 @@ export default function Atividades() {
   const [statusFilter, setStatusFilter] = useState("");
   const [view, setView] = useState<"meu-dia" | "pendencias" | "todas">("meu-dia");
 
-  const { data: atividades = [], isLoading } = useQuery({ queryKey: ['crm_atividades'], queryFn: fetchAtividades });
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: atividadesResponse, isLoading } = useQuery({
+    queryKey: ['crm_atividades', currentPage],
+    queryFn: () => fetchAtividades(currentPage),
+  });
+  const atividades = Array.isArray(atividadesResponse) ? atividadesResponse : (atividadesResponse?.results ?? []);
+  const totalCount = Array.isArray(atividadesResponse) ? atividadesResponse.length : (atividadesResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
   const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
   const { data: leads = [] } = useQuery({ queryKey: ['crm_leads'], queryFn: fetchLeads });
 
@@ -221,6 +228,16 @@ export default function Atividades() {
           );
         })}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+          <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes da Atividade</DialogTitle></DialogHeader>
