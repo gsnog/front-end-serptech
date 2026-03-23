@@ -112,12 +112,10 @@ const menuItems = [
     title: "Operacional",
     icon: BarChart3,
     basePath: "/operacional",
-    help: "Gestão operacional: setores, embarcações, operações e serviços.",
+    help: "Laboratório: mapas e exames.",
     subItems: [
-      { title: "Setor", url: "/operacional/setor" },
-      { title: "Embarcações", url: "/operacional/embarcacoes" },
-      { title: "Operação", url: "/operacional/operacao" },
-      { title: "Serviços", url: "/operacional/servicos" },
+      { title: "Mapas", url: "/operacional/mapas" },
+      { title: "Exames", url: "/operacional/exames" },
     ]
   },
 

@@ -83,19 +83,11 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   
   // Patrimônio (under Estoque)
   "/patrimonio": { title: "Patrimônio", description: "Gerenciamento de patrimônio" },
-  
-  // Operacional - Páginas principais
-  "/operacional/setor": { title: "Setor", description: "Gerenciamento de setores" },
-  "/operacional/embarcacoes": { title: "Embarcações", description: "Gerenciamento de embarcações" },
-  "/operacional/operacao": { title: "Operação", description: "Gerenciamento de operações" },
-  "/operacional/servicos": { title: "Serviços", description: "Gerenciamento de serviços" },
-  
-  // Operacional - Subpáginas
-  "/operacional/setor/novo": { title: "Setor", description: "Novo Setor" },
-  "/operacional/embarcacoes/nova": { title: "Embarcações", description: "Nova Embarcação" },
-  "/operacional/operacao/nova": { title: "Operação", description: "Nova Operação" },
-  "/operacional/servicos/novo": { title: "Serviços", description: "Novo Serviço" },
-  
+
+  // Operacional - Lab
+  "/operacional/mapas": { title: "Mapas", description: "Mapas do laboratório" },
+  "/operacional/exames": { title: "Exames", description: "Tipos de exames" },
+
   // NF-e
   "/nfe": { title: "NF-e", description: "Gerenciamento de notas fiscais eletrônicas" },
   "/nfe/nova": { title: "NF-e", description: "Nova Nota Fiscal" },

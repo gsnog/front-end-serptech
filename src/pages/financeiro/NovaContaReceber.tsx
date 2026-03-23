@@ -6,11 +6,17 @@ import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Receipt } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import {
+  fetchCentrosReceita, fetchPlanoContas, createContaReceber,
+  type CentroReceita, type PlanoContas,
+} from "@/services/financeiro";
+import api from "@/lib/api";
 
 const validationFields = [
   { name: "cliente", label: "Cliente", required: true },
@@ -20,28 +26,65 @@ const validationFields = [
   { name: "dataVencimento", label: "Data de Vencimento", required: true },
 ];
 
-const clienteOptions = [
-  { value: "cliente1", label: "Cliente 1" }, { value: "cliente2", label: "Cliente 2" }
-];
-const centroReceitaOptions = [
-  { value: "centro1", label: "Centro 1" }, { value: "centro2", label: "Centro 2" }
-];
-const planoContasOptions = [
-  { value: "plano1", label: "Plano 1" }, { value: "plano2", label: "Plano 2" }
-];
-
 export default function NovaContaReceber() {
   const navigate = useNavigate();
-  const { isSaving, handleSave } = useSaveWithDelay();
+  const [isSaving, setIsSaving] = useState(false);
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { cliente: "", centroReceita: "", planoContas: "", documento: "", valor: "", multa: "0", encargos: "0", juros: "0", desconto: "0", valorTotal: "", dataFaturamento: "", dataVencimento: "", parcelas: "1", descricao: "" },
     validationFields
   );
 
+  const { data: clientesResponse } = useQuery({
+    queryKey: ['lab-clientes'],
+    queryFn: () => api.get('/api/lab/clientes/').then(r => r.data),
+  });
+  const clientes: { id: number; nome: string }[] = Array.isArray(clientesResponse)
+    ? clientesResponse
+    : (clientesResponse?.results ?? []);
+
+  const { data: centrosReceitaResponse } = useQuery({
+    queryKey: ['centrosReceita'],
+    queryFn: () => fetchCentrosReceita(),
+  });
+  const centrosReceita: CentroReceita[] = Array.isArray(centrosReceitaResponse)
+    ? centrosReceitaResponse
+    : ((centrosReceitaResponse as any)?.results ?? []);
+
+  const { data: planoContasResponse } = useQuery({
+    queryKey: ['planoContas'],
+    queryFn: () => fetchPlanoContas(),
+  });
+  const planoContasList: PlanoContas[] = Array.isArray(planoContasResponse)
+    ? planoContasResponse
+    : ((planoContasResponse as any)?.results ?? []);
+
   const handleSalvar = async () => {
     if (validateAll()) {
-      await handleSave("/financeiro/contas-receber", "Conta a receber salva com sucesso!");
+      setIsSaving(true);
+      try {
+        await createContaReceber({
+          cliente: Number(formData.cliente),
+          centro_de_receita: formData.centroReceita ? Number(formData.centroReceita) : undefined,
+          plano_de_contas: formData.planoContas ? Number(formData.planoContas) : undefined,
+          numero_documento: formData.documento,
+          valor_do_titulo: Number(formData.valor),
+          multa: Number(formData.multa),
+          encargos: Number(formData.encargos),
+          juros: Number(formData.juros),
+          desconto: Number(formData.desconto),
+          valor_total: formData.valorTotal ? Number(formData.valorTotal) : undefined,
+          data_de_faturamento: formData.dataFaturamento,
+          data_de_vencimento: formData.dataVencimento,
+          descricao: formData.descricao,
+        } as any);
+        toast({ title: "Conta a receber salva com sucesso!" });
+        navigate("/financeiro/contas-receber");
+      } catch {
+        toast({ title: "Erro ao salvar", description: "Não foi possível salvar a conta.", variant: "destructive" });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -66,7 +109,7 @@ export default function NovaContaReceber() {
                 <Select value={formData.cliente} onValueChange={(v) => setFieldValue("cliente", v)}>
                   <SelectTrigger className="form-input"><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {clienteOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {clientes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -75,7 +118,11 @@ export default function NovaContaReceber() {
                 <Select value={formData.centroReceita} onValueChange={(v) => setFieldValue("centroReceita", v)}>
                   <SelectTrigger className="form-input"><SelectValue placeholder="Selecione o centro de receita" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {centroReceitaOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {centrosReceita.map(cr => (
+                      <SelectItem key={cr.id} value={String(cr.id)}>
+                        {cr.centro_id ?? `Centro ${cr.id}`}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -87,7 +134,11 @@ export default function NovaContaReceber() {
                 <Select value={formData.planoContas} onValueChange={(v) => setFieldValue("planoContas", v)}>
                   <SelectTrigger className="form-input"><SelectValue placeholder="Selecione o plano de contas" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {planoContasOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {planoContasList.map(pc => (
+                      <SelectItem key={pc.id} value={String(pc.id)}>
+                        {pc.id_plano}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -365,7 +365,25 @@ export const deleteFormaApresentacao = async (id: number): Promise<void> => {
     await api.delete(`/api/estoque/formas-apresentacao/${id}/`);
 };
 
+// ─── Nomenclaturas ─────────────────────────────────────────────────────────────
+
+export interface Nomenclatura {
+    id: number;
+    nome: string;
+}
+
+export const fetchNomenclaturas = async (): Promise<Nomenclatura[]> => {
+    const res = await api.get('/api/estoque/nomenclaturas/');
+    return Array.isArray(res.data) ? res.data : res.data?.results ?? [];
+};
+
+export const createNomenclatura = async (nome: string): Promise<Nomenclatura> => {
+    const res = await api.post('/api/estoque/nomenclaturas/', { nome });
+    return res.data;
+};
+
 // ─── Query Keys ───────────────────────────────────────────────────────────────
+export const nomenclaturasQueryKey = ['nomenclaturas'] as const;
 export const fornecedoresQueryKey = ['fornecedores'] as const;
 export const itensEstoqueQueryKey = ['itensEstoque'] as const;
 export const inventarioQueryKey = ['inventario'] as const;
