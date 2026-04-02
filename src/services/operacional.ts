@@ -23,15 +23,13 @@ export interface Tarefa {
     prazo: string;
 }
 
-export const fetchProjetos = async (page?: number): Promise<Projeto[] | PaginatedResponse<Projeto>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/operacional/projetos/', { params });
+export const fetchProjetos = async (): Promise<Projeto[] | PaginatedResponse<Projeto>> => {
+    const res = await api.get('/api/operacional/projetos/');
     return res.data;
 };
 
-export const fetchTarefas = async (page?: number): Promise<Tarefa[] | PaginatedResponse<Tarefa>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/operacional/tarefas/', { params });
+export const fetchTarefas = async (): Promise<Tarefa[] | PaginatedResponse<Tarefa>> => {
+    const res = await api.get('/api/operacional/tarefas/');
     return res.data;
 };
 
@@ -54,9 +52,8 @@ export interface Embarcacao {
     dimensoes: string | null;
 }
 
-export const fetchEmbarcacoes = async (page?: number): Promise<Embarcacao[] | PaginatedResponse<Embarcacao>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/operacional/embarcacoes/', { params });
+export const fetchEmbarcacoes = async (): Promise<Embarcacao[] | PaginatedResponse<Embarcacao>> => {
+    const res = await api.get('/api/operacional/embarcacoes/');
     return res.data;
 };
 
@@ -73,3 +70,34 @@ export const updateEmbarcacao = async (id: number, data: Partial<Embarcacao>): P
 export const deleteEmbarcacao = async (id: number): Promise<void> => {
     await api.delete(`/api/operacional/embarcacoes/${id}/`);
 };
+
+// ─── Mapas ────────────────────────────────────────────────────────────────────
+
+export interface MapaPrincipal {
+    id: number;
+    nome: string | null;
+    data_de_recebimento: string | null;
+    arquivo_pdf: string | null;
+    medico?: number | null;
+}
+
+export const fetchMapas = async (page = 1): Promise<PaginatedResponse<MapaPrincipal>> => {
+    const res = await api.get('/api/lab/mapas/', { params: { page, page_size: 20 } });
+    return res.data;
+};
+
+export const createMapa = async (data: Partial<MapaPrincipal>): Promise<MapaPrincipal> => {
+    const res = await api.post('/api/lab/mapas/', data);
+    return res.data;
+};
+
+export const updateMapa = async (id: number, data: Partial<MapaPrincipal>): Promise<MapaPrincipal> => {
+    const res = await api.patch(`/api/lab/mapas/${id}/`, data);
+    return res.data;
+};
+
+export const deleteMapa = async (id: number): Promise<void> => {
+    await api.delete(`/api/lab/mapas/${id}/`);
+};
+
+export const mapasQueryKey = ['lab-mapas'] as const;

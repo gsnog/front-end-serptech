@@ -3,10 +3,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo } from "react"
 import { FilterSection } from "@/components/FilterSection"
+import { SortableHead } from "@/components/SortableHead"
 import { Plus, FileText, ClipboardCheck, PackageCheck, ChevronDown, ChevronRight, User, CalendarCheck } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ExportButton } from "@/components/ExportButton"
+import { usePagination } from "@/hooks/usePagination"
+import { useSortable } from "@/hooks/useSortable"
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
@@ -22,6 +26,7 @@ export default function EstoqueRequisicoes() {
   const queryClient = useQueryClient()
   const [filterItem, setFilterItem] = useState("")
   const [filterSetor, setFilterSetor] = useState("")
+  const [filterStatus, setFilterStatus] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
   const [filterDataFim, setFilterDataFim] = useState("")
   const [viewItem, setViewItem] = useState<Requisicao | null>(null)
@@ -36,14 +41,13 @@ export default function EstoqueRequisicoes() {
   const [rejectJustificativa, setRejectJustificativa] = useState("")
   const [entregarItem, setEntregarItem] = useState<Requisicao | null>(null)
 
-  const [currentPage, setCurrentPage] = useState(1);
+  useRealtimeUpdates([[...requisicoesQueryKey]]);
+
   const { data: response, isLoading, isError } = useQuery({
-    queryKey: [...requisicoesQueryKey, currentPage],
-    queryFn: () => fetchRequisicoes(currentPage),
+    queryKey: requisicoesQueryKey,
+    queryFn: () => fetchRequisicoes(),
   });
   const items = Array.isArray(response) ? response : (response?.results ?? []);
-  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
 
   const { data: setores = [] } = useQuery({
     queryKey: setoresQueryKey,
@@ -88,11 +92,15 @@ export default function EstoqueRequisicoes() {
       const matchItem = req.itens?.some(i => i.item_nome?.toLowerCase().includes(filterItem.toLowerCase())) ||
         req.requisitante_nome?.toLowerCase().includes(filterItem.toLowerCase())
       const matchSetor = filterSetor && filterSetor !== "todos" ? String(req.setor_requisicao) === filterSetor : true
+      const matchStatus = filterStatus && filterStatus !== "todos" ? req.status === filterStatus : true
       const matchDataInicio = filterDataInicio ? (req.data || "") >= filterDataInicio : true
       const matchDataFim = filterDataFim ? (req.data || "") <= filterDataFim : true
-      return matchItem && matchSetor && matchDataInicio && matchDataFim
+      return matchItem && matchSetor && matchStatus && matchDataInicio && matchDataFim
     })
-  }, [items, filterItem, filterSetor, filterDataInicio, filterDataFim])
+  }, [items, filterItem, filterSetor, filterStatus, filterDataInicio, filterDataFim])
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted)
 
   const getExportData = () => filtered.map(r => ({ Data: r.data, Itens: r.itens?.map(i => i.item_nome).join(", "), Requisitante: r.requisitante_nome, Setor: r.setor_nome, Status: r.status }));
   const handleDelete = () => { if (deleteId !== null) deleteMutation.mutate(deleteId); };
@@ -133,34 +141,35 @@ export default function EstoqueRequisicoes() {
         <FilterSection
           fields={[
             { type: "text", label: "Buscar", placeholder: "Buscar item ou requisitante...", value: filterItem, onChange: setFilterItem, width: "flex-1 min-w-[200px]" },
-            { type: "select", label: "Setor", placeholder: "Selecione o setor", value: filterSetor, onChange: setFilterSetor, options: setorOptions, width: "min-w-[180px]" },
+            { type: "select", label: "Setor", placeholder: "Todos", value: filterSetor, onChange: setFilterSetor, options: setorOptions, width: "min-w-[180px]" },
+            { type: "select", label: "Status", placeholder: "Todos", value: filterStatus, onChange: setFilterStatus, options: [{ value: "todos", label: "Todos" }, { value: "Análise", label: "Análise" }, { value: "Aprovado", label: "Aprovado" }, { value: "Negado", label: "Negado" }, { value: "Entregue", label: "Entregue" }], width: "min-w-[160px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={totalCount}
+          resultsCount={filtered.length}
         />
 
-        <div className="rounded overflow-hidden">
+        <div className="rounded border border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow>
-              <TableHead className="text-center">Data</TableHead>
-              <TableHead className="text-center">Itens</TableHead>
-              <TableHead className="text-center">Requisitante</TableHead>
-              <TableHead className="text-center">Setor</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-center">Aprovação</TableHead>
-              <TableHead className="text-center">Entrega</TableHead>
-              <TableHead className="text-center">Ações</TableHead>
+            <TableHeader><TableRow className="bg-table-header">
+              <SortableHead label="Data" field="data" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Itens" field="itens" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Requisitante" field="requisitante_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Setor" field="setor_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold">Aprovação</TableHead>
+              <TableHead className="text-center font-semibold">Entrega</TableHead>
+              <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando pedidos...</TableCell></TableRow>
               ) : isError ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-destructive">Erro ao carregar os dados.</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : paginatedItems.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado.</TableCell></TableRow>
               ) : (
-                filtered.map((req) => (
+                paginatedItems.map((req) => (
                   <TableRow key={req.id}>
                     <TableCell className="text-center">{req.data ? new Date(req.data).toLocaleDateString('pt-BR') : '—'}</TableCell>
                     <TableCell className="text-center truncate max-w-[200px]">{req.itens?.map(i => i.item_nome).join(", ")}</TableCell>
@@ -193,6 +202,15 @@ export default function EstoqueRequisicoes() {
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

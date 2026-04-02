@@ -29,7 +29,7 @@ export default function EstoqueSaidas() {
   });
   const items = Array.isArray(response) ? response : (response?.results ?? []);
   const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
+  const totalPages = Math.max(1, Math.ceil(totalCount / 20));
 
   const deleteMutation = useMutation({
     mutationFn: deleteSaida,

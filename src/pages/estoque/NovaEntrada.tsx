@@ -7,594 +7,666 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
-import { PackagePlus, Trash2, Upload, FileText, ArrowLeft, ArrowRight, Lock } from "lucide-react";
+import { PackagePlus, Trash2, Upload, FileText, Lock, UserPlus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { toast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { fetchFornecedores, fetchItensEstoque, fornecedoresQueryKey, itensEstoqueQueryKey } from "@/services/estoque";
+import {
+  fetchFornecedores, fetchItensEstoque, fetchUnidades,
+  fornecedoresQueryKey, itensEstoqueQueryKey, unidadesQueryKey,
+  createFornecedor,
+} from "@/services/estoque";
 
 interface ItemEntrada {
   id: number;
-  item: string;
-  marca: string;
+  itemId: string;
+  itemNome: string;
   quantidade: string;
   custoUnitario: string;
-  especificacoes: string;
-  tipoItem: "novo" | "existente";
-  itemExistenteId?: string;
 }
-
-const unidadeOptions = [
-  { value: "almoxarifado-sp", label: "Almoxarifado SP" },
-  { value: "ti-central", label: "TI Central" },
-  { value: "deposito-rj", label: "Depósito RJ" },
-];
-
-const operacaoOptions = [
-  { value: "compra", label: "Compra" },
-  { value: "transferencia", label: "Transferência" },
-];
-
-// Removed hardcoded mocks for itens and fornecedores
 
 export default function NovaEntrada() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isSaving, setIsSaving] = useState(false);
 
-  const { data: fornecedores = [] } = useQuery({ queryKey: fornecedoresQueryKey, queryFn: fetchFornecedores });
-  const { data: itensEstoqueData = [] } = useQuery({ queryKey: itensEstoqueQueryKey, queryFn: fetchItensEstoque });
+  // ── API data ──────────────────────────────────────────────────────────────
+  const { data: fornecedoresRaw = [] } = useQuery({ queryKey: fornecedoresQueryKey, queryFn: fetchFornecedores });
+  const fornecedores = (Array.isArray(fornecedoresRaw) ? fornecedoresRaw : (fornecedoresRaw as any)?.results ?? []) as any[];
 
-  // Define API POST Mutation
-  const createEntradaMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await api.post('/api/estoque/entradas/', data);
-      return response.data;
-    },
+  const { data: itensRaw = [] } = useQuery({ queryKey: itensEstoqueQueryKey, queryFn: fetchItensEstoque });
+  const itensEstoque = (Array.isArray(itensRaw) ? itensRaw : (itensRaw as any)?.results ?? []) as any[];
+
+  const { data: unidadesRaw = [] } = useQuery({ queryKey: unidadesQueryKey, queryFn: fetchUnidades });
+  const unidades = (Array.isArray(unidadesRaw) ? unidadesRaw : (unidadesRaw as any)?.results ?? []) as any[];
+
+  const fornecedorOptions = fornecedores.map((f: any) => ({ value: String(f.id), label: f.nome }));
+  const itemOptions = itensEstoque.map((i: any) => ({ value: String(i.id), label: i.itens_do_estoque }));
+  const unidadeOptions = unidades.map((u: any) => ({ value: String(u.id), label: u.unidade }));
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => (await api.post('/api/estoque/entradas/', data)).data,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entradas_estoque'] });
-      toast({
-        title: "Entrada cadastrada com sucesso!",
-        description: "A entrada foi salva diretamente no banco de dados.",
-      });
+      toast({ title: "Entrada cadastrada com sucesso!" });
       navigate("/estoque/entradas");
     },
     onError: (error: any) => {
-      console.error(error);
-      toast({
-        title: "Erro ao salvar a entrada",
-        description: "Verifique os dados informados.",
-        variant: "destructive"
-      });
+      const errData = error.response?.data;
+      const msgs = errData && typeof errData === "object"
+        ? Object.entries(errData).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Ocorreu um erro ao salvar.";
+      toast({ title: "Erro ao salvar", description: msgs, variant: "destructive" });
     },
-    onSettled: () => {
-      setIsSaving(false);
-    }
+    onSettled: () => setIsSaving(false),
   });
 
-  const handleCancelar = () => navigate("/estoque/entradas");
+  const xmlMutation = useMutation({
+    mutationFn: async (formData: FormData) =>
+      (await api.post('/api/estoque/entradas/importar-xml/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entradas_estoque'] });
+      toast({ title: "NF-e importada com sucesso!" });
+      navigate("/estoque/entradas");
+    },
+    onError: (error: any) => {
+      const detail = error.response?.data?.detail;
+      const msgs = detail ?? (
+        error.response?.data && typeof error.response.data === "object"
+          ? Object.entries(error.response.data).map(([k, v]) => `${k}: ${v}`).join(" | ")
+          : "Ocorreu um erro ao importar o XML."
+      );
+      toast({ title: "Erro ao importar XML", description: msgs, variant: "destructive" });
+    },
+    onSettled: () => setIsSaving(false),
+  });
 
-  const [step, setStep] = useState(1);
+  // ── Form state ────────────────────────────────────────────────────────────
   const [modoEntrada, setModoEntrada] = useState<"manual" | "xml">("manual");
-  const [itens, setItens] = useState<ItemEntrada[]>([]);
-  const [itemForm, setItemForm] = useState({ item: "", marca: "", quantidade: "", custoUnitario: "", especificacoes: "" });
-
-  const [estoqueOrigem, setEstoqueOrigem] = useState("");
-  const [estoqueDestino, setEstoqueDestino] = useState("");
-  const [operacao, setOperacao] = useState("");
+  const [fornecedorId, setFornecedorId] = useState("");
+  const [fornecedorXml, setFornecedorXml] = useState("");
+  const [estoqueDestinoId, setEstoqueDestinoId] = useState("");
   const [nfNumero, setNfNumero] = useState("");
   const [dataEntrada, setDataEntrada] = useState("");
   const [dataEmissao, setDataEmissao] = useState("");
   const [dataVencimento, setDataVencimento] = useState("");
   const [observacao, setObservacao] = useState("");
   const [xmlFile, setXmlFile] = useState<File | null>(null);
-  const [fornecedorXml, setFornecedorXml] = useState("");
   const [xmlImported, setXmlImported] = useState(false);
+  const [xmlFornecedorNotFound, setXmlFornecedorNotFound] = useState(false);
+  const [pdfNf, setPdfNf] = useState<File | null>(null);
+  const [pdfBoleto, setPdfBoleto] = useState<File | null>(null);
 
+  // Dialog cadastro de fornecedor (apenas modo XML)
+  const [showFornecedorDialog, setShowFornecedorDialog] = useState(false);
+  const [fornecedorDialogNome, setFornecedorDialogNome] = useState("");
+  const [fornecedorDialogCnpj, setFornecedorDialogCnpj] = useState("");
+  const [fornecedorDialogRazaoSocial, setFornecedorDialogRazaoSocial] = useState("");
+  const [fornecedorDialogEmail, setFornecedorDialogEmail] = useState("");
+  const [fornecedorDialogTelefone, setFornecedorDialogTelefone] = useState("");
+  const [isSavingFornecedor, setIsSavingFornecedor] = useState(false);
+
+  // Items
+  const [itens, setItens] = useState<ItemEntrada[]>([]);
+  const [itemSelecionado, setItemSelecionado] = useState("");
+  const [quantidade, setQuantidade] = useState("");
+  const [custoUnitario, setCustoUnitario] = useState("");
+
+  const isFieldLocked = xmlImported && modoEntrada === "xml";
+
+  const valorTotal = useMemo(() =>
+    itens.reduce((acc, i) => acc + (parseFloat(i.quantidade) || 0) * (parseFloat(i.custoUnitario) || 0), 0),
+    [itens]
+  );
+
+  // ── Item helpers ──────────────────────────────────────────────────────────
   const handleAddItem = () => {
-    if (!itemForm.item || !itemForm.quantidade) {
-      toast({ title: "Campos obrigatórios", description: "Informe o item e a quantidade.", variant: "destructive" });
+    if (!itemSelecionado || !quantidade) {
+      toast({ title: "Selecione o item e informe a quantidade", variant: "destructive" });
       return;
     }
-    setItens([...itens, { id: Date.now(), ...itemForm, tipoItem: "novo" }]);
-    setItemForm({ item: "", marca: "", quantidade: "", custoUnitario: "", especificacoes: "" });
+    const found = itensEstoque.find((i: any) => String(i.id) === itemSelecionado);
+    setItens(prev => [...prev, {
+      id: Date.now(),
+      itemId: itemSelecionado,
+      itemNome: found?.itens_do_estoque ?? itemSelecionado,
+      quantidade,
+      custoUnitario: custoUnitario || "0",
+    }]);
+    setItemSelecionado("");
+    setQuantidade("");
+    setCustoUnitario("");
   };
 
-  const handleRemoveItem = (id: number) => setItens(itens.filter(i => i.id !== id));
+  const handleRemoveItem = (id: number) => setItens(prev => prev.filter(i => i.id !== id));
 
-  const valorTotal = useMemo(() => {
-    return itens.reduce((acc, item) => {
-      const qty = parseFloat(item.quantidade) || 0;
-      const cost = parseFloat(item.custoUnitario.replace("R$", "").replace(",", ".").trim()) || 0;
-      return acc + qty * cost;
-    }, 0);
-  }, [itens]);
-
-  const handleNextStep = () => {
-    if (itens.length === 0) {
-      toast({ title: "Adicione itens", description: "Adicione pelo menos um item antes de prosseguir.", variant: "destructive" });
+  // ── Cadastrar fornecedor via dialog (modo XML) ────────────────────────────
+  const handleSaveFornecedor = async () => {
+    if (!fornecedorDialogNome.trim()) {
+      toast({ title: "Nome do fornecedor é obrigatório", variant: "destructive" });
       return;
     }
-    setStep(2);
+    setIsSavingFornecedor(true);
+    try {
+      const novo = await createFornecedor({
+        nome: fornecedorDialogNome,
+        cnpj: fornecedorDialogCnpj || undefined,
+        razao_social: fornecedorDialogRazaoSocial || undefined,
+        email: fornecedorDialogEmail || undefined,
+        telefone: fornecedorDialogTelefone || undefined,
+      });
+      setFornecedorId(String(novo.id));
+      queryClient.invalidateQueries({ queryKey: fornecedoresQueryKey });
+      toast({ title: "Fornecedor cadastrado", description: `"${fornecedorDialogNome}" adicionado com sucesso.` });
+      setShowFornecedorDialog(false);
+      setXmlFornecedorNotFound(false);
+    } catch {
+      toast({ title: "Erro ao cadastrar fornecedor", variant: "destructive" });
+    } finally {
+      setIsSavingFornecedor(false);
+    }
   };
 
-  const updateItemType = (id: number, tipo: "novo" | "existente") => {
-    setItens(prev => prev.map(i => i.id === id ? { ...i, tipoItem: tipo, itemExistenteId: tipo === "novo" ? undefined : i.itemExistenteId } : i));
-  };
-
-  const updateItemExistente = (id: number, existenteId: string) => {
-    setItens(prev => prev.map(i => i.id === id ? { ...i, itemExistenteId: existenteId } : i));
-  };
-
+  // ── XML import ────────────────────────────────────────────────────────────
   const handleXmlUpload = () => {
-    if (!xmlFile) {
-      toast({ title: "Selecione um arquivo", description: "Escolha um arquivo XML para importar.", variant: "destructive" });
-      return;
-    }
+    if (!xmlFile) { toast({ title: "Selecione um arquivo XML", variant: "destructive" }); return; }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
         const text = e.target?.result as string;
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(text, "text/xml");
-
-        const parseError = xmlDoc.querySelector("parsererror");
-        if (parseError) {
-          toast({ title: "Erro no XML", description: "O arquivo XML não é válido.", variant: "destructive" });
+        if (xmlDoc.querySelector("parsererror")) {
+          toast({ title: "XML inválido", variant: "destructive" });
           return;
         }
 
         const ns = "http://www.portalfiscal.inf.br/nfe";
-        let infNFe = xmlDoc.getElementsByTagNameNS(ns, "infNFe")[0];
-        if (!infNFe) infNFe = xmlDoc.querySelector("infNFe");
+        // Suporta NFe com e sem namespace explícito
+        const infNFe =
+          xmlDoc.getElementsByTagNameNS(ns, "infNFe")[0] ||
+          xmlDoc.querySelector("infNFe") ||
+          xmlDoc.getElementsByTagName("infNFe")[0];
 
         if (!infNFe) {
-          toast({ title: "XML não reconhecido", description: "Não foi possível encontrar dados de NF-e no arquivo.", variant: "destructive" });
+          toast({ title: "XML não reconhecido como NF-e", description: "Elemento infNFe não encontrado.", variant: "destructive" });
           return;
         }
 
-        const ide = infNFe.getElementsByTagNameNS(ns, "ide")[0] || infNFe.querySelector("ide");
-        const emit = infNFe.getElementsByTagNameNS(ns, "emit")[0] || infNFe.querySelector("emit");
-        const cobr = infNFe.getElementsByTagNameNS(ns, "cobr")[0] || infNFe.querySelector("cobr");
+        const getEl = (parent: Element, tag: string) =>
+          parent.getElementsByTagNameNS(ns, tag)[0] ||
+          parent.querySelector(tag) ||
+          parent.getElementsByTagName(tag)[0];
 
+        const ide = getEl(infNFe, "ide");
+        const emit = getEl(infNFe, "emit");
+        const cobr = getEl(infNFe, "cobr");
+
+        // Dados da NF
         if (ide) {
-          const nNF = (ide.getElementsByTagNameNS(ns, "nNF")[0] || ide.querySelector("nNF"))?.textContent || "";
-          const dhEmi = (ide.getElementsByTagNameNS(ns, "dhEmi")[0] || ide.querySelector("dhEmi"))?.textContent || "";
+          const nNF = getEl(ide, "nNF")?.textContent || "";
+          const dhEmi = getEl(ide, "dhEmi")?.textContent || "";
+          const dEmi = getEl(ide, "dEmi")?.textContent || ""; // fallback NF-e v2
           if (nNF) setNfNumero(nNF);
-          if (dhEmi) {
-            const dateStr = dhEmi.substring(0, 10);
-            setDataEmissao(dateStr);
-            setDataEntrada(dateStr);
-          }
+          const dataStr = dhEmi ? dhEmi.substring(0, 10) : dEmi.substring(0, 10);
+          if (dataStr) { setDataEmissao(dataStr); setDataEntrada(dataStr); }
         }
 
-        let xmlFornecedorName = "";
-        let xmlFornecedorCnpj = "";
+        // Fornecedor — verifica se já existe; se não, abre dialog pré-preenchido
         if (emit) {
-          const xNome = (emit.getElementsByTagNameNS(ns, "xNome")[0] || emit.querySelector("xNome"))?.textContent || "";
-          const cnpj = (emit.getElementsByTagNameNS(ns, "CNPJ")[0] || emit.querySelector("CNPJ"))?.textContent || "";
-          xmlFornecedorName = xNome;
-          xmlFornecedorCnpj = cnpj;
+          const xNome = getEl(emit, "xNome")?.textContent?.trim() || "";
+          const cnpjRaw = getEl(emit, "CNPJ")?.textContent?.trim() || "";
           if (xNome) {
             setFornecedorXml(xNome);
-            // Auto-register supplier if not found - persist via sessionStorage
-            const found = fornecedores.some(
-              (f: any) => f.nome.toLowerCase() === xNome.toLowerCase()
-            );
-            if (!found) {
-              // Real implementation should POST this new Fornecedor to the API
-              // For session simulation:
-              const existing = JSON.parse(sessionStorage.getItem("novos_fornecedores") || "[]");
-              existing.push({
-                id: Date.now(),
-                fornecedor: xNome,
-                cnpj: cnpj ? cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5") : "",
-                razaoSocial: xNome,
-                vendedor: "",
-                email: "",
-                telefone: "",
-              });
-              sessionStorage.setItem("novos_fornecedores", JSON.stringify(existing));
-              toast({ title: "Fornecedor cadastrado", description: `"${xNome}" foi adicionado automaticamente ao cadastro de fornecedores.` });
+            const cnpjFmt = cnpjRaw
+              ? cnpjRaw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
+              : "";
+            const found = fornecedores.find((f: any) => f.nome?.toLowerCase() === xNome.toLowerCase());
+            if (found) {
+              setFornecedorId(String(found.id));
+              setXmlFornecedorNotFound(false);
+            } else {
+              setFornecedorDialogNome(xNome);
+              setFornecedorDialogCnpj(cnpjFmt);
+              setFornecedorDialogRazaoSocial(xNome);
+              setFornecedorDialogEmail("");
+              setFornecedorDialogTelefone("");
+              setXmlFornecedorNotFound(true);
             }
           }
         }
 
+        // Vencimento
         if (cobr) {
-          const dup = cobr.getElementsByTagNameNS(ns, "dup")[0] || cobr.querySelector("dup");
+          const dup = getEl(cobr, "dup");
           if (dup) {
-            const dVenc = (dup.getElementsByTagNameNS(ns, "dVenc")[0] || dup.querySelector("dVenc"))?.textContent || "";
+            const dVenc = getEl(dup, "dVenc")?.textContent || "";
             if (dVenc) setDataVencimento(dVenc);
           }
         }
 
-        setOperacao("compra");
+        // Itens
+        const detList = Array.from(
+          infNFe.getElementsByTagNameNS(ns, "det").length > 0
+            ? infNFe.getElementsByTagNameNS(ns, "det")
+            : infNFe.getElementsByTagName("det")
+        );
 
-        const detElements = infNFe.getElementsByTagNameNS(ns, "det");
-        const detFallback = detElements.length > 0 ? detElements : infNFe.querySelectorAll("det");
         const parsedItens: ItemEntrada[] = [];
-
-        for (let i = 0; i < detFallback.length; i++) {
-          const det = detFallback[i];
-          const prod = det.getElementsByTagNameNS(ns, "prod")[0] || det.querySelector("prod");
-          if (!prod) continue;
-
-          const getVal = (tag: string) => (prod.getElementsByTagNameNS(ns, tag)[0] || prod.querySelector(tag))?.textContent || "";
-
-          const xProd = getVal("xProd");
-          const qCom = getVal("qCom");
-          const vUnCom = getVal("vUnCom");
-          const cProd = getVal("cProd");
-          const uCom = getVal("uCom");
-
+        detList.forEach((det, i) => {
+          const prod =
+            det.getElementsByTagNameNS(ns, "prod")[0] ||
+            det.getElementsByTagName("prod")[0];
+          if (!prod) return;
+          const v = (tag: string) =>
+            (prod.getElementsByTagNameNS(ns, tag)[0] || prod.getElementsByTagName(tag)[0])?.textContent || "";
+          const xProd = v("xProd");
+          const qCom = v("qCom");
+          const vUnCom = v("vUnCom");
+          const matched = itensEstoque.find(
+            (it: any) => it.itens_do_estoque?.toLowerCase() === xProd.toLowerCase()
+          );
           parsedItens.push({
             id: Date.now() + i,
-            item: xProd,
-            marca: "",
-            quantidade: qCom ? parseFloat(qCom).toString() : "0",
-            custoUnitario: vUnCom ? `R$ ${parseFloat(vUnCom).toFixed(2).replace(".", ",")}` : "R$ 0,00",
-            especificacoes: [cProd ? `Cód: ${cProd}` : "", uCom ? `Un: ${uCom}` : ""].filter(Boolean).join(" • "),
-            tipoItem: "novo",
+            itemId: matched ? String(matched.id) : "",
+            itemNome: xProd,
+            quantidade: qCom ? String(parseFloat(qCom)) : "1",
+            custoUnitario: vUnCom ? String(parseFloat(vUnCom)) : "0",
           });
-        }
+        });
 
         if (parsedItens.length > 0) {
           setItens(parsedItens);
           setXmlImported(true);
-          toast({ title: "XML importado com sucesso", description: `${parsedItens.length} iten(s) e dados da nota preenchidos automaticamente.` });
+          toast({ title: "XML importado com sucesso!", description: `${parsedItens.length} item(ns) extraídos.` });
         } else {
-          toast({ title: "Nenhum item encontrado", description: "O XML foi lido mas não contém itens (det/prod).", variant: "destructive" });
+          toast({ title: "Nenhum item encontrado no XML", description: "Verifique se o arquivo é uma NF-e válida.", variant: "destructive" });
         }
       } catch (err) {
-        console.error("Erro ao parsear XML:", err);
-        toast({ title: "Erro ao processar XML", description: "Não foi possível ler o arquivo.", variant: "destructive" });
+        console.error("Erro ao processar XML:", err);
+        toast({ title: "Erro ao processar XML", description: "Verifique o arquivo e tente novamente.", variant: "destructive" });
       }
     };
-    reader.readAsText(xmlFile);
+
+    reader.onerror = () => {
+      toast({ title: "Erro ao ler o arquivo", variant: "destructive" });
+    };
+
+    reader.readAsText(xmlFile, "UTF-8");
   };
 
-  const isFieldLocked = xmlImported && modoEntrada === "xml";
+  // ── Submit ────────────────────────────────────────────────────────────────
+  const handleSalvar = () => {
+    if (!estoqueDestinoId) {
+      toast({ title: "Selecione o estoque de destino", variant: "destructive" });
+      return;
+    }
 
-  const handleSalvar = async () => {
     setIsSaving(true);
 
-    const dataFormatted = dataEntrada || new Date().toISOString().split("T")[0];
-
-    // Simplification for prototype:
-    // This sends the data directly to the new API endpoint
-    // To conform with standard relational models: we might need nested insertions for items.
-
-    // For now we map this properly assuming 'fornecedor' requires an ID, we send a hardcoded '1' 
-    // or the selected value if available in an advanced implementation. 
-    // Currently, Estoque is mapped to use `fornecedor` numeric ID. As this form doesn't actually select a Fornecedor ID (only string names),
-    // we use a mocked ID 1. Real integration would fetch `Fornecedor` from API to list in a dropdown.
-    const createPayload = {
-      data: dataFormatted,
-      nota_fiscal: nfNumero || `NF-${Date.now().toString().slice(-6)}`,
-      fornecedor: 1, // requires Fornecedor ID integer
-      estoque_de_destino: 1, // Requires Unidade ID integer (estoque_de_destino)
-      item: 1, // Requires Item ID integer
-      quantidade: itens.reduce((acc, curr) => acc + (parseFloat(curr.quantidade) || 0), 0),
-      custo_unitario: itens.length > 0 ? parseFloat(itens[0].custoUnitario.replace("R$", "").replace(",", ".")) : 0,
-      custo_total: itens.reduce((acc, curr) => acc + (parseFloat(curr.quantidade) || 0) * (parseFloat(curr.custoUnitario.replace("R$", "").replace(",", ".")) || 0), 0)
-    };
-
-    createEntradaMutation.mutate(createPayload, {
-      onSuccess: () => {
+    // Modo XML: envia o arquivo diretamente ao backend para processamento server-side
+    if (modoEntrada === "xml") {
+      if (!xmlFile) {
+        toast({ title: "Selecione e importe um arquivo XML antes de enviar", variant: "destructive" });
         setIsSaving(false);
-        toast({
-          title: "Entrada salva",
-          description: "A nota de entrada foi registrada com sucesso.",
-        });
-        navigate("/estoque/entradas");
-      },
-      onError: (error: any) => {
-        setIsSaving(false);
-        const errData = error.response?.data;
-        let msgs = "Ocorreu um erro ao salvar a entrada.";
-        if (errData && typeof errData === "object") {
-          msgs = Object.entries(errData).map(([key, val]) => `${key}: ${val}`).join(" | ");
-        }
-        toast({
-          title: "Erro de Validação",
-          description: msgs,
-          variant: "destructive",
-        });
+        return;
       }
-    });
+      const formData = new FormData();
+      formData.append('xml_file', xmlFile);
+      formData.append('unidade', estoqueDestinoId);
+      if (pdfNf) formData.append('pdf_nf', pdfNf);
+      if (pdfBoleto) formData.append('pdf_ticket', pdfBoleto);
+      xmlMutation.mutate(formData);
+      return;
+    }
+
+    // Modo manual
+    if (itens.length === 0) {
+      toast({ title: "Adicione pelo menos um item", variant: "destructive" });
+      setIsSaving(false);
+      return;
+    }
+
+    const itensCadastrados = itens
+      .filter(i => i.itemId)
+      .map(i => ({ item_id: parseInt(i.itemId), quantidade: parseFloat(i.quantidade) || 1, custo_unitario: parseFloat(i.custoUnitario) || 0 }));
+
+    const itensNovos = itens
+      .filter(i => !i.itemId)
+      .map(i => ({ nome_item: i.itemNome, quantidade: parseFloat(i.quantidade) || 1, custo_unitario: parseFloat(i.custoUnitario) || 0 }));
+
+    const payload: any = {
+      data: dataEntrada || new Date().toISOString().split("T")[0],
+      estoque_destino: parseInt(estoqueDestinoId),
+      custo_total: valorTotal,
+      observacao: observacao || "",
+      itens: itensCadastrados,
+      itens_precadastro: itensNovos,
+    };
+    if (fornecedorId) payload.fornecedor = parseInt(fornecedorId);
+    if (nfNumero) {
+      payload.nota_fiscal_numero = nfNumero;
+      payload.nota_fiscal_data_emissao = dataEmissao || dataEntrada || new Date().toISOString().split("T")[0];
+    }
+
+    createMutation.mutate(payload);
   };
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <SimpleFormWizard title="Nova Entrada">
       <Card className="border-border shadow-lg">
-        <CardContent className="p-6 md:p-8">
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-                <PackagePlus className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">
-                  {step === 1 ? "Dados da Entrada" : "Classificação de Itens"}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {step === 1 ? "Passo 1: Preencha os dados e adicione os itens" : "Passo 2: Classifique cada item como novo ou existente no estoque"}
-                </p>
-              </div>
+        <CardContent className="p-6 md:p-8 space-y-6">
+
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
+              <PackagePlus className="h-5 w-5 text-primary" />
             </div>
-
-            {/* Step indicators */}
-            <div className="flex items-center gap-2 mb-4">
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${step === 1 ? "bg-primary text-primary-foreground" : "bg-primary/20 text-primary"}`}>1</div>
-              <div className="flex-1 h-0.5 bg-border" />
-              <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${step === 2 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>2</div>
+            <div>
+              <h2 className="text-xl font-semibold">Dados da Entrada</h2>
+              <p className="text-sm text-muted-foreground">Preencha os dados da nota e os itens recebidos</p>
             </div>
+          </div>
 
-            {step === 1 && (
-              <>
-                {/* Modo de Entrada */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Modo de Cadastro da Nota</Label>
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant={modoEntrada === "manual" ? "default" : "outline"}
-                      className="gap-2 flex-1"
-                      onClick={() => setModoEntrada("manual")}
-                    >
-                      <FileText className="w-4 h-4" /> Cadastrar Manualmente
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={modoEntrada === "xml" ? "default" : "outline"}
-                      className="gap-2 flex-1"
-                      onClick={() => setModoEntrada("xml")}
-                    >
-                      <Upload className="w-4 h-4" /> Importar XML
-                    </Button>
-                  </div>
+          {/* Modo */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Modo de Cadastro</Label>
+            <div className="flex gap-3">
+              <Button type="button" variant={modoEntrada === "manual" ? "default" : "outline"} className="gap-2 flex-1" onClick={() => { setModoEntrada("manual"); setXmlImported(false); }}>
+                <FileText className="w-4 h-4" /> Cadastrar Manualmente
+              </Button>
+              <Button type="button" variant={modoEntrada === "xml" ? "default" : "outline"} className="gap-2 flex-1" onClick={() => setModoEntrada("xml")}>
+                <Upload className="w-4 h-4" /> Importar XML
+              </Button>
+            </div>
+          </div>
+
+          {modoEntrada === "xml" && (
+            <div className="p-4 border border-dashed border-border rounded bg-muted/30 space-y-3">
+              <Label className="text-sm font-medium">Arquivo XML da Nota Fiscal</Label>
+              <div className="flex gap-3 items-end">
+                <Input type="file" accept=".xml" onChange={(e) => setXmlFile(e.target.files?.[0] || null)} className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                <Button type="button" onClick={handleXmlUpload} className="gap-2"><Upload className="w-4 h-4" /> Importar</Button>
+              </div>
+              {fornecedorXml && <p className="text-sm">Fornecedor identificado: <strong>{fornecedorXml}</strong></p>}
+              {isFieldLocked && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
+                  <Lock className="w-3.5 h-3.5" /> Campos preenchidos pelo XML estão bloqueados
                 </div>
+              )}
+            </div>
+          )}
 
-                {modoEntrada === "xml" && (
-                  <div className="space-y-3 p-4 border border-dashed border-border rounded bg-muted/30">
-                    <Label className="text-sm font-medium">Arquivo XML da Nota Fiscal</Label>
-                    <div className="flex gap-3 items-end">
-                      <Input type="file" accept=".xml" onChange={(e) => setXmlFile(e.target.files?.[0] || null)} className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
-                      <Button type="button" onClick={handleXmlUpload} className="gap-2">
-                        <Upload className="w-4 h-4" /> Importar
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Os campos e itens serão preenchidos automaticamente a partir do XML</p>
-                    {fornecedorXml && (
-                      <p className="text-sm text-foreground mt-2">Fornecedor: <strong>{fornecedorXml}</strong></p>
-                    )}
-                    {isFieldLocked && (
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Campos preenchidos pelo XML estão bloqueados para edição</span>
-                      </div>
-                    )}
-                  </div>
-                )}
+          {/* Row: Fornecedor + Estoque de Destino */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Fornecedor</Label>
+              <SearchableSelect
+                options={fornecedorOptions}
+                value={fornecedorId}
+                onValueChange={setFornecedorId}
+                placeholder="Selecione o fornecedor"
+                searchPlaceholder="Pesquisar fornecedor..."
+              />
+              {modoEntrada === "xml" && xmlFornecedorNotFound && !fornecedorId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-1 gap-2 text-amber-700 border-amber-400 hover:bg-amber-50"
+                  onClick={() => setShowFornecedorDialog(true)}
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Cadastrar fornecedor do XML
+                </Button>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Estoque de Destino <span className="text-destructive">*</span></Label>
+              <Select value={estoqueDestinoId} onValueChange={setEstoqueDestinoId}>
+                <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
+                <SelectContent className="bg-popover">
+                  {unidades.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.unidade}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Data <span className="text-destructive">*</span></Label>
-                    <Input type="date" value={dataEntrada} onChange={(e) => setDataEntrada(e.target.value)} className="form-input" readOnly={isFieldLocked && !!dataEntrada} disabled={isFieldLocked && !!dataEntrada} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Operação <span className="text-destructive">*</span></Label>
-                    <Select value={operacao} onValueChange={setOperacao} disabled={isFieldLocked && !!operacao}>
-                      <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a operação" /></SelectTrigger>
-                      <SelectContent className="bg-popover">
-                        {operacaoOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
+          {/* Row: Data + NF */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Data de Entrada <span className="text-destructive">*</span></Label>
+              <Input type="date" value={dataEntrada} onChange={(e) => setDataEntrada(e.target.value)} className="form-input" disabled={isFieldLocked && !!dataEntrada} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Número da NF <span className="text-destructive">*</span></Label>
+              <Input type="text" value={nfNumero} onChange={(e) => setNfNumero(e.target.value)} placeholder="Ex: 001234" className="form-input" disabled={isFieldLocked && !!nfNumero} />
+            </div>
+          </div>
+
+          {/* Row: Emissão + Vencimento */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Data de Emissão <span className="text-destructive">*</span></Label>
+              <Input type="date" value={dataEmissao} onChange={(e) => setDataEmissao(e.target.value)} className="form-input" disabled={isFieldLocked && !!dataEmissao} />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Data de Vencimento <span className="text-destructive">*</span></Label>
+              <Input type="date" value={dataVencimento} onChange={(e) => setDataVencimento(e.target.value)} className="form-input" disabled={isFieldLocked && !!dataVencimento} />
+            </div>
+          </div>
+
+          {/* Row: PDFs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">PDF da NF</Label>
+              <Input type="file" accept=".pdf" onChange={(e) => setPdfNf(e.target.files?.[0] || null)} className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">PDF do Boleto</Label>
+              <Input type="file" accept=".pdf" onChange={(e) => setPdfBoleto(e.target.files?.[0] || null)} className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+            </div>
+          </div>
+
+          {/* Observação */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Observação</Label>
+            <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} className="form-input min-h-[80px]" placeholder="Observações sobre a entrada..." />
+          </div>
+
+          {/* ── Itens ───────────────────────────────────────────────────── */}
+          <div className="border-t pt-6 space-y-4">
+            <h3 className="text-lg font-semibold">Itens da Nota Fiscal</h3>
+
+            {modoEntrada === "manual" && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="md:col-span-2 space-y-2">
+                  <Label className="text-sm font-medium">Item</Label>
+                  <SearchableSelect
+                    options={itemOptions}
+                    value={itemSelecionado}
+                    onValueChange={setItemSelecionado}
+                    placeholder="Selecione o item"
+                    searchPlaceholder="Pesquisar item..."
+                  />
                 </div>
-
-                {operacao === "transferencia" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Estoque de Origem</Label>
-                      <Select value={estoqueOrigem} onValueChange={setEstoqueOrigem}>
-                        <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          {unidadeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Estoque de Destino <span className="text-destructive">*</span></Label>
-                      <Select value={estoqueDestino} onValueChange={setEstoqueDestino}>
-                        <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          {unidadeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-
-                {operacao === "compra" && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">Estoque de Destino <span className="text-destructive">*</span></Label>
-                      <Select value={estoqueDestino} onValueChange={setEstoqueDestino}>
-                        <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          {unidadeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Nota Fiscal <span className="text-destructive">*</span></Label>
-                    <Input type="text" value={nfNumero} onChange={(e) => setNfNumero(e.target.value)} placeholder="Número da NF" className="form-input" readOnly={isFieldLocked && !!nfNumero} disabled={isFieldLocked && !!nfNumero} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Data de Emissão</Label>
-                    <Input type="date" value={dataEmissao} onChange={(e) => setDataEmissao(e.target.value)} className="form-input" readOnly={isFieldLocked && !!dataEmissao} disabled={isFieldLocked && !!dataEmissao} />
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Quantidade</Label>
+                  <Input type="number" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} placeholder="Qtd" className="form-input" min="1" />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Data de Vencimento</Label>
-                    <Input type="date" value={dataVencimento} onChange={(e) => setDataVencimento(e.target.value)} className="form-input" readOnly={isFieldLocked && !!dataVencimento} disabled={isFieldLocked && !!dataVencimento} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Valor Total</Label>
-                    <Input type="text" value={valorTotal > 0 ? `R$ ${valorTotal.toFixed(2).replace(".", ",")}` : ""} placeholder="Calculado automaticamente a partir dos itens" className="form-input" readOnly disabled />
-                  </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Custo Unitário (R$)</Label>
+                  <Input type="number" step="0.01" value={custoUnitario} onChange={(e) => setCustoUnitario(e.target.value)} placeholder="0,00" className="form-input" />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">PDF da Nota Fiscal</Label>
-                    <Input type="file" accept=".pdf" className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">PDF do Boleto</Label>
-                    <Input type="file" accept=".pdf" className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
-                  </div>
+                <div className="md:col-span-4">
+                  <Button type="button" onClick={handleAddItem}>Adicionar Item</Button>
                 </div>
-
-                <div className="grid grid-cols-1 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Observação</Label>
-                    <Textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} className="form-input min-h-[80px]" placeholder="Observações sobre a entrada..." />
-                  </div>
-                </div>
-
-                {modoEntrada === "manual" && (
-                  <div className="border-t pt-6">
-                    <h3 className="text-lg font-semibold text-foreground mb-4">Itens da Nota Fiscal</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Item</Label>
-                        <Input value={itemForm.item} onChange={(e) => setItemForm(p => ({ ...p, item: e.target.value }))} placeholder="Nome do item" className="form-input" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Marca</Label>
-                        <Input value={itemForm.marca} onChange={(e) => setItemForm(p => ({ ...p, marca: e.target.value }))} placeholder="Marca" className="form-input" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Custo Unitário</Label>
-                        <Input value={itemForm.custoUnitario} onChange={(e) => setItemForm(p => ({ ...p, custoUnitario: e.target.value }))} placeholder="R$ 0,00" className="form-input" />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Quantidade</Label>
-                        <Input type="number" value={itemForm.quantidade} onChange={(e) => setItemForm(p => ({ ...p, quantidade: e.target.value }))} placeholder="Qtd" className="form-input" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Especificações</Label>
-                        <Input value={itemForm.especificacoes} onChange={(e) => setItemForm(p => ({ ...p, especificacoes: e.target.value }))} placeholder="Specs" className="form-input" />
-                      </div>
-                    </div>
-                    <div className="flex gap-3 mt-4">
-                      <Button type="button" onClick={handleAddItem}>Adicionar Item</Button>
-                    </div>
-                  </div>
-                )}
-
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-center">Item</TableHead>
-                      <TableHead className="text-center">Marca</TableHead>
-                      <TableHead className="text-center">Quantidade</TableHead>
-                      <TableHead className="text-center">Custo Unitário</TableHead>
-                      <TableHead className="text-center">Especificações</TableHead>
-                      {!isFieldLocked && <TableHead className="text-center">Ações</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itens.length === 0 ? (
-                      <TableRow><TableCell colSpan={isFieldLocked ? 5 : 6} className="text-center text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
-                    ) : (
-                      itens.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="text-center">{item.item}</TableCell>
-                          <TableCell className="text-center">{item.marca}</TableCell>
-                          <TableCell className="text-center">{item.quantidade}</TableCell>
-                          <TableCell className="text-center">{item.custoUnitario}</TableCell>
-                          <TableCell className="text-center">{item.especificacoes}</TableCell>
-                          {!isFieldLocked && (
-                            <TableCell className="text-center">
-                              <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={handleCancelar}>Cancelar</Button>
-                  <Button onClick={handleNextStep} className="gap-2">Próximo <ArrowRight className="w-4 h-4" /></Button>
-                </div>
-              </>
+              </div>
             )}
 
-            {step === 2 && (
-              <>
-                <p className="text-sm text-muted-foreground">Para cada item, indique se é um <strong>item novo</strong> no estoque ou se deseja <strong>conciliar com um item existente</strong>.</p>
-                <div className="space-y-4">
-                  {itens.map((item) => (
-                    <Card key={item.id} className="border-border">
-                      <CardContent className="p-4">
-                        <div className="flex flex-col md:flex-row md:items-center gap-4">
-                          <div className="flex-1">
-                            <p className="font-medium text-foreground">{item.item}</p>
-                            <p className="text-xs text-muted-foreground">{item.marca} • Qtd: {item.quantidade} • {item.custoUnitario}</p>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <RadioGroup value={item.tipoItem} onValueChange={(v) => updateItemType(item.id, v as "novo" | "existente")} className="flex gap-4">
-                              <div className="flex items-center gap-2">
-                                <RadioGroupItem value="novo" id={`novo-${item.id}`} />
-                                <Label htmlFor={`novo-${item.id}`} className="text-sm cursor-pointer">Item Novo</Label>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <RadioGroupItem value="existente" id={`existente-${item.id}`} />
-                                <Label htmlFor={`existente-${item.id}`} className="text-sm cursor-pointer">Item Existente</Label>
-                              </div>
-                            </RadioGroup>
-                          </div>
-                          {item.tipoItem === "existente" && (
-                            <div className="min-w-[200px]">
-                              <Select value={item.itemExistenteId || ""} onValueChange={(v) => updateItemExistente(item.id, v)}>
-                                <SelectTrigger><SelectValue placeholder="Selecione o item" /></SelectTrigger>
-                                <SelectContent className="bg-popover">
-                                  {itensEstoqueData.map(opt => <SelectItem key={opt.id} value={opt.id.toString()}>{opt.itens_do_estoque}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+            {/* Items table */}
+            <div className="rounded border border-border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-table-header">
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-center">Quantidade</TableHead>
+                    <TableHead className="text-center">Custo Unit.</TableHead>
+                    <TableHead className="text-center">Total</TableHead>
+                    {!isFieldLocked && <TableHead className="text-center">Ações</TableHead>}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {itens.length === 0 ? (
+                    <TableRow><TableCell colSpan={isFieldLocked ? 4 : 5} className="text-center py-6 text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
+                  ) : (
+                    itens.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          <div>{item.itemNome}</div>
+                          {!item.itemId && <span className="text-xs text-amber-600">Pré-cadastro (item novo)</span>}
+                        </TableCell>
+                        <TableCell className="text-center">{item.quantidade}</TableCell>
+                        <TableCell className="text-center">R$ {parseFloat(item.custoUnitario || "0").toFixed(2).replace(".", ",")}</TableCell>
+                        <TableCell className="text-center">R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}</TableCell>
+                        {!isFieldLocked && (
+                          <TableCell className="text-center">
+                            <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
 
-                <div className="flex justify-between gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setStep(1)} className="gap-2"><ArrowLeft className="w-4 h-4" /> Voltar</Button>
-                  <FormActionBar onSave={handleSalvar} onCancel={handleCancelar} isSaving={isSaving} saveLabel="Enviar para Aprovação" />
-                </div>
-              </>
+            {valorTotal > 0 && (
+              <div className="flex justify-end">
+                <span className="text-sm font-semibold">Valor Total: R$ {valorTotal.toFixed(2).replace(".", ",")}</span>
+              </div>
             )}
           </div>
+
+          {/* Itens XML sem match - permite selecionar item existente */}
+          {isFieldLocked && itens.some(i => !i.itemId) && (
+            <div className="border-t pt-4 space-y-3">
+              <p className="text-sm text-amber-700 font-medium">Alguns itens do XML não foram encontrados no estoque. Vincule-os ou deixe como pré-cadastro:</p>
+              {itens.filter(i => !i.itemId).map(item => (
+                <div key={item.id} className="flex items-center gap-4 p-3 border rounded">
+                  <span className="flex-1 text-sm font-medium">{item.itemNome}</span>
+                  <div className="w-64">
+                    <SearchableSelect
+                      options={itemOptions}
+                      value={item.itemId}
+                      onValueChange={(v) => setItens(prev => prev.map(i => i.id === item.id ? { ...i, itemId: v } : i))}
+                      placeholder="Vincular a item existente"
+                      searchPlaceholder="Pesquisar..."
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <FormActionBar
+            onSave={handleSalvar}
+            onCancel={() => navigate("/estoque/entradas")}
+            isSaving={isSaving}
+            saveLabel="Enviar para Aprovação"
+          />
         </CardContent>
       </Card>
+
+      {/* Dialog cadastro de fornecedor — apenas modo XML */}
+      <Dialog open={showFornecedorDialog} onOpenChange={setShowFornecedorDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5" /> Cadastrar Fornecedor
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground -mt-2">
+            Dados extraídos do XML da NF-e. Revise e complete antes de salvar.
+          </p>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Nome <span className="text-destructive">*</span></Label>
+              <Input
+                value={fornecedorDialogNome}
+                onChange={(e) => setFornecedorDialogNome(e.target.value)}
+                placeholder="Nome do fornecedor"
+                className="form-input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">CNPJ</Label>
+              <Input
+                value={fornecedorDialogCnpj}
+                onChange={(e) => setFornecedorDialogCnpj(e.target.value)}
+                placeholder="00.000.000/0000-00"
+                className="form-input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Razão Social</Label>
+              <Input
+                value={fornecedorDialogRazaoSocial}
+                onChange={(e) => setFornecedorDialogRazaoSocial(e.target.value)}
+                placeholder="Razão social"
+                className="form-input"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Email</Label>
+                <Input
+                  type="email"
+                  value={fornecedorDialogEmail}
+                  onChange={(e) => setFornecedorDialogEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  className="form-input"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Telefone</Label>
+                <Input
+                  value={fornecedorDialogTelefone}
+                  onChange={(e) => setFornecedorDialogTelefone(e.target.value)}
+                  placeholder="(00) 00000-0000"
+                  className="form-input"
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowFornecedorDialog(false)}
+              disabled={isSavingFornecedor}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSaveFornecedor}
+              disabled={isSavingFornecedor}
+            >
+              {isSavingFornecedor ? "Salvando..." : "Salvar Fornecedor"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </SimpleFormWizard>
   );
 }

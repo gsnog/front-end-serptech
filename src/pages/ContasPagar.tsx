@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
+import { SortableHead } from "@/components/SortableHead"
 import { Plus, FileText, CreditCard, Receipt, Wallet } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
@@ -14,7 +15,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchContasPagar, updateContaPagar, deleteContaPagar, type ContaPagar as Conta, fetchEstatisticasFinanceiras } from "@/services/financeiro"
+import { fetchContasPagar, updateContaPagar, deleteContaPagar, type ContaPagar as Conta, fetchEstatisticasFinanceiras, contasPagarQueryKey } from "@/services/financeiro"
+import { useSortable } from "@/hooks/useSortable"
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 
 const ContasPagar = () => {
   const formatBRL = (value?: number | null) =>
@@ -33,19 +36,22 @@ const ContasPagar = () => {
   const [editItem, setEditItem] = useState<Conta | null>(null)
   const [editData, setEditData] = useState<Partial<Conta>>({})
 
-  const [currentPage, setCurrentPage] = useState(1);
+  useRealtimeUpdates([[...contasPagarQueryKey]]);
+
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim]);
+
   const { data: response, isLoading } = useQuery({
-    queryKey: ['contas_pagar', currentPage],
-    queryFn: () => fetchContasPagar(currentPage),
+    queryKey: [...contasPagarQueryKey, page],
+    queryFn: () => fetchContasPagar(page),
   });
-  const items = Array.isArray(response) ? response : (response?.results ?? []);
-  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
+  const items = response?.results ?? [];
+  const serverTotal = response?.count ?? 0;
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; payload: Partial<Conta> }) => updateContaPagar(data.id, data.payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contas_pagar'] });
+      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
       setEditItem(null);
       toast({ title: "Salvo", description: "Conta atualizada com sucesso." });
     },
@@ -55,7 +61,7 @@ const ContasPagar = () => {
   const deleteMutation = useMutation({
     mutationFn: deleteContaPagar,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['contas_pagar'] });
+      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
       setDeleteId(null);
       toast({ title: "Removida", description: "Conta excluída com sucesso." });
     },
@@ -71,6 +77,14 @@ const ContasPagar = () => {
       return matchBeneficiario && matchDocumento && matchDataInicio && matchDataFim
     })
   }, [items, filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim])
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const paginatedItems = sorted;
+  const total = serverTotal;
+  const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
+  const hasNext = page < totalPages;
+  const hasPrev = page > 1;
+  const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
 
   const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Beneficiário: c.fornecedor_nome, Documento: c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
@@ -105,44 +119,54 @@ const ContasPagar = () => {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={totalCount}
+          resultsCount={filtered.length}
         />
 
-        <Table>
-          <TableHeader><TableRow>
-            <TableHead className="text-center">Lançamento</TableHead><TableHead className="text-center">Faturamento</TableHead><TableHead className="text-center">Beneficiário</TableHead><TableHead className="text-center">Documento</TableHead><TableHead className="text-center">Título</TableHead><TableHead className="text-center">Total</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Ações</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
-            ) : (
-              filtered.map((conta: Conta) => (
-                <TableRow key={conta.id}>
-                  <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
-                  <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
-                  <TableCell className="text-center">{conta.fornecedor_nome || "—"}</TableCell>
-                  <TableCell className="text-center">{conta.documento || "—"}</TableCell>
-                  <TableCell className="text-center">{formatBRL(conta.valor_do_titulo)}</TableCell>
-                  <TableCell className="text-center">{formatBRL(conta.valor_total)}</TableCell>
-                  <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
-                  <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
-                  <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+        <div className="rounded border border-border overflow-hidden">
+          <Table>
+            <TableHeader><TableRow className="bg-table-header">
+              <SortableHead label="Lançamento" field="data_de_lancamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Faturamento" field="data_de_faturamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Beneficiário" field="fornecedor_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Documento" field="documento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Título" field="valor_do_titulo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Total" field="valor_total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Vencimento" field="data_de_vencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold">Ações</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : paginatedItems.length === 0 ? (
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+              ) : (
+                paginatedItems.map((conta: Conta) => (
+                  <TableRow key={conta.id} className="hover:bg-table-hover transition-colors">
+                    <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
+                    <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
+                    <TableCell className="text-center">{conta.fornecedor_nome || "—"}</TableCell>
+                    <TableCell className="text-center">{conta.documento || "—"}</TableCell>
+                    <TableCell className="text-center">{formatBRL(conta.valor_do_titulo)}</TableCell>
+                    <TableCell className="text-center">{formatBRL(conta.valor_total)}</TableCell>
+                    <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
+                    <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
+                    <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

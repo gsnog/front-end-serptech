@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -8,6 +9,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Search, Clock, User, Settings, FileText, DollarSign, Shield } from "lucide-react";
+import { FilterSection } from "@/components/FilterSection";
+import { SortableHead } from "@/components/SortableHead";
+import { usePagination } from "@/hooks/usePagination";
+import { useSortable } from "@/hooks/useSortable";
 
 // Logs de auditoria — dados estáticos temporários (futuro: endpoint /api/auditoria/)
 const auditLogs = [
@@ -28,42 +33,41 @@ const tipoColors: Record<string, string> = {
 export default function Auditoria() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("all");
+  const [usuarioFilter, setUsuarioFilter] = useState("");
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
 
-  const filteredLogs = auditLogs.filter((log) => {
+  const usuariosUnicos = Array.from(new Set(auditLogs.map(l => l.usuario)));
+
+  const filteredLogs = useMemo(() => auditLogs.filter((log) => {
     const matchesSearch =
       log.acao.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.pessoa.toLowerCase().includes(searchTerm.toLowerCase());
+      log.pessoa.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      log.detalhes.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTipo = tipoFilter === "all" || log.tipo === tipoFilter;
-    return matchesSearch && matchesTipo;
-  });
+    const matchesUsuario = !usuarioFilter || log.usuario === usuarioFilter;
+    // dataHora format: "DD/MM/YYYY HH:mm:ss"
+    const logDate = log.dataHora.split(" ")[0].split("/").reverse().join("-");
+    const matchesDataInicio = filterDataInicio ? logDate >= filterDataInicio : true;
+    const matchesDataFim = filterDataFim ? logDate <= filterDataFim : true;
+    return matchesSearch && matchesTipo && matchesUsuario && matchesDataInicio && matchesDataFim;
+  }), [searchTerm, tipoFilter, usuarioFilter, filterDataInicio, filterDataFim]);
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filteredLogs);
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted);
 
   return (
     <div className="space-y-6">
-      <div className="filter-card">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por ação, pessoa ou detalhes..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select value={tipoFilter} onValueChange={setTipoFilter}>
-            <SelectTrigger><SelectValue placeholder="Tipo de Alteração" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os tipos</SelectItem>
-              <SelectItem value="acesso">Acesso</SelectItem>
-              <SelectItem value="salario">Salário</SelectItem>
-              <SelectItem value="gestor">Gestor</SelectItem>
-              <SelectItem value="dashboard">Dashboard</SelectItem>
-              <SelectItem value="documento">Documento</SelectItem>
-              <SelectItem value="setor">Setor</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+      <FilterSection
+        fields={[
+          { type: "text", label: "Buscar", placeholder: "Ação, pessoa ou detalhes...", value: searchTerm, onChange: setSearchTerm, width: "flex-1 min-w-[200px]" },
+          { type: "select", label: "Tipo", placeholder: "Todos", value: tipoFilter === "all" ? "" : tipoFilter, onChange: (v) => setTipoFilter(v || "all"), options: [{ value: "acesso", label: "Acesso" }, { value: "salario", label: "Salário" }, { value: "gestor", label: "Gestor" }, { value: "dashboard", label: "Dashboard" }, { value: "documento", label: "Documento" }, { value: "setor", label: "Setor" }], width: "min-w-[160px]" },
+          { type: "select", label: "Usuário", placeholder: "Todos", value: usuarioFilter, onChange: setUsuarioFilter, options: [{ value: "todos", label: "Todos" }, ...usuariosUnicos.map(u => ({ value: u, label: u }))], width: "min-w-[160px]" },
+          { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
+          { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
+        ]}
+        resultsCount={filteredLogs.length}
+      />
 
       <Card className="border-border">
         <CardHeader>
@@ -76,17 +80,17 @@ export default function Auditoria() {
           <div className="rounded border border-border">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-24">Tipo</TableHead>
-                  <TableHead>Ação</TableHead>
-                  <TableHead>Pessoa</TableHead>
-                  <TableHead>Por</TableHead>
-                  <TableHead>Data/Hora</TableHead>
-                  <TableHead>Detalhes</TableHead>
+                <TableRow className="bg-table-header">
+                  <TableHead className="w-24 font-semibold">Tipo</TableHead>
+                  <SortableHead label="Ação" field="acao" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableHead label="Pessoa" field="pessoa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableHead label="Por" field="usuario" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableHead label="Data/Hora" field="dataHora" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <TableHead className="font-semibold">Detalhes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredLogs.map((log) => {
+                {paginatedItems.map((log) => {
                   const Icon = tipoIcons[log.tipo] || Clock;
                   const colorClass = tipoColors[log.tipo] || "bg-muted text-muted-foreground";
                   return (
@@ -106,13 +110,19 @@ export default function Auditoria() {
                 })}
               </TableBody>
             </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                  <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
-      <div className="text-sm text-muted-foreground">
-        Exibindo {filteredLogs.length} de {auditLogs.length} registros
-      </div>
     </div>
   );
 }

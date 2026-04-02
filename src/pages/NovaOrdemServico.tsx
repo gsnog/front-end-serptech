@@ -1,29 +1,77 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { ClipboardCheck } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { DropdownWithAdd } from "@/components/DropdownWithAdd";
+import { toast } from "@/hooks/use-toast";
+import {
+  createOrdemServico, updateOrdemServico, fetchOrdemServico,
+  ordensServicoQueryKey,
+} from "@/services/estoque";
 
 export default function NovaOrdemServico() {
   const navigate = useNavigate();
-  const { isSaving, handleSave } = useSaveWithDelay();
-  const [formData, setFormData] = useState({ tipoOrdem: "", descricao: "" });
+  const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+  const isEditing = !!id;
 
+  const [formData, setFormData] = useState({ tipoOrdem: "", descricao: "" });
   const [tipoOptions, setTipoOptions] = useState([
-    { value: "servicos-gerais", label: "Serviços Gerais" },
-    { value: "patrimonio", label: "Patrimônio" },
-    { value: "suporte", label: "Suporte" },
+    { value: "Serviços Gerais", label: "Serviços Gerais" },
+    { value: "Patrimônio", label: "Patrimônio" },
+    { value: "Suporte", label: "Suporte" },
   ]);
 
-  const handleSalvar = () => handleSave("/estoque/ordem-servico", "Ordem de serviço salva com sucesso!");
+  // Load existing order for editing
+  const { data: existingOrder } = useQuery({
+    queryKey: ['ordemServico', id],
+    queryFn: () => fetchOrdemServico(Number(id)),
+    enabled: isEditing,
+  });
+
+  // Pre-populate form when editing
+  useEffect(() => {
+    if (existingOrder) {
+      setFormData({
+        tipoOrdem: existingOrder.tipo_de_ordem || "",
+        descricao: existingOrder.descricao || "",
+      });
+    }
+  }, [existingOrder]);
+
+  const mutation = useMutation({
+    mutationFn: (payload: any) =>
+      isEditing ? updateOrdemServico(Number(id), payload) : createOrdemServico(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ordensServicoQueryKey });
+      toast({ title: isEditing ? "Ordem de serviço atualizada!" : "Ordem de serviço criada!" });
+      navigate("/estoque/ordem-servico");
+    },
+    onError: () => {
+      toast({ title: "Erro ao salvar", description: "Verifique os dados e tente novamente.", variant: "destructive" });
+    },
+  });
+
+  const handleSalvar = () => {
+    if (!formData.tipoOrdem || !formData.descricao) {
+      toast({ title: "Campos obrigatórios", description: "Preencha o tipo de ordem e a descrição.", variant: "destructive" });
+      return;
+    }
+    mutation.mutate({
+      tipo_de_ordem: formData.tipoOrdem,
+      descricao: formData.descricao,
+    });
+  };
+
   const handleCancelar = () => navigate("/estoque/ordem-servico");
 
   return (
-    <SimpleFormWizard title="Nova Ordem de Serviço">
+    <SimpleFormWizard title={isEditing ? "Editar Ordem de Serviço" : "Nova Ordem de Serviço"}>
       <Card className="border-border shadow-lg">
         <CardContent className="p-6 md:p-8">
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -45,20 +93,20 @@ export default function NovaOrdemServico() {
                 onChange={(value) => setFormData({ ...formData, tipoOrdem: value })}
                 options={tipoOptions}
                 onAddNew={(name) => {
-                  const newValue = name.toLowerCase().replace(/\s+/g, "-");
-                  setTipoOptions(prev => [...prev, { value: newValue, label: name }]);
-                  setFormData(prev => ({ ...prev, tipoOrdem: newValue }));
+                  setTipoOptions(prev => [...prev, { value: name, label: name }]);
+                  setFormData(prev => ({ ...prev, tipoOrdem: name }));
                 }}
               />
             </div>
 
             <div className="grid grid-cols-1 gap-6">
               <div className="space-y-2">
-                <Textarea 
-                  value={formData.descricao} 
-                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })} 
-                  placeholder="Digite a descrição da ordem de serviço" 
-                  className="form-input min-h-[120px]" 
+                <Label className="text-sm font-medium">Descrição</Label>
+                <Textarea
+                  value={formData.descricao}
+                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
+                  placeholder="Digite a descrição da ordem de serviço"
+                  className="form-input min-h-[120px]"
                 />
               </div>
             </div>
@@ -66,7 +114,7 @@ export default function NovaOrdemServico() {
             <FormActionBar
               onSave={handleSalvar}
               onCancel={handleCancelar}
-              isSaving={isSaving}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

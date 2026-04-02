@@ -41,68 +41,58 @@ interface Comissao { id: number; responsavel: number; oportunidade: number; valo
 interface ProdutoComercial { id: string; codigo: string; nome: string; categoria: string; precoBase: number; margem: number; ativo: boolean; }
 
 // --- API calls ---
-export const fetchLeads = async (page?: number, search?: string): Promise<Lead[] | PaginatedResponse<Lead>> => {
-    const params: Record<string, unknown> = {};
-    if (page !== undefined) params.page = page;
-    if (search) params.search = search;
-    const res = await api.get('/api/crm/leads/', { params });
+export const fetchLeads = async (): Promise<Lead[] | PaginatedResponse<Lead>> => {
+    const res = await api.get('/api/crm/leads/');
     return res.data;
 };
 
-export const fetchContas = async (page?: number, search?: string): Promise<Conta[] | PaginatedResponse<Conta>> => {
-    const params: Record<string, unknown> = {};
-    if (page !== undefined) params.page = page;
-    if (search) params.search = search;
-    const res = await api.get('/api/crm/contas/', { params });
+export const fetchContas = async (): Promise<Conta[] | PaginatedResponse<Conta>> => {
+    const res = await api.get('/api/crm/contas/');
     return res.data;
 };
 
-export const fetchOportunidades = async (page?: number, search?: string): Promise<Oportunidade[] | PaginatedResponse<Oportunidade>> => {
-    const params: Record<string, unknown> = {};
-    if (page !== undefined) params.page = page;
-    if (search) params.search = search;
-    const res = await api.get('/api/crm/oportunidades/', { params });
+export const fetchOportunidades = async (): Promise<Oportunidade[] | PaginatedResponse<Oportunidade>> => {
+    const res = await api.get('/api/crm/oportunidades/');
     return res.data;
 };
 
-export const fetchAtividades = async (page?: number, search?: string): Promise<Atividade[] | PaginatedResponse<Atividade>> => {
-    const params: Record<string, unknown> = {};
-    if (page !== undefined) params.page = page;
-    if (search) params.search = search;
-    const res = await api.get('/api/crm/atividades/', { params });
+export const fetchAtividades = async (): Promise<Atividade[] | PaginatedResponse<Atividade>> => {
+    const res = await api.get('/api/crm/atividades/');
     return res.data;
 };
 
-export const fetchContatos = async (page?: number, search?: string): Promise<Contato[] | PaginatedResponse<Contato>> => {
-    const params: Record<string, unknown> = {};
-    if (page !== undefined) params.page = page;
-    if (search) params.search = search;
-    const res = await api.get('/api/crm/contatos/', { params });
+export const fetchContatos = async (): Promise<Contato[] | PaginatedResponse<Contato>> => {
+    const res = await api.get('/api/crm/contatos/');
     return res.data;
 };
 
-export const fetchPropostas = async (page?: number): Promise<Proposta[] | PaginatedResponse<Proposta>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/crm/propostas/', { params });
+export const fetchPropostas = async (): Promise<Proposta[] | PaginatedResponse<Proposta>> => {
+    const res = await api.get('/api/crm/propostas/');
     return res.data;
 };
 
-export const fetchPedidos = async (page?: number): Promise<Pedido[] | PaginatedResponse<Pedido>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/crm/pedidos/', { params });
+export const fetchPedidos = async (): Promise<Pedido[] | PaginatedResponse<Pedido>> => {
+    const res = await api.get('/api/crm/pedidos/');
     return res.data;
 };
 
-export const fetchMetas = async (page?: number): Promise<Meta[] | PaginatedResponse<Meta>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/crm/metas/', { params });
+export const fetchMetas = async (): Promise<Meta[] | PaginatedResponse<Meta>> => {
+    const res = await api.get('/api/crm/metas/');
     return res.data;
 };
 
-export const fetchComissoes = async (page?: number): Promise<Comissao[] | PaginatedResponse<Comissao>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/crm/comissoes/', { params });
+export const fetchComissoes = async (): Promise<Comissao[] | PaginatedResponse<Comissao>> => {
+    const res = await api.get('/api/crm/comissoes/');
     return res.data;
+};
+
+export const updateOportunidade = async (id: number, data: Partial<Oportunidade>): Promise<Oportunidade> => {
+    const res = await api.patch(`/api/crm/oportunidades/${id}/`, data);
+    return res.data;
+};
+
+export const deleteOportunidade = async (id: number): Promise<void> => {
+    await api.delete(`/api/crm/oportunidades/${id}/`);
 };
 
 // React Query Keys

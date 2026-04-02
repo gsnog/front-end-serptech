@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,9 +9,10 @@ import { ExportButton } from "@/components/ExportButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Calendar, Phone, Mail, FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { fetchAtividades, fetchOportunidades, fetchLeads } from "@/services/comercial";
+import { fetchAtividades, fetchOportunidades, fetchLeads, atividadesQueryKey } from "@/services/comercial";
 import { useQuery } from "@tanstack/react-query";
-
+import { usePagination } from "@/hooks/usePagination";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -27,16 +28,18 @@ export default function Atividades() {
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [filterResponsavel, setFilterResponsavel] = useState("");
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
   const [view, setView] = useState<"meu-dia" | "pendencias" | "todas">("meu-dia");
 
-  const [currentPage, setCurrentPage] = useState(1);
+  useRealtimeUpdates([[...atividadesQueryKey]]);
+
   const { data: atividadesResponse, isLoading } = useQuery({
-    queryKey: ['crm_atividades', currentPage],
-    queryFn: () => fetchAtividades(currentPage),
+    queryKey: atividadesQueryKey,
+    queryFn: () => fetchAtividades(),
   });
   const atividades = Array.isArray(atividadesResponse) ? atividadesResponse : (atividadesResponse?.results ?? []);
-  const totalCount = Array.isArray(atividadesResponse) ? atividadesResponse.length : (atividadesResponse?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
   const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
   const { data: leads = [] } = useQuery({ queryKey: ['crm_leads'], queryFn: fetchLeads });
 
@@ -55,15 +58,26 @@ export default function Atividades() {
     handleStatusChange(id, currentStatus === 'concluida' ? 'pendente' : 'concluida');
   };
 
-  const filteredAtividades = atividades.filter(atividade => {
+  const responsaveisUnicos = Array.from(new Set(atividades.map((a: any) => String(a.responsavel)).filter(Boolean)));
+  const responsavelOptions = [
+    { value: "todos", label: "Todos" },
+    ...responsaveisUnicos.map(r => ({ value: r, label: r }))
+  ];
+
+  const filteredAtividades = useMemo(() => atividades.filter(atividade => {
     const matchSearch = !searchTerm || atividade.titulo.toLowerCase().includes(searchTerm.toLowerCase());
     const matchTipo = !tipoFilter || atividade.tipo === tipoFilter;
     const matchStatus = !statusFilter || atividade.status === statusFilter;
+    const matchResponsavel = !filterResponsavel || filterResponsavel === "todos" || String(atividade.responsavel) === filterResponsavel;
+    const matchDataInicio = filterDataInicio ? atividade.data >= filterDataInicio : true;
+    const matchDataFim = filterDataFim ? atividade.data <= filterDataFim : true;
     let matchView = true;
     if (view === "meu-dia") matchView = atividade.data === today;
     else if (view === "pendencias") matchView = atividade.status === 'pendente';
-    return matchSearch && matchTipo && matchStatus && matchView;
-  });
+    return matchSearch && matchTipo && matchStatus && matchResponsavel && matchDataInicio && matchDataFim && matchView;
+  }), [atividades, searchTerm, tipoFilter, statusFilter, filterResponsavel, filterDataInicio, filterDataFim, view, today]);
+
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(filteredAtividades);
 
   const getRelacionadoLabel = (atividade: any) => {
     if (atividade.oportunidade) return oportunidades.find(o => o.id === atividade.oportunidade)?.titulo;
@@ -168,13 +182,16 @@ export default function Atividades() {
             type: "select", label: "Status", placeholder: "Todos", value: statusFilter, onChange: setStatusFilter, options: [
               { value: "pendente", label: "Pendente" }, { value: "concluida", label: "Concluída" }, { value: "cancelada", label: "Cancelada" }
             ], width: "min-w-[140px]"
-          }
+          },
+          { type: "select", label: "Responsável", placeholder: "Todos", value: filterResponsavel, onChange: setFilterResponsavel, options: responsavelOptions, width: "min-w-[160px]" },
+          { type: "date", label: "Data de", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[155px]" },
+          { type: "date", label: "Data até", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[155px]" }
         ]}
         resultsCount={filteredAtividades.length}
       />
 
       <div className="space-y-3">
-        {filteredAtividades.map((atividade) => {
+        {paginatedItems.map((atividade) => {
           const isOverdue = atividade.status === 'pendente' && new Date(atividade.data) < new Date();
           const relacionado = getRelacionadoLabel(atividade);
           return (
@@ -231,10 +248,10 @@ export default function Atividades() {
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-          <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+          <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
-            <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+            <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
           </div>
         </div>
       )}

@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
+import { SortableHead } from "@/components/SortableHead"
 import { Plus, FileText, ArrowUpRight, ArrowDownRight, Wallet } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
@@ -14,19 +15,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { useQuery } from "@tanstack/react-query"
-import { fetchParcelas, fetchEstatisticasFinanceiras } from "@/services/financeiro"
+import { fetchParcelas, fetchEstatisticasFinanceiras, parcelasQueryKey } from "@/services/financeiro"
+import { useSortable } from "@/hooks/useSortable"
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Loader2 } from "lucide-react"
 
 const FluxoCaixa = () => {
   const navigate = useNavigate()
-  const [currentPage, setCurrentPage] = useState(1)
+
+  useRealtimeUpdates([[...parcelasQueryKey]]);
+
+  const [page, setPage] = useState(1);
+
   const { data: response, isLoading: isLoadingParcelas } = useQuery({
-    queryKey: ['parcelas', currentPage],
-    queryFn: () => fetchParcelas(currentPage),
+    queryKey: [...parcelasQueryKey, page],
+    queryFn: () => fetchParcelas(page),
   })
-  const parcelas = Array.isArray(response) ? response : (response?.results ?? [])
-  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0)
-  const totalPages = Math.ceil(totalCount / 5)
+  const parcelas = response?.results ?? [];
+  const serverTotal = response?.count ?? 0;
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ['estatisticasFinanceiras'],
@@ -37,6 +43,27 @@ const FluxoCaixa = () => {
   const [filterBeneficiario, setFilterBeneficiario] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
   const [filterDataFim, setFilterDataFim] = useState("")
+  const [filterPeriodo, setFilterPeriodo] = useState("")
+
+  const handlePeriodoChange = (periodo: string) => {
+    setFilterPeriodo(periodo)
+    const hoje = new Date()
+    if (periodo === "hoje") {
+      const d = hoje.toISOString().split("T")[0]
+      setFilterDataInicio(d); setFilterDataFim(d)
+    } else if (periodo === "semana") {
+      const ini = new Date(hoje); ini.setDate(hoje.getDate() - hoje.getDay())
+      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+    } else if (periodo === "mes") {
+      const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+    } else if (periodo === "trimestre") {
+      const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 3)
+      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+    } else {
+      setFilterDataInicio(""); setFilterDataFim("")
+    }
+  }
   const [viewItem, setViewItem] = useState<any>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<any>(null)
@@ -64,6 +91,15 @@ const FluxoCaixa = () => {
       return matchTipo && matchBeneficiario && matchDataInicio && matchDataFim
     })
   }, [items, filterTipo, filterBeneficiario, filterDataInicio, filterDataFim])
+
+  useEffect(() => { setPage(1); }, [filterTipo, filterBeneficiario, filterDataInicio, filterDataFim]);
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const paginatedItems = sorted;
+  const total = serverTotal;
+  const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
+  const hasNext = page < totalPages;
+  const hasPrev = page > 1;
+  const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
 
   const getExportData = () => filtered.map(t => ({ Vencimento: t.dataVencimento, Pagamento: t.dataPagamento, Tipo: t.tipo, Beneficiário: t.beneficiario, Status: t.status, Valor: t.valorTotal, Saldo: t.saldo }));
   const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API" }); setDeleteId(null); } };
@@ -96,41 +132,51 @@ const FluxoCaixa = () => {
           fields={[
             { type: "select", label: "Tipo", placeholder: "Selecione o tipo", value: filterTipo, onChange: setFilterTipo, options: [{ value: "todos", label: "Todos" }, { value: "entrada", label: "Entrada" }, { value: "saída", label: "Saída" }], width: "min-w-[160px]" },
             { type: "text", label: "Beneficiário", placeholder: "Buscar beneficiário...", value: filterBeneficiario, onChange: setFilterBeneficiario, width: "flex-1 min-w-[180px]" },
-            { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
-            { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
+            { type: "select", label: "Período", placeholder: "Selecione", value: filterPeriodo, onChange: handlePeriodoChange, options: [{ value: "hoje", label: "Hoje" }, { value: "semana", label: "Esta semana" }, { value: "mes", label: "Este mês" }, { value: "trimestre", label: "Últimos 3 meses" }], width: "min-w-[170px]" },
+            { type: "date", label: "Data Início", value: filterDataInicio, onChange: (v) => { setFilterDataInicio(v); setFilterPeriodo("") }, width: "min-w-[160px]" },
+            { type: "date", label: "Data Fim", value: filterDataFim, onChange: (v) => { setFilterDataFim(v); setFilterPeriodo("") }, width: "min-w-[160px]" }
           ]}
-          resultsCount={totalCount}
+          resultsCount={filtered.length}
         />
 
-        <Table>
-          <TableHeader><TableRow>
-            <TableHead className="text-center">Vencimento</TableHead><TableHead className="text-center">Pagamento</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-center">Beneficiário</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Valor</TableHead><TableHead className="text-center">Saldo</TableHead><TableHead className="text-center">Ações</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (<TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma transação encontrada.</TableCell></TableRow>) : (
-              filtered.map((transacao) => (
-                <TableRow key={transacao.id}>
-                  <TableCell className="text-center">{transacao.dataVencimento}</TableCell><TableCell className="text-center">{transacao.dataPagamento}</TableCell>
-                  <TableCell className="text-center"><StatusBadge status={transacao.tipo} /></TableCell>
-                  <TableCell className="text-center">{transacao.beneficiario}</TableCell>
-                  <TableCell className="text-center"><StatusBadge status={transacao.status} /></TableCell>
-                  <TableCell className="text-center"><span className={transacao.tipo === 'Entrada' ? 'text-primary font-semibold' : 'text-red-700 font-semibold'}>{transacao.valorTotal}</span></TableCell>
-                  <TableCell className="text-center font-semibold">{transacao.saldo}</TableCell>
-                  <TableCell className="text-center"><TableActions onView={() => setViewItem(transacao)} onEdit={() => openEdit(transacao)} onDelete={() => setDeleteId(transacao.id)} /></TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+        <div className="rounded border border-border overflow-hidden">
+          <Table>
+            <TableHeader><TableRow className="bg-table-header">
+              <SortableHead label="Vencimento" field="dataVencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Pagamento" field="dataPagamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Tipo" field="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Beneficiário" field="beneficiario" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Valor" field="valorTotal" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold">Saldo</TableHead>
+              <TableHead className="text-center font-semibold">Ações</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma transação encontrada.</TableCell></TableRow>) : (
+                paginatedItems.map((transacao) => (
+                  <TableRow key={transacao.id} className="hover:bg-table-hover transition-colors">
+                    <TableCell className="text-center">{transacao.dataVencimento}</TableCell><TableCell className="text-center">{transacao.dataPagamento}</TableCell>
+                    <TableCell className="text-center"><StatusBadge status={transacao.tipo} /></TableCell>
+                    <TableCell className="text-center">{transacao.beneficiario}</TableCell>
+                    <TableCell className="text-center"><StatusBadge status={transacao.status} /></TableCell>
+                    <TableCell className="text-center"><span className={transacao.tipo === 'Entrada' ? 'text-primary font-semibold' : 'text-red-700 font-semibold'}>{transacao.valorTotal}</span></TableCell>
+                    <TableCell className="text-center font-semibold">{transacao.saldo}</TableCell>
+                    <TableCell className="text-center"><TableActions onView={() => setViewItem(transacao)} onEdit={() => openEdit(transacao)} onDelete={() => setDeleteId(transacao.id)} /></TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>

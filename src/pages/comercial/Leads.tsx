@@ -1,14 +1,17 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TableActions } from "@/components/TableActions";
 import { FilterSection } from "@/components/FilterSection";
+import { SortableHead } from "@/components/SortableHead";
 import { Plus, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { fetchLeads, leadsQueryKey, origensLead } from "@/services/comercial";
-
+import { usePagination } from "@/hooks/usePagination";
+import { useSortable } from "@/hooks/useSortable";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import { toast } from "@/hooks/use-toast";
 import { ExportButton } from "@/components/ExportButton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -27,26 +30,34 @@ export default function Leads() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [origemFilter, setOrigemFilter] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
+
+  useRealtimeUpdates([[...leadsQueryKey]]);
+
   const { data: response, isLoading } = useQuery({
-    queryKey: [...leadsQueryKey, currentPage, searchTerm],
-    queryFn: () => fetchLeads(currentPage, searchTerm),
+    queryKey: leadsQueryKey,
+    queryFn: () => fetchLeads(),
   });
   const leads = Array.isArray(response) ? response : (response?.results ?? []);
-  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
 
   const [viewItem, setViewItem] = useState<any | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editItem, setEditItem] = useState<any | null>(null);
   const [editData, setEditData] = useState({ nome: "", empresa: "", email: "", telefone: "" });
 
-  const filteredLeads = leads.filter(lead => {
+  const filteredLeads = useMemo(() => leads.filter(lead => {
+    const matchSearch = !searchTerm || lead.nome?.toLowerCase().includes(searchTerm.toLowerCase()) || lead.empresa?.toLowerCase().includes(searchTerm.toLowerCase()) || lead.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = !statusFilter || lead.status === statusFilter;
     const matchOrigem = !origemFilter || lead.origem === origemFilter;
-    return matchStatus && matchOrigem;
-  });
+    const leadDate = lead.criado_em ? lead.criado_em.split("T")[0] : "";
+    const matchDataInicio = filterDataInicio ? leadDate >= filterDataInicio : true;
+    const matchDataFim = filterDataFim ? leadDate <= filterDataFim : true;
+    return matchSearch && matchStatus && matchOrigem && matchDataInicio && matchDataFim;
+  }), [leads, searchTerm, statusFilter, origemFilter, filterDataInicio, filterDataFim]);
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filteredLeads);
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted);
 
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = { 'novo': 'Novo', 'quente': 'Quente', 'morno': 'Morno', 'frio': 'Frio', 'convertido': 'Convertido', 'perdido': 'Perdido' };
@@ -109,18 +120,32 @@ export default function Leads() {
           {
             type: "select", label: "Origem", placeholder: "Todas", value: origemFilter, onChange: setOrigemFilter,
             options: origensLead.map(o => ({ value: o, label: o })), width: "min-w-[160px]"
-          }
+          },
+          { type: "date", label: "Criado de", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
+          { type: "date", label: "Criado até", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
         ]}
-        resultsCount={totalCount}
+        resultsCount={filteredLeads.length}
       />
 
       <div className="rounded border border-border">
         <Table>
           <TableHeader><TableRow className="bg-table-header">
-            <TableHead>Nome</TableHead><TableHead>Empresa</TableHead><TableHead>Contato</TableHead><TableHead>Origem</TableHead><TableHead>Status</TableHead><TableHead>Score</TableHead><TableHead>Proprietário</TableHead><TableHead>Última Atividade</TableHead><TableHead className="w-[50px]"></TableHead>
+            <SortableHead label="Nome" field="nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableHead label="Empresa" field="empresa" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <TableHead>Contato</TableHead>
+            <SortableHead label="Origem" field="origem" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableHead label="Score" field="score" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <SortableHead label="Proprietário" field="responsavel" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            <TableHead>Última Atividade</TableHead>
+            <TableHead className="w-[50px]"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {filteredLeads.map((lead) => (
+            {isLoading ? (
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+            ) : paginatedItems.length === 0 ? (
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lead encontrado.</TableCell></TableRow>
+            ) : paginatedItems.map((lead) => (
               <TableRow key={lead.id} className="hover:bg-muted/50 cursor-pointer">
                 <TableCell className="font-medium">{lead.nome}</TableCell>
                 <TableCell>{lead.empresa}</TableCell>
@@ -142,10 +167,10 @@ export default function Leads() {
         </Table>
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
             </div>
           </div>
         )}

@@ -60,11 +60,8 @@ export const getSupervisorNome = (p: Pessoa) => p.supervisor_nome ?? null;
 // ─── API calls ────────────────────────────────────────────────────────────
 
 /** GET /api/pessoas/ — all active users with full profile */
-export const fetchPessoas = async (page?: number, search?: string): Promise<Pessoa[] | PaginatedResponse<Pessoa>> => {
-    const params: Record<string, unknown> = {};
-    if (page !== undefined) params.page = page;
-    if (search) params.search = search;
-    const res = await api.get('/api/pessoas/', { params });
+export const fetchPessoas = async (): Promise<Pessoa[] | PaginatedResponse<Pessoa>> => {
+    const res = await api.get('/api/pessoas/');
     return res.data;
 };
 
@@ -112,16 +109,14 @@ export const fetchMeuTime = async (): Promise<Pessoa[]> => {
 };
 
 /** GET /api/setores/ — all sectors */
-export const fetchSetores = async (page?: number): Promise<Setor[] | PaginatedResponse<Setor>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/setores/', { params });
+export const fetchSetores = async (): Promise<Setor[] | PaginatedResponse<Setor>> => {
+    const res = await api.get('/api/setores/');
     return res.data;
 };
 
 /** GET /api/operacional/setores/ — sectors via operacional route */
-export const fetchSetoresOperacional = async (page?: number): Promise<Setor[] | PaginatedResponse<Setor>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/operacional/setores/', { params });
+export const fetchSetoresOperacional = async (): Promise<Setor[] | PaginatedResponse<Setor>> => {
+    const res = await api.get('/api/operacional/setores/');
     return res.data;
 };
 

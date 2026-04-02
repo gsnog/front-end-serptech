@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(wc:*)",
+      "Bash(grep -r \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\" /c/Users/Joaog/front-end-serptech/src --include=*.tsx --include=*.ts)",
+      "Bash(grep -l \"skeleton\\\\|placeholder\\\\|TODO\\\\|undefined\\\\|null\\\\|MOCK\\\\|mock\" /c/Users/Joaog/front-end-serptech/src/pages/*.tsx)",
+      "Bash(find /c/Users/Joaog/front-end-serptech/src/pages -name \"*.tsx\" -exec wc -l {} +)",
+      "Bash(grep -r \"not implemented\\\\|not available\\\\|coming soon\\\\|TODO\\\\|FIXME\" /c/Users/Joaog/front-end-serptech/src --include=*.tsx --include=*.ts)",
+      "Bash(grep -E \"^\\\\s+[0-9]{1,3}\\\\s\")",
+      "Bash(xargs grep:*)",
+      "Bash(npx tsc:*)",
+      "Bash(grep -r operacional /c/Users/Joaog/DLC/ --include=*.py)",
+      "Bash(grep -r \"estoque_de_destino\\\\|item_entrada\\\\|itens_precadastro\" C:UsersJoaogfront-end-serptech/src --include=*.tsx --include=*.ts)",
+      "Bash(/c/Users/Joaog/DLC/estoque/serializers.py:*)"
+    ]
+  }
+}

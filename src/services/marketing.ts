@@ -30,18 +30,16 @@ interface Evento { id: string; nome: string; tipo: string; data: string; custo: 
 interface OrcamentoMarketing { id: string; periodo: string; orcado: number; realizado: number; categoria: string; }
 
 // API fetchers
-export const fetchCampanhas = async (page?: number): Promise<Campanha[] | PaginatedResponse<Campanha>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/marketing/campanhas/', { params });
+export const fetchCampanhas = async (): Promise<Campanha[] | PaginatedResponse<Campanha>> => {
+    const res = await api.get('/api/marketing/campanhas/');
     return res.data;
 };
 export const fetchCanais = async (): Promise<Canal[]> => {
     const res = await api.get('/api/marketing/canais/');
     return res.data;
 };
-export const fetchLeadsMarketing = async (page?: number): Promise<LeadMarketing[] | PaginatedResponse<LeadMarketing>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/marketing/leads/', { params });
+export const fetchLeadsMarketing = async (): Promise<LeadMarketing[] | PaginatedResponse<LeadMarketing>> => {
+    const res = await api.get('/api/marketing/leads/');
     return res.data;
 };
 

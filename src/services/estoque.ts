@@ -46,8 +46,8 @@ export interface Locacao {
 export interface OrdemCompra {
     id: number;
     data?: string;
-    data_de_entrega?: string;
-    data_de_compra?: string;
+    data_de_entrega?: string | null;
+    data_de_compra?: string | null;
     setor?: number;
     setor_nome?: string;
     unidade?: number;
@@ -56,7 +56,7 @@ export interface OrdemCompra {
     justificativa?: string;
     status?: string;
     status_da_compra?: string;
-    feedback?: string;
+    feedback?: string | null;
     itens?: OrdemCompraItem[];
 }
 
@@ -215,9 +215,12 @@ export const fetchLocacoes = async (page?: number): Promise<Locacao[] | Paginate
 
 // ─── Ordens de Compra ─────────────────────────────────────────────────────────
 
-export const fetchOrdensCompra = async (page?: number): Promise<OrdemCompra[] | PaginatedResponse<OrdemCompra>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/estoque/ordens-compra/', { params });
+export const fetchOrdensCompra = async (page = 1): Promise<PaginatedResponse<OrdemCompra>> => {
+    const res = await api.get('/api/estoque/ordens-compra/', { params: { page, page_size: 20 } });
+    return res.data;
+};
+export const fetchOrdemCompra = async (id: number): Promise<OrdemCompra> => {
+    const res = await api.get(`/api/estoque/ordens-compra/${id}/`);
     return res.data;
 };
 export const createOrdemCompra = async (data: Partial<OrdemCompra>): Promise<OrdemCompra> => {
@@ -231,12 +234,31 @@ export const updateOrdemCompra = async (id: number, data: Partial<OrdemCompra>):
 export const deleteOrdemCompra = async (id: number): Promise<void> => {
     await api.delete(`/api/estoque/ordens-compra/${id}/`);
 };
+export const aprovarOrdemCompra = async (id: number): Promise<OrdemCompra> => {
+    const res = await api.post(`/api/estoque/ordens-compra/${id}/aprovar/`);
+    return res.data;
+};
+export const negarOrdemCompra = async (id: number, feedback?: string): Promise<OrdemCompra> => {
+    const res = await api.post(`/api/estoque/ordens-compra/${id}/negar/`, { feedback });
+    return res.data;
+};
+export const registrarCompraOrdem = async (id: number): Promise<OrdemCompra> => {
+    const res = await api.post(`/api/estoque/ordens-compra/${id}/registrar_compra/`);
+    return res.data;
+};
+export const registrarEntregaOrdem = async (id: number): Promise<OrdemCompra> => {
+    const res = await api.post(`/api/estoque/ordens-compra/${id}/registrar_entrega/`);
+    return res.data;
+};
 
 // ─── Ordens de Serviço ────────────────────────────────────────────────────────
 
-export const fetchOrdensServico = async (page?: number): Promise<OrdemServico[] | PaginatedResponse<OrdemServico>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/estoque/ordens-servico/', { params });
+export const fetchOrdensServico = async (page = 1): Promise<PaginatedResponse<OrdemServico>> => {
+    const res = await api.get('/api/estoque/ordens-servico/', { params: { page, page_size: 20 } });
+    return res.data;
+};
+export const fetchOrdemServico = async (id: number): Promise<OrdemServico> => {
+    const res = await api.get(`/api/estoque/ordens-servico/${id}/`);
     return res.data;
 };
 export const createOrdemServico = async (data: Partial<OrdemServico>): Promise<OrdemServico> => {
@@ -300,11 +322,32 @@ export const deleteNotaFiscal = async (id: number): Promise<void> => {
     await api.delete(`/api/estoque/notas-fiscais/${id}/`);
 };
 
+// ─── Entradas ─────────────────────────────────────────────────────────────────
+
+export const fetchEntradas = async (page = 1): Promise<PaginatedResponse<any>> => {
+    const res = await api.get('/api/estoque/entradas/', { params: { page, page_size: 20 } });
+    return res.data;
+};
+
+export const fetchAllEntradas = async (): Promise<any[]> => {
+    const all: any[] = [];
+    let page = 1;
+    while (true) {
+        const res = await api.get('/api/estoque/entradas/', { params: { page, page_size: 100 } });
+        const data: PaginatedResponse<any> = res.data;
+        all.push(...(data.results ?? []));
+        if (!data.next) break;
+        page++;
+    }
+    return all;
+};
+
+export const entradasQueryKey = ['entradas_estoque'] as const;
+
 // ─── Saídas ───────────────────────────────────────────────────────────────────
 
-export const fetchSaidas = async (page?: number): Promise<Saida[] | PaginatedResponse<Saida>> => {
-    const params = page !== undefined ? { page } : {};
-    const res = await api.get('/api/estoque/saidas/', { params });
+export const fetchSaidas = async (page = 1): Promise<PaginatedResponse<Saida>> => {
+    const res = await api.get('/api/estoque/saidas/', { params: { page, page_size: 20 } });
     return res.data;
 };
 export const deleteSaida = async (id: number): Promise<void> => {

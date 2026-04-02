@@ -105,7 +105,7 @@ const menuItems = [
       { title: "Contas a Receber", url: "/financeiro/contas-receber" },
       { title: "Contas a Pagar", url: "/financeiro/contas-pagar" },
       { title: "Fluxo de Caixa", url: "/financeiro/fluxo-caixa" },
-      { title: "XML", url: "/financeiro/xml" },
+      { title: "Notas Fiscais", url: "/financeiro/xml" },
     ]
   },
   {

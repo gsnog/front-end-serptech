@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Upload, ChevronDown, ChevronRight, XCircle, Link2, ClipboardCheck, CheckCircle, User, CalendarCheck } from "lucide-react"
+import { Plus, Upload, ChevronDown, ChevronRight, XCircle, Link2, ClipboardCheck, CheckCircle, User, CalendarCheck, ChevronsUpDown, Check } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
@@ -12,11 +12,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { cn } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import api from "@/lib/api"
+import { fetchEntradas, fetchAllEntradas, entradasQueryKey } from "@/services/estoque"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { Entradas } from "@/types/estoque"
 import { fetchItensEstoque } from "@/services/estoque"
@@ -24,11 +28,15 @@ import { fetchItensEstoque } from "@/services/estoque"
 interface ItemNF {
   id: number;
   item: string;
-  marca: string;
   quantidade: number;
   custoUnitario: string;
-  especificacoes: string;
-  tipo: "novo" | "existente";
+}
+
+interface ItemPreCadastroNF {
+  id: number;
+  nome_item: string;
+  quantidade: number;
+  custo_unitario: number;
 }
 
 interface EntradaNF {
@@ -41,6 +49,7 @@ interface EntradaNF {
   custoTotal: string;
   status: string;
   itens: ItemNF[];
+  itens_precadastro: ItemPreCadastroNF[];
 }
 
 // --- Mocks removidos ---
@@ -68,23 +77,27 @@ export default function EstoqueEntradas() {
   const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase();
   const canApprove = APPROVAL_ROLES.includes(currentRole);
 
-  // Fetch reais da API
-  const [currentPage, setCurrentPage] = useState(1);
-  const { data: entradasResponse, isLoading, isError } = useQuery({
-    queryKey: ['entradas_estoque', currentPage],
-    queryFn: async () => {
-      const res = await api.get('/api/estoque/entradas/', { params: { page: currentPage } });
-      return res.data;
-    }
-  });
-  const entradasApi = Array.isArray(entradasResponse) ? entradasResponse : (entradasResponse?.results ?? []);
-  const totalCount = Array.isArray(entradasResponse) ? entradasResponse.length : (entradasResponse?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
+  const [page, setPage] = useState(1)
 
-  const { data: itensEstoque = [] } = useQuery({
+  // Fetch reais da API
+  const { data: entradasResponse, isLoading, isError } = useQuery({
+    queryKey: [...entradasQueryKey, page],
+    queryFn: () => fetchEntradas(page),
+  });
+  const entradasApi = entradasResponse?.results ?? [];
+  const serverTotal = entradasResponse?.count ?? 0;
+  const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
+  const hasNext = page < totalPages;
+  const hasPrev = page > 1;
+  const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
+
+  const { data: itensEstoqueResponse } = useQuery({
     queryKey: ['itens_estoque'],
     queryFn: fetchItensEstoque
   });
+  const itensEstoque = Array.isArray(itensEstoqueResponse)
+    ? itensEstoqueResponse
+    : (itensEstoqueResponse as any)?.results ?? [];
 
   const optionsEstoque = useMemo(() =>
     itensEstoque.map((i: any) => ({ value: String(i.id), label: i.itens_do_estoque })),
@@ -149,10 +162,7 @@ export default function EstoqueEntradas() {
     }
   });
 
-  const [items, setItems] = useState<EntradaNF[]>(() => {
-    const newEntries = loadSavedEntries();
-    return [...newEntries, ...mockEntradas];
-  });
+  const [items, setItems] = useState<EntradaNF[]>([]);
 
   useEffect(() => {
     if (isError) {
@@ -179,9 +189,53 @@ export default function EstoqueEntradas() {
   const [approvalItem, setApprovalItem] = useState<EntradaNF | null>(null)
   const [rejectItem, setRejectItem] = useState<EntradaNF | null>(null)
   const [rejectJustificativa, setRejectJustificativa] = useState("")
-  // Conciliation
-  const [conciliateItem, setConciliateItem] = useState<{ entrada: EntradaNF; itemNF: ItemNF } | null>(null)
+  // Normalização de itens pré-cadastrados: { [precadastroId]: { acao: "novo"|"existente"|"", itemId: string } }
+  const [precadastroSelections, setPrecadastroSelections] = useState<Record<number, { acao: "novo" | "existente" | ""; itemId: string }>>({})
+  const [conciliateItem, setConciliateItem] = useState<{ entradaId: number; itemNF: ItemNF } | null>(null)
   const [conciliateWith, setConciliateWith] = useState("")
+  const [conciliateComboboxOpen, setConciliateComboboxOpen] = useState(false)
+  const [openComboboxIds, setOpenComboboxIds] = useState<Record<number, boolean>>({})
+
+  const handleConciliate = async () => {
+    if (!conciliateItem || !conciliateWith) return;
+    try {
+      await api.post(`/api/estoque/entradas/${conciliateItem.entradaId}/conciliar-item/`, {
+        item_entrada_id: conciliateItem.itemNF.id,
+        item_estoque_id: parseInt(conciliateWith),
+      });
+      toast({ title: "Item conciliado com sucesso!" });
+      queryClient.invalidateQueries({ queryKey: entradasQueryKey });
+    } catch {
+      toast({ title: "Erro ao conciliar item", variant: "destructive" });
+    } finally {
+      setConciliateItem(null);
+      setConciliateWith("");
+    }
+  };
+
+  const normalizarMutation = useMutation({
+    mutationFn: async ({ entradaId, precadastroId, acao, itemExistenteId }: {
+      entradaId: number; precadastroId: number; acao: "novo" | "existente"; itemExistenteId?: string;
+    }) => {
+      const res = await api.post(`/api/estoque/entradas/${entradaId}/normalizar-precadastro/`, {
+        precadastro_id: precadastroId,
+        acao,
+        item_existente_id: itemExistenteId ? parseInt(itemExistenteId) : undefined,
+      });
+      return res.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['entradas_estoque'] });
+      toast({ title: "Item normalizado!", description: "Item pré-cadastrado processado com sucesso." });
+      // Remove o item normalizado do dialog sem precisar fechar e reabrir
+      setApprovalItem(prev =>
+        prev ? { ...prev, itens_precadastro: prev.itens_precadastro.filter(it => it.id !== variables.precadastroId) } : prev
+      );
+    },
+    onError: (error: any) => {
+      toast({ title: "Erro", description: error.response?.data?.detail ?? "Erro ao normalizar item.", variant: "destructive" });
+    },
+  });
 
   // Check for new entries on focus (when user returns from NovaEntrada)
   useEffect(() => {
@@ -215,46 +269,88 @@ export default function EstoqueEntradas() {
   // Mapeamos os dados reais para se unirem/substituirem o conceito de "items" filtrados
   // Nota: A API retorna Entradas brutas, o mapping visual dependerá das propriedades retornadas (notas, fornecedores, ids)
   const filtered = useMemo(() => {
-    // Simularemos o merge ou substituição dos mocks. Aqui substituiremos na base de "entradasApi" se disponíveis,
-    // ou deixamos o mock para não quebrar a UI se a API ainda estiver vazia/sendo povoada localmente.
-    const hasApiData = Array.isArray(entradasApi) && entradasApi.length > 0;
-    const baseList = hasApiData ?
-      entradasApi.map(e => ({
-        id: e?.id || 0,
-        data: e?.data || e?.data_de_chegada || "",
-        responsavel: e?.criado_por_nome || "—",
-        notaFiscal: e?.nota_fiscal || e?.numeracao_nf || `NF-${e?.id}`,
-        fornecedor: e?.fornecedor_nome || String(e?.fornecedor || ""),
-        unidade: "—",
-        custoTotal: e?.custo_total != null
-          ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.custo_total)
-          : "R$ 0,00",
-        status: (() => {
-          // Map backend lowercase to display label for StatusBadge
-          if (e?.status === 'aprovado') return 'Aprovada';
-          if (e?.status === 'recusado') return 'Rejeitada';
-          return 'Pré-Cadastro'; // pendente default
-        })(),
-        _rawStatus: e?.status as string | undefined,
-        _rawId: e?.id,
-        _criado_por_nome: e?.criado_por_nome,
-        _aprovado_por_nome: e?.aprovado_por_nome,
-        _aprovado_em: e?.aprovado_em,
-        itens: []
-      } as EntradaNF & { _rawStatus?: string; _rawId?: number; _criado_por_nome?: string; _aprovado_por_nome?: string; _aprovado_em?: string | null }))
-      : items;
+    const baseList = entradasApi.map(e => ({
+      id: e?.id || 0,
+      data: e?.data || e?.data_de_chegada || "",
+      responsavel: e?.criado_por_nome || "—",
+      notaFiscal: String(e?.nota_fiscal_numero || e?.nota_fiscal || `NF-${e?.id}`),
+      fornecedor: e?.fornecedor_nome || String(e?.fornecedor || ""),
+      unidade: e?.unidade_nome || String(e?.unidade_nome || ""),
+      custoTotal: e?.custo_total != null
+        ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.custo_total)
+        : "R$ 0,00",
+      status: (() => {
+        if (e?.status === 'aprovado') return 'Aprovada';
+        if (e?.status === 'recusado') return 'Rejeitada';
+        return 'Pendente';
+      })(),
+      _rawStatus: e?.status as string | undefined,
+      _criado_por_nome: e?.criado_por_nome,
+      _aprovado_por_nome: e?.aprovado_por_nome,
+      _aprovado_em: e?.aprovado_em,
+      itens: (e?.itens || []).map((it: any) => ({
+        id: it.id,
+        item: it.item_nome || `Item #${it.item}`,
+        quantidade: it.quantidade,
+        custoUnitario: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario ?? 0),
+      })),
+      itens_precadastro: (e?.itens_precadastro || []).map((it: any) => ({
+        id: it.id,
+        nome_item: it.nome_item,
+        quantidade: it.quantidade,
+        custo_unitario: Number(it.custo_unitario ?? 0),
+      }))
+    } as EntradaNF & { _rawStatus?: string; _rawId?: number; _criado_por_nome?: string; _aprovado_por_nome?: string; _aprovado_em?: string | null }));
 
     return baseList.filter(entrada => {
-      const matchNome = entrada.notaFiscal.toLowerCase().includes(filterNome.toLowerCase()) || entrada.fornecedor.toLowerCase().includes(filterNome.toLowerCase())
+
+      const matchNome = entrada.fornecedor.toLowerCase().includes(filterNome.toLowerCase())
       const matchNFe = entrada.notaFiscal.toLowerCase().includes(filterNFe.toLowerCase())
       const matchStatus = filterStatus && filterStatus !== "todos" ? entrada.status.toLowerCase() === filterStatus.toLowerCase() : true
-      const matchDataInicio = filterDataInicio ? entrada.data >= filterDataInicio.split("-").reverse().join("/") : true
-      const matchDataFim = filterDataFim ? entrada.data <= filterDataFim.split("-").reverse().join("/") : true
+      // data from API is YYYY-MM-DD — compare directly without conversion
+      const matchDataInicio = filterDataInicio ? entrada.data >= filterDataInicio : true
+      const matchDataFim = filterDataFim ? entrada.data <= filterDataFim : true
       return matchNome && matchNFe && matchStatus && matchDataInicio && matchDataFim
     })
-  }, [items, entradasApi, filterNome, filterNFe, filterStatus, filterDataInicio, filterDataFim])
+  }, [entradasApi, filterNome, filterNFe, filterStatus, filterDataInicio, filterDataFim])
 
-  const getExportData = () => filtered.map(e => ({ Data: e.data, Responsável: e.responsavel, "Nota Fiscal": e.notaFiscal, Fornecedor: e.fornecedor, Unidade: e.unidade, "Custo Total": e.custoTotal, Status: e.status }));
+  const paginatedItems = filtered
+  const total = serverTotal
+
+  const getExportData = async () => {
+    const all = await fetchAllEntradas();
+    return all
+      .filter(e => {
+        const fornecedor = e?.fornecedor_nome ?? '';
+        const notaFiscal = e?.nota_fiscal_numero ?? '';
+        const status = (() => {
+          if (e?.status === 'aprovado') return 'Aprovada';
+          if (e?.status === 'recusado') return 'Rejeitada';
+          return 'Pendente';
+        })();
+        const data = e?.data ?? '';
+        const matchNome = fornecedor.toLowerCase().includes(filterNome.toLowerCase());
+        const matchNFe = notaFiscal.toLowerCase().includes(filterNFe.toLowerCase());
+        const matchStatus = filterStatus && filterStatus !== "todos" ? status.toLowerCase() === filterStatus.toLowerCase() : true;
+        const matchDataInicio = filterDataInicio ? data >= filterDataInicio : true;
+        const matchDataFim = filterDataFim ? data <= filterDataFim : true;
+        return matchNome && matchNFe && matchStatus && matchDataInicio && matchDataFim;
+      })
+      .map(e => ({
+        Data: e?.data ?? '',
+        Fornecedor: e?.fornecedor_nome ?? '',
+        "Nota Fiscal": e?.nota_fiscal_numero ?? '',
+        Unidade: e?.unidade_nome ?? '',
+        "Custo Total": e?.custo_total ?? 0,
+        Status: (() => {
+          if (e?.status === 'aprovado') return 'Aprovada';
+          if (e?.status === 'recusado') return 'Rejeitada';
+          return 'Pendente';
+        })(),
+        "Criado Por": e?.criado_por_nome ?? '',
+        "Aprovado Por": e?.aprovado_por_nome ?? '',
+      }));
+  };
 
   const handleDelete = () => {
     if (deleteId !== null) {
@@ -287,21 +383,16 @@ export default function EstoqueEntradas() {
     }
   };
 
-  const handleConciliate = () => {
-    if (conciliateItem && conciliateWith) {
-      setItems(prev => prev.map(entrada => {
-        if (entrada.id === conciliateItem.entrada.id) {
-          return {
-            ...entrada,
-            itens: entrada.itens.map(it => it.id === conciliateItem.itemNF.id ? { ...it, tipo: "existente" as const, item: optionsEstoque.find(i => i.value === conciliateWith)?.label || it.item } : it)
-          }
-        }
-        return entrada
-      }));
-      setConciliateItem(null);
-      setConciliateWith("");
-      toast({ title: "Conciliado", description: "Item conciliado com estoque existente." });
-    }
+  const handleNormalizar = (entradaId: number, precadastroId: number) => {
+    const sel = precadastroSelections[precadastroId];
+    if (!sel || !sel.acao) return;
+    normalizarMutation.mutate({
+      entradaId,
+      precadastroId,
+      acao: sel.acao,
+      itemExistenteId: sel.acao === "existente" ? sel.itemId : undefined,
+    });
+    setPrecadastroSelections(prev => { const next = { ...prev }; delete next[precadastroId]; return next; });
   };
 
   return (
@@ -309,7 +400,6 @@ export default function EstoqueEntradas() {
       <div className="space-y-6">
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/estoque/entradas/nova")} className="gap-2"><Plus className="w-4 h-4" />Nova Entrada</Button>
-          <Button onClick={() => navigate("/estoque/entradas/upload-nfe")} variant="outline" className="gap-2 border-border"><Upload className="w-4 h-4" />Upload NF-e<ChevronDown className="w-4 h-4" /></Button>
           <ExportButton getData={getExportData} fileName="estoque-entradas" />
         </div>
 
@@ -317,11 +407,11 @@ export default function EstoqueEntradas() {
           fields={[
             { type: "text", label: "Buscar", placeholder: "NF ou fornecedor...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" },
             { type: "text", label: "NF-e", placeholder: "Número da NF-e...", value: filterNFe, onChange: setFilterNFe, width: "min-w-[160px]" },
-            { type: "select", label: "Status", placeholder: "Todos", value: filterStatus, onChange: setFilterStatus, options: [{ value: "todos", label: "Todos" }, { value: "pré-cadastro", label: "Pré-Cadastro" }, { value: "aprovada", label: "Aprovada" }, { value: "rejeitada", label: "Rejeitada" }], width: "min-w-[160px]" },
+            { type: "select", label: "Status", placeholder: "Todos", value: filterStatus, onChange: setFilterStatus, options: [{ value: "todos", label: "Todos" }, { value: "pendente", label: "Pendente" }, { value: "aprovada", label: "Aprovada" }, { value: "rejeitada", label: "Rejeitada" }], width: "min-w-[160px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={totalCount}
+          resultsCount={filtered.length}
         />
 
         <div className="rounded overflow-hidden">
@@ -345,10 +435,10 @@ export default function EstoqueEntradas() {
                 <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando entradas...</TableCell></TableRow>
               ) : isError ? (
                 <TableRow><TableCell colSpan={10} className="text-center py-8 text-destructive">Erro ao carregar os dados. Verifique a conexão com a API.</TableCell></TableRow>
-              ) : filtered.length === 0 ? (
+              ) : paginatedItems.length === 0 ? (
                 <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma entrada encontrada.</TableCell></TableRow>
               ) : (
-                filtered.map((entrada) => (
+                paginatedItems.map((entrada) => (
                   <>
                     <TableRow key={entrada.id}>
                       <TableCell className="text-center">
@@ -407,44 +497,60 @@ export default function EstoqueEntradas() {
                     {expandedRows.has(entrada.id) && (
                       <TableRow key={`${entrada.id}-items`}>
                         <TableCell colSpan={10} className="p-0">
-                          <div className="bg-muted/30 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Itens da Nota Fiscal</p>
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="text-center">Item</TableHead>
-                                  <TableHead className="text-center">Marca</TableHead>
-                                  <TableHead className="text-center">Quantidade</TableHead>
-                                  <TableHead className="text-center">Custo Unitário</TableHead>
-                                  <TableHead className="text-center">Especificações</TableHead>
-                                  <TableHead className="text-center">Tipo</TableHead>
-                                  {entrada.status === "Pré-Cadastro" && <TableHead className="text-center">Conciliar</TableHead>}
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {entrada.itens.map(item => (
-                                  <TableRow key={item.id}>
-                                    <TableCell className="text-center">{item.item}</TableCell>
-                                    <TableCell className="text-center">{item.marca}</TableCell>
-                                    <TableCell className="text-center">{item.quantidade}</TableCell>
-                                    <TableCell className="text-center">{item.custoUnitario}</TableCell>
-                                    <TableCell className="text-center">{item.especificacoes}</TableCell>
-                                    <TableCell className="text-center">
-                                      <StatusBadge status={item.tipo === "novo" ? "Pré-Cadastro" : "Aprovada"} className="text-[10px] min-w-[70px]" />
-                                    </TableCell>
-                                    {entrada.status === "Pré-Cadastro" && (
-                                      <TableCell className="text-center">
-                                        {item.tipo === "novo" && (
-                                          <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-blue-600" onClick={() => setConciliateItem({ entrada, itemNF: item })}>
-                                            <Link2 className="w-3 h-3" /> Conciliar
-                                          </Button>
-                                        )}
-                                      </TableCell>
-                                    )}
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
+                          <div className="bg-muted/30 p-4 space-y-4">
+                            {/* Itens no estoque */}
+                            {entrada.itens.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Itens no Estoque</p>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="text-center">Item</TableHead>
+                                      <TableHead className="text-center">Quantidade</TableHead>
+                                      <TableHead className="text-center">Custo Unitário</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {entrada.itens.map(item => (
+                                      <TableRow key={item.id}>
+                                        <TableCell className="text-center">{item.item}</TableCell>
+                                        <TableCell className="text-center">{item.quantidade}</TableCell>
+                                        <TableCell className="text-center">{item.custoUnitario}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                            {/* Itens pré-cadastrados */}
+                            {(entrada as any).itens_precadastro?.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Itens Pré-Cadastrados</p>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead className="text-center">Nome</TableHead>
+                                      <TableHead className="text-center">Quantidade</TableHead>
+                                      <TableHead className="text-center">Custo Unitário</TableHead>
+                                      <TableHead className="text-center">Status</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {(entrada as any).itens_precadastro.map((it: ItemPreCadastroNF) => (
+                                      <TableRow key={it.id}>
+                                        <TableCell className="text-center">{it.nome_item}</TableCell>
+                                        <TableCell className="text-center">{it.quantidade}</TableCell>
+                                        <TableCell className="text-center">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</TableCell>
+                                        <TableCell className="text-center"><StatusBadge status="Pré-Cadastro" className="text-[10px]" /></TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                            {entrada.itens.length === 0 && !(entrada as any).itens_precadastro?.length && (
+                              <p className="text-xs text-muted-foreground text-center py-2">Nenhum item registrado nesta entrada.</p>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -456,10 +562,10 @@ export default function EstoqueEntradas() {
           </Table>
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20, total)} de {total} registros</span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
               </div>
             </div>
           )}
@@ -467,7 +573,7 @@ export default function EstoqueEntradas() {
       </div>
 
       {/* Analysis / Approval Dialog */}
-      <Dialog open={!!approvalItem} onOpenChange={() => setApprovalItem(null)}>
+      <Dialog open={!!approvalItem} onOpenChange={() => { setApprovalItem(null); setPrecadastroSelections({}); }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Análise de Entrada — {approvalItem?.notaFiscal}</DialogTitle>
@@ -481,56 +587,113 @@ export default function EstoqueEntradas() {
                 <div><span className="text-muted-foreground">Custo Total:</span><p className="font-medium">{approvalItem.custoTotal}</p></div>
               </div>
 
-              <div>
-                <p className="text-sm font-semibold mb-3">Itens para análise</p>
-                <div className="space-y-3">
-                  {approvalItem.itens.map(item => (
-                    <div key={item.id} className="border border-border rounded-lg p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-medium text-foreground">{item.item}</p>
-                          <p className="text-xs text-muted-foreground">{item.marca} • Qtd: {item.quantidade} • {item.custoUnitario} {item.especificacoes && `• ${item.especificacoes}`}</p>
-                        </div>
-                        <StatusBadge status={item.tipo === "novo" ? "Pré-Cadastro" : "Aprovada"} className="text-[10px] min-w-[70px]" />
+              {/* Itens já no estoque */}
+              {approvalItem.itens.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2">Itens no Estoque</p>
+                  <div className="space-y-2">
+                    {approvalItem.itens.map(item => (
+                      <div key={item.id} className="flex items-center justify-between border border-border rounded-lg px-4 py-3 text-sm">
+                        <span className="font-medium">{item.item}</span>
+                        <span className="text-muted-foreground">Qtd: {item.quantidade} • {item.custoUnitario}</span>
                       </div>
-                      {item.tipo === "novo" && (
-                        <div className="flex items-end gap-3 bg-muted/40 rounded p-3">
-                          <div className="flex-1 space-y-1">
-                            <Label className="text-xs">Conciliar com item existente (opcional)</Label>
-                            <Select
-                              value={conciliateItem?.itemNF.id === item.id ? conciliateWith : ""}
-                              onValueChange={(v) => {
-                                setConciliateItem({ entrada: approvalItem, itemNF: item });
-                                setConciliateWith(v);
-                              }}
-                            >
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                              <SelectContent className="bg-popover">
-                                {optionsEstoque.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          {conciliateItem?.itemNF.id === item.id && conciliateWith && (
-                            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleConciliate}>
-                              <Link2 className="w-3 h-3" /> Conciliar
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <p className="text-xs text-muted-foreground bg-muted/40 p-3 rounded">
-                <strong>Nota:</strong> Itens marcados como "Novo" serão automaticamente cadastrados em Cadastro → Estoque → Itens ao aprovar esta entrada.
-              </p>
+              {/* Itens pré-cadastrados — normalização */}
+              {approvalItem.itens_precadastro.length > 0 && (
+                <div>
+                  <p className="text-sm font-semibold mb-2">Itens Pré-Cadastrados</p>
+                  <p className="text-xs text-muted-foreground mb-3">Estes itens ainda não existem no catálogo. Normalize cada um antes de aprovar a entrada.</p>
+                  <div className="space-y-3">
+                    {approvalItem.itens_precadastro.map(it => {
+                      const sel = precadastroSelections[it.id] ?? { acao: "", itemId: "" };
+                      const isPending = normalizarMutation.isPending;
+                      return (
+                        <div key={it.id} className="border border-border rounded-lg p-4 space-y-3 bg-muted/20">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-foreground">{it.nome_item}</p>
+                              <p className="text-xs text-muted-foreground">Qtd: {it.quantidade} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</p>
+                            </div>
+                            <StatusBadge status="Pré-Cadastro" className="text-[10px]" />
+                          </div>
+                          <div className="flex flex-col gap-2">
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm" variant={sel.acao === "novo" ? "default" : "outline"}
+                                className="h-8 text-xs flex-1"
+                                onClick={() => setPrecadastroSelections(p => ({ ...p, [it.id]: { acao: "novo", itemId: "" } }))}
+                              >
+                                Criar Novo Item
+                              </Button>
+                              <Button
+                                size="sm" variant={sel.acao === "existente" ? "default" : "outline"}
+                                className="h-8 text-xs flex-1"
+                                onClick={() => setPrecadastroSelections(p => ({ ...p, [it.id]: { acao: "existente", itemId: "" } }))}
+                              >
+                                Vincular a Existente
+                              </Button>
+                            </div>
+                            {sel.acao === "existente" && (
+                              <Popover open={openComboboxIds[it.id] ?? false} onOpenChange={v => setOpenComboboxIds(p => ({ ...p, [it.id]: v }))}>
+                                <PopoverTrigger asChild>
+                                  <Button variant="outline" role="combobox" className="h-8 text-xs w-full justify-between font-normal">
+                                    {sel.itemId ? optionsEstoque.find(o => o.value === sel.itemId)?.label : "Selecione o item do estoque..."}
+                                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="p-0 w-[320px]">
+                                  <Command>
+                                    <CommandInput placeholder="Buscar item..." className="h-8 text-xs" />
+                                    <CommandList>
+                                      <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                                      {optionsEstoque.map(opt => (
+                                        <CommandItem key={opt.value} value={opt.label} onSelect={() => {
+                                          setPrecadastroSelections(p => ({ ...p, [it.id]: { acao: "existente", itemId: opt.value } }));
+                                          setOpenComboboxIds(p => ({ ...p, [it.id]: false }));
+                                        }}>
+                                          <Check className={cn("mr-2 h-3.5 w-3.5", sel.itemId === opt.value ? "opacity-100" : "opacity-0")} />
+                                          {opt.label}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                            {sel.acao && (sel.acao === "novo" || sel.itemId) && (
+                              <Button
+                                size="sm" className="h-8 text-xs gap-1 self-end"
+                                disabled={isPending}
+                                onClick={() => handleNormalizar((approvalItem as any)._rawId ?? approvalItem.id, it.id)}
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" /> Confirmar Normalização
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {approvalItem.itens.length === 0 && approvalItem.itens_precadastro.length === 0 && (
+                <p className="text-xs text-muted-foreground bg-muted/40 p-3 rounded text-center">Nenhum item registrado nesta entrada.</p>
+              )}
 
               <DialogFooter className="gap-2 pt-4">
-                <Button variant="outline" onClick={() => { setRejectItem(approvalItem); setApprovalItem(null); }} className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
+                <Button variant="outline" onClick={() => { setRejectItem(approvalItem); setApprovalItem(null); setPrecadastroSelections({}); }} className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10">
                   <XCircle className="w-4 h-4" /> Negar
                 </Button>
-                <Button onClick={() => handleApprove(approvalItem)} className="gap-1.5">
+                <Button
+                  onClick={() => handleApprove(approvalItem)}
+                  disabled={aprovarMutation.isPending || rejeitarMutation.isPending}
+                  className="gap-1.5"
+                >
                   <ClipboardCheck className="w-4 h-4" /> Aprovar Entrada
                 </Button>
               </DialogFooter>
@@ -564,12 +727,31 @@ export default function EstoqueEntradas() {
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">Vincule <strong>{conciliateItem?.itemNF.item}</strong> a um item existente no estoque:</p>
-            <Select value={conciliateWith} onValueChange={setConciliateWith}>
-              <SelectTrigger><SelectValue placeholder="Selecione o item de estoque" /></SelectTrigger>
-              <SelectContent className="bg-popover">
-                {optionsEstoque.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <Popover open={conciliateComboboxOpen} onOpenChange={setConciliateComboboxOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+                  {conciliateWith ? optionsEstoque.find(o => o.value === conciliateWith)?.label : "Selecione o item de estoque"}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-0 w-[400px]">
+                <Command>
+                  <CommandInput placeholder="Buscar item..." />
+                  <CommandList>
+                    <CommandEmpty>Nenhum item encontrado.</CommandEmpty>
+                    {optionsEstoque.map(opt => (
+                      <CommandItem key={opt.value} value={opt.label} onSelect={() => {
+                        setConciliateWith(opt.value);
+                        setConciliateComboboxOpen(false);
+                      }}>
+                        <Check className={cn("mr-2 h-4 w-4", conciliateWith === opt.value ? "opacity-100" : "opacity-0")} />
+                        {opt.label}
+                      </CommandItem>
+                    ))}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setConciliateItem(null); setConciliateWith(""); }}>Cancelar</Button>

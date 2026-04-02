@@ -73,7 +73,7 @@ const statusStyles: Record<string, { bg: string; text: string }> = {
 const defaultStyle = { bg: "bg-muted", text: "text-muted-foreground" }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const normalizedStatus = status.toLowerCase()
+  const normalizedStatus = (status ?? '').toLowerCase()
   const style = statusStyles[normalizedStatus] || defaultStyle
 
   return (

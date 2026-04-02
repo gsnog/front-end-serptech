@@ -72,7 +72,7 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/financeiro/contas-receber": { title: "Contas a Receber", description: "Gerenciamento de contas a receber" },
   "/financeiro/contas-pagar": { title: "Contas a Pagar", description: "Gerenciamento de contas a pagar" },
   "/financeiro/fluxo-caixa": { title: "Fluxo de Caixa", description: "Controle de fluxo de caixa" },
-  "/financeiro/xml": { title: "XML", description: "Gerenciamento de arquivos XML" },
+  "/financeiro/xml": { title: "Notas Fiscais", description: "Gerenciamento de notas fiscais eletrônicas" },
   
   // Financeiro - Subpáginas
   "/financeiro/contas-receber/nova": { title: "Contas a Receber", description: "Nova Conta a Receber" },
@@ -88,9 +88,9 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/operacional/mapas": { title: "Mapas", description: "Mapas do laboratório" },
   "/operacional/exames": { title: "Exames", description: "Tipos de exames" },
 
-  // NF-e
-  "/nfe": { title: "NF-e", description: "Gerenciamento de notas fiscais eletrônicas" },
-  "/nfe/nova": { title: "NF-e", description: "Nova Nota Fiscal" },
+  // Notas Fiscais
+  "/nfe": { title: "Notas Fiscais", description: "Gerenciamento de notas fiscais eletrônicas" },
+  "/nfe/nova": { title: "Notas Fiscais", description: "Nova Nota Fiscal" },
   
   // Usuário
   "/notificacoes": { title: "Notificações", description: "Central de notificações do sistema" },

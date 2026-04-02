@@ -140,3 +140,5 @@ class SocketManager {
 // Global instances exposed
 export const chatSocket = new SocketManager('ws://127.0.0.1:8000/ws/chat/');
 export const rtcSocket = new SocketManager('ws://127.0.0.1:8000/ws/signaling/');
+/** General-purpose data updates channel — broadcasts model create/update/delete events. */
+export const updatesSocket = new SocketManager('ws://127.0.0.1:8000/ws/updates/');

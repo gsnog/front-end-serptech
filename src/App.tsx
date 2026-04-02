@@ -30,6 +30,8 @@ import EstoqueEntradas from "./pages/EstoqueEntradas";
 import NovaEntrada from "./pages/estoque/NovaEntrada";
 import UploadNFe from "./pages/estoque/UploadNFe";
 import RelatorioEntradas from "./pages/estoque/RelatorioEntradas";
+import EstoqueTransferencias from "./pages/estoque/EstoqueTransferencias";
+import NovaTransferenciaEstoque from "./pages/estoque/NovaTransferenciaEstoque";
 import EstoqueInventario from "./pages/EstoqueInventario";
 import RelatorioInventario from "./pages/estoque/RelatorioInventario";
 import EstoqueLocacoes from "./pages/EstoqueLocacoes";
@@ -48,6 +50,7 @@ import OrdemServico from "./pages/OrdemServico";
 import NovaOrdemServico from "./pages/NovaOrdemServico";
 import Cadastro from "./pages/Cadastro";
 import NotFound from "./pages/NotFound";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Cadastro - Estoque
 import FornecedoresEstoque from "./pages/cadastro/estoque/Fornecedores";
@@ -165,10 +168,12 @@ const App = () => (
                   <Route path="/patrimonio" element={<Patrimonio />} />
                   <Route path="/relatorio" element={<Relatorio />} />
                   <Route path="/relatorios" element={<Relatorios />} />
-                  <Route path="/estoque/entradas" element={<EstoqueEntradas />} />
+                  <Route path="/estoque/entradas" element={<ErrorBoundary><EstoqueEntradas /></ErrorBoundary>} />
                   <Route path="/estoque/entradas/nova" element={<NovaEntrada />} />
                   <Route path="/estoque/entradas/upload-nfe" element={<UploadNFe />} />
                   <Route path="/estoque/entradas/relatorio" element={<RelatorioEntradas />} />
+                  <Route path="/estoque/transferencias" element={<EstoqueTransferencias />} />
+                  <Route path="/estoque/transferencias/nova" element={<NovaTransferenciaEstoque />} />
                   <Route path="/estoque/inventario" element={<EstoqueInventario />} />
                   <Route path="/estoque/inventario/relatorio" element={<RelatorioInventario />} />
                   <Route path="/estoque/saidas" element={<EstoqueSaidas />} />
@@ -185,9 +190,11 @@ const App = () => (
                   <Route path="/estoque/requisicoes/relatorio" element={<RelatorioRequisicoes />} />
                   <Route path="/estoque/ordem-compra" element={<OrdemCompra />} />
                   <Route path="/estoque/ordem-compra/nova" element={<NovaOrdemCompra />} />
+                  <Route path="/estoque/ordem-compra/:id" element={<NovaOrdemCompra />} />
                   <Route path="/estoque/ordem-compra/relatorio" element={<RelatorioOrdemCompra />} />
                   <Route path="/estoque/ordem-servico" element={<OrdemServico />} />
                   <Route path="/estoque/ordem-servico/nova" element={<NovaOrdemServico />} />
+                  <Route path="/estoque/ordem-servico/:id" element={<NovaOrdemServico />} />
 
                   {/* Cadastro - Estoque */}
                   <Route path="/cadastro/estoque/fornecedores" element={<FornecedoresEstoque />} />
