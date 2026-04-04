@@ -12,30 +12,27 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { fetchLocacoes, Locacao } from "@/services/estoque"
 import { Loader2 } from "lucide-react"
+import api from "@/lib/api"
 
 interface DisplayLocacao {
   id: number;
+  raw: Locacao;
   unidade: string;
   dataInicio: string;
-  previsaoEntrega: string;
+  previsaoFinalizacao: string;
   dataFim: string;
   locador: string;
-  contrato: string;
   valor: string;
   status: string;
-  itens: {
-    item: string;
-    marca: string;
-    quantidade: string;
-    especificacoes: string;
-  }[];
+  itens: { item: string; quantidade: string; dataEntrega: string }[];
 }
 
 export default function EstoqueLocacoes() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [currentPage, setCurrentPage] = useState(1);
   const { data: response, isLoading } = useQuery({
     queryKey: ['locacoes', currentPage],
@@ -50,26 +47,53 @@ export default function EstoqueLocacoes() {
   const [filterDataFim, setFilterDataFim] = useState("")
   const [viewItem, setViewItem] = useState<DisplayLocacao | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [editItem, setEditItem] = useState<DisplayLocacao | null>(null)
-  const [editData, setEditData] = useState({ unidade: "", locador: "", contrato: "" })
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
+  // Finalizar locação
+  const [finalizeItem, setFinalizeItem] = useState<DisplayLocacao | null>(null)
+  const [finalizeAdicional, setFinalizeAdicional] = useState("")
+
+  const finalizeMut = useMutation({
+    mutationFn: ({ id, adicional }: { id: number; adicional: number }) =>
+      api.patch(`/api/estoque/locacoes/${id}/`, {
+        status: "Finalizado",
+        data_fim: new Date().toISOString().split("T")[0],
+        adicional,
+      }).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["locacoes"] })
+      toast({ title: "Locação finalizada com sucesso!" })
+      setFinalizeItem(null)
+      setFinalizeAdicional("")
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao finalizar locação.", variant: "destructive" }),
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.delete(`/api/estoque/locacoes/${id}/`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["locacoes"] })
+      toast({ title: "Locação excluída." })
+      setDeleteId(null)
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  })
+
   const items: DisplayLocacao[] = useMemo(() => {
-    return (locacoes || []).map(l => ({
+    return (locacoes || []).map((l: Locacao) => ({
       id: l.id,
+      raw: l,
       unidade: l.unidade_nome,
       dataInicio: l.data_inicio || "-",
-      previsaoEntrega: l.previsao_de_entrega || "-",
+      previsaoFinalizacao: l.previsao_de_entrega || "-",
       dataFim: l.data_fim || "-",
       locador: l.locador_nome,
-      contrato: "CONTRATO REAL",
-      valor: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.valor),
-      status: l.status || "Pendente",
+      valor: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(l.valor_total ?? l.valor),
+      status: l.status || "Em Andamento",
       itens: (l as any).item_locacao?.map((i: any) => ({
         item: i.item_nome,
-        marca: "-",
         quantidade: String(i.quantidade),
-        especificacoes: "-"
+        dataEntrega: i.data_de_entrega || "—",
       })) || []
     }))
   }, [locacoes])
@@ -77,8 +101,8 @@ export default function EstoqueLocacoes() {
   const filtered = useMemo(() => {
     return items.filter(loc => {
       const matchLocador = loc.locador.toLowerCase().includes(filterLocador.toLowerCase())
-      const matchDataInicio = filterDataInicio ? loc.dataInicio >= filterDataInicio.split("-").reverse().join("/") : true
-      const matchDataFim = filterDataFim ? loc.previsaoEntrega <= filterDataFim.split("-").reverse().join("/") : true
+      const matchDataInicio = filterDataInicio ? loc.dataInicio >= filterDataInicio : true
+      const matchDataFim = filterDataFim ? loc.previsaoFinalizacao <= filterDataFim : true
       return matchLocador && matchDataInicio && matchDataFim
     })
   }, [items, filterLocador, filterDataInicio, filterDataFim])
@@ -91,18 +115,28 @@ export default function EstoqueLocacoes() {
     });
   };
 
-  const getExportData = () => filtered.map(l => ({ Unidade: l.unidade, "Data Início": l.dataInicio, "Previsão Entrega": l.previsaoEntrega, "Data Fim": l.dataFim, Locador: l.locador, Contrato: l.contrato, Valor: l.valor, Status: l.status }));
-  const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API" }); setDeleteId(null); } };
-  const openEdit = (l: DisplayLocacao) => { setEditItem(l); setEditData({ unidade: l.unidade, locador: l.locador, contrato: l.contrato }); };
-  const handleSaveEdit = () => { if (editItem) { toast({ title: "Edição requer API" }); setEditItem(null); } };
-  const deleteItem = items.find(i => i.id === deleteId);
+  const getExportData = () => filtered.map(l => ({
+    Unidade: l.unidade,
+    "Data Início": l.dataInicio,
+    "Previsão de Finalização": l.previsaoFinalizacao,
+    "Data Fim": l.dataFim,
+    Locador: l.locador,
+    Valor: l.valor,
+    Status: l.status,
+  }));
+
+  const handleFinalize = () => {
+    if (!finalizeItem) return
+    const extra = parseFloat(finalizeAdicional) || 0
+    const novoAdicional = (finalizeItem.raw.adicional ?? 0) + extra
+    finalizeMut.mutate({ id: finalizeItem.id, adicional: novoAdicional })
+  }
+
+  const deleteLocacao = items.find(i => i.id === deleteId)
 
   if (isLoading) {
     return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   }
-
-  const getItensCount = (loc: DisplayLocacao) => loc.itens.length;
-  const getQuantidadeTotal = (loc: DisplayLocacao) => loc.itens.reduce((acc, i) => acc + (parseInt(i.quantidade) || 0), 0);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -128,19 +162,19 @@ export default function EstoqueLocacoes() {
               <TableHead className="text-center w-[50px]"></TableHead>
               <TableHead className="text-center">Unidade</TableHead>
               <TableHead className="text-center">Data de Início</TableHead>
-              <TableHead className="text-center">Previsão de Entrega</TableHead>
+              <TableHead className="text-center">Previsão de Finalização</TableHead>
               <TableHead className="text-center">Data Fim</TableHead>
               <TableHead className="text-center">Locador</TableHead>
-              <TableHead className="text-center">Contrato</TableHead>
-              <TableHead className="text-center">Valor</TableHead>
+              <TableHead className="text-center">Valor Total</TableHead>
               <TableHead className="text-center">Itens</TableHead>
-              <TableHead className="text-center">Quantidades</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <TableHead className="text-center">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (<TableRow><TableCell colSpan={12} className="text-center py-8 text-muted-foreground">Nenhuma locação encontrada.</TableCell></TableRow>) : (
+            {filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma locação encontrada.</TableCell></TableRow>
+            ) : (
               filtered.map((loc) => (
                 <>
                   <TableRow key={loc.id}>
@@ -151,37 +185,41 @@ export default function EstoqueLocacoes() {
                     </TableCell>
                     <TableCell className="text-center">{loc.unidade}</TableCell>
                     <TableCell className="text-center">{loc.dataInicio}</TableCell>
-                    <TableCell className="text-center">{loc.previsaoEntrega}</TableCell>
+                    <TableCell className="text-center">{loc.previsaoFinalizacao}</TableCell>
                     <TableCell className="text-center">{loc.dataFim}</TableCell>
                     <TableCell className="text-center">{loc.locador}</TableCell>
-                    <TableCell className="text-center">{loc.contrato}</TableCell>
                     <TableCell className="text-center font-semibold">{loc.valor}</TableCell>
-                    <TableCell className="text-center">{getItensCount(loc)}</TableCell>
-                    <TableCell className="text-center">{getQuantidadeTotal(loc)}</TableCell>
+                    <TableCell className="text-center">{loc.itens.length}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={loc.status} /></TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(loc)} onEdit={() => openEdit(loc)} onDelete={() => setDeleteId(loc.id)} /></TableCell>
+                    <TableCell className="text-center">
+                      <TableActions
+                        onView={() => setViewItem(loc)}
+                        onDelete={() => setDeleteId(loc.id)}
+                        onFinalize={loc.status !== "Finalizado" ? () => { setFinalizeItem(loc); setFinalizeAdicional(""); } : undefined}
+                      />
+                    </TableCell>
                   </TableRow>
                   {expandedRows.has(loc.id) && (
                     <TableRow key={`${loc.id}-details`} className="bg-muted/30">
-                      <TableCell colSpan={12} className="p-4">
+                      <TableCell colSpan={10} className="p-4">
                         <div className="ml-8">
                           <h4 className="text-sm font-semibold mb-2 text-foreground">Itens da Locação</h4>
                           <Table>
                             <TableHeader>
                               <TableRow>
                                 <TableHead className="text-center">Item</TableHead>
-                                <TableHead className="text-center">Marca</TableHead>
                                 <TableHead className="text-center">Quantidade</TableHead>
-                                <TableHead className="text-center">Especificações</TableHead>
+                                <TableHead className="text-center">Data de Entrega</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {loc.itens.map((item, idx) => (
+                              {loc.itens.length === 0 ? (
+                                <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">Sem itens</TableCell></TableRow>
+                              ) : loc.itens.map((item, idx) => (
                                 <TableRow key={idx}>
                                   <TableCell className="text-center">{item.item}</TableCell>
-                                  <TableCell className="text-center">{item.marca}</TableCell>
                                   <TableCell className="text-center">{item.quantidade}</TableCell>
-                                  <TableCell className="text-center">{item.especificacoes}</TableCell>
+                                  <TableCell className="text-center">{item.dataEntrega}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -195,6 +233,7 @@ export default function EstoqueLocacoes() {
             )}
           </TableBody>
         </Table>
+
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-border">
             <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
@@ -206,41 +245,96 @@ export default function EstoqueLocacoes() {
         )}
       </div>
 
+      {/* Modal: Visualizar */}
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Detalhes da Locação</DialogTitle></DialogHeader>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Detalhes da Locação</DialogTitle></DialogHeader>
           {viewItem && (
-            <div className="space-y-2">
-              {Object.entries({ Unidade: viewItem.unidade, "Data Início": viewItem.dataInicio, "Previsão Entrega": viewItem.previsaoEntrega, "Data Fim": viewItem.dataFim, Locador: viewItem.locador, Contrato: viewItem.contrato, Valor: viewItem.valor, Status: viewItem.status }).map(([k, v]) => (
-                <div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>
+            <div className="space-y-2 text-sm">
+              {[
+                ["Unidade", viewItem.unidade],
+                ["Locador", viewItem.locador],
+                ["Data Início", viewItem.dataInicio],
+                ["Previsão de Finalização", viewItem.previsaoFinalizacao],
+                ["Data Fim", viewItem.dataFim],
+                ["Valor Total", viewItem.valor],
+                ["Status", viewItem.status],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-muted-foreground">{k}</span>
+                  <span className="font-medium">{v}</span>
+                </div>
               ))}
-              <div className="pt-3">
-                <h4 className="text-sm font-semibold mb-2">Itens</h4>
-                {viewItem.itens.map((item, idx) => (
-                  <div key={idx} className="flex justify-between py-1 border-b border-border last:border-0 text-sm">
-                    <span>{item.item} ({item.marca})</span>
-                    <span>Qtd: {item.quantidade}</span>
-                  </div>
-                ))}
-              </div>
+              {viewItem.itens.length > 0 && (
+                <div className="pt-2">
+                  <p className="font-semibold mb-1">Itens</p>
+                  {viewItem.itens.map((it, idx) => (
+                    <div key={idx} className="flex justify-between py-1 border-b border-border last:border-0">
+                      <span>{it.item}</span>
+                      <span>Qtd: {it.quantidade}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Locação</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Unidade</Label><Input value={editData.unidade} onChange={e => setEditData({ ...editData, unidade: e.target.value })} /></div>
-            <div><Label>Locador</Label><Input value={editData.locador} onChange={e => setEditData({ ...editData, locador: e.target.value })} /></div>
-            <div><Label>Contrato</Label><Input value={editData.contrato} onChange={e => setEditData({ ...editData, contrato: e.target.value })} /></div>
-          </div>
-          <DialogFooter><Button onClick={handleSaveEdit}>Salvar</Button></DialogFooter>
+      {/* Modal: Finalizar */}
+      <Dialog open={!!finalizeItem} onOpenChange={() => { setFinalizeItem(null); setFinalizeAdicional(""); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Finalizar Locação</DialogTitle></DialogHeader>
+          {finalizeItem && (
+            <div className="space-y-4 py-2 text-sm">
+              <div className="space-y-1">
+                <div className="flex justify-between py-1 border-b border-border">
+                  <span className="text-muted-foreground">Locador</span>
+                  <span className="font-medium">{finalizeItem.locador}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border">
+                  <span className="text-muted-foreground">Unidade</span>
+                  <span className="font-medium">{finalizeItem.unidade}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-border">
+                  <span className="text-muted-foreground">Valor atual</span>
+                  <span className="font-medium">{finalizeItem.valor}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Adicional de finalização (opcional)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={finalizeAdicional}
+                  onChange={(e) => setFinalizeAdicional(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Valor extra a ser somado ao adicional existente.</p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setFinalizeItem(null); setFinalizeAdicional(""); }}>Cancelar</Button>
+            <Button onClick={handleFinalize} disabled={finalizeMut.isPending} className="bg-green-600 hover:bg-green-700 text-white">
+              {finalizeMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Finalizar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* AlertDialog: Excluir */}
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir locação?</AlertDialogTitle><AlertDialogDescription>Deseja excluir a locação "{deleteItem?.unidade}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir locação?</AlertDialogTitle>
+            <AlertDialogDescription>Deseja excluir a locação de <strong>{deleteLocacao?.locador}</strong>? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { if (deleteId) deleteMut.mutate(deleteId) }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

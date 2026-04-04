@@ -36,6 +36,8 @@ export interface Locacao {
     previsao_de_entrega: string;
     data_fim: string | null;
     valor: number;
+    adicional: number;
+    desconto: number;
     valor_total: number;
     status: string;
     unidade: number;
@@ -69,6 +71,29 @@ export interface OrdemCompraItem {
     especificacoes?: string;
 }
 
+export interface OrdemServicoFilhoGerais {
+    id: number;
+    unidade: number;
+    unidade_nome?: string;
+    setor: number;
+    setor_nome?: string;
+    tipo_servico: string;
+}
+
+export interface OrdemServicoFilhoImobilizado {
+    id: number;
+    patrimonio: number;
+    patrimonio_codigo?: string;
+    tipo_servico: string;
+}
+
+export interface OrdemServicoFilhoSuporte {
+    id: number;
+    tipo_suporte: string;
+    software?: number | null;
+    software_nome?: string | null;
+}
+
 export interface OrdemServico {
     id: number;
     numero?: number;
@@ -81,6 +106,11 @@ export interface OrdemServico {
     feedback?: string;
     status?: string;
     usuario_nome?: string;
+    filho_servicos_gerais?: OrdemServicoFilhoGerais[];
+    filho_imobilizado?: OrdemServicoFilhoImobilizado[];
+    filho_suporte?: OrdemServicoFilhoSuporte[];
+    finalizado_por?: number | null;
+    finalizado_por_nome?: string | null;
 }
 
 export interface RequisicaoSetor {
@@ -273,6 +303,34 @@ export const deleteOrdemServico = async (id: number): Promise<void> => {
     await api.delete(`/api/estoque/ordens-servico/${id}/`);
 };
 
+export interface Software {
+    id: number;
+    nome: string;
+    fornecedor: number;
+    fornecedor_nome?: string;
+    licenca?: string | null;
+    data_aquisicao?: string;
+    data_vencimento?: string | null;
+    valor?: number;
+}
+
+export const fetchSoftware = async (): Promise<Software[]> => {
+    const res = await api.get('/api/estoque/software/');
+    return Array.isArray(res.data) ? res.data : res.data?.results ?? [];
+};
+export const createSoftware = async (data: Partial<Software>): Promise<Software> => {
+    const res = await api.post('/api/estoque/software/', data);
+    return res.data;
+};
+export const updateSoftware = async (id: number, data: Partial<Software>): Promise<Software> => {
+    const res = await api.put(`/api/estoque/software/${id}/`, data);
+    return res.data;
+};
+export const deleteSoftware = async (id: number): Promise<void> => {
+    await api.delete(`/api/estoque/software/${id}/`);
+};
+export const softwareQueryKey = ['software'] as const;
+
 // ─── Requisições de Setor ─────────────────────────────────────────────────────
 
 export const fetchRequisicoes = async (page?: number): Promise<RequisicaoSetor[] | PaginatedResponse<RequisicaoSetor>> => {
@@ -285,7 +343,19 @@ export const createRequisicao = async (data: Partial<RequisicaoSetor>): Promise<
     return res.data;
 };
 export const updateRequisicao = async (id: number, data: Partial<RequisicaoSetor>): Promise<RequisicaoSetor> => {
-    const res = await api.put(`/api/estoque/requisicoes/${id}/`, data);
+    const res = await api.patch(`/api/estoque/requisicoes/${id}/`, data);
+    return res.data;
+};
+export const aprovarRequisicao = async (id: number, itens: { id: number; quantidade_aprovada: number }[]): Promise<RequisicaoSetor> => {
+    const res = await api.post(`/api/estoque/requisicoes/${id}/aprovar/`, { itens });
+    return res.data;
+};
+export const negarRequisicao = async (id: number, observacao: string): Promise<RequisicaoSetor> => {
+    const res = await api.post(`/api/estoque/requisicoes/${id}/negar/`, { observacao });
+    return res.data;
+};
+export const entregarRequisicao = async (id: number): Promise<RequisicaoSetor> => {
+    const res = await api.post(`/api/estoque/requisicoes/${id}/entregar/`);
     return res.data;
 };
 export const deleteRequisicao = async (id: number): Promise<void> => {

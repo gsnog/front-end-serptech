@@ -1,13 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-
-interface CnpjData {
-  razaoSocial: string;
-  nomeFantasia: string;
-  endereco: string;
-  email: string;
-  telefone: string;
-}
+import api from "@/lib/api";
 
 export const formatCnpj = (value: string): string => {
   const digits = value.replace(/\D/g, "").slice(0, 14);
@@ -36,59 +29,36 @@ export const useCnpjLookup = (
     setIsSearching(true);
 
     try {
-      const response = await fetch(
-        `https://open.cnpja.com/office/${digits}`
-      );
+      const response = await api.get(`/api/estoque/consulta-cnpj/${digits}/`);
+      const data = response.data;
 
-      if (!response.ok) {
-        throw new Error("Empresa não encontrada");
+      if (data.nome) {
+        setFieldValue("nome", data.nome);
+        setFieldValue("razaoSocial", data.nome);
       }
 
-      const data = await response.json();
+      const enderecoParts = [
+        data.logradouro,
+        data.numero,
+        data.complemento,
+        data.bairro,
+        data.municipio,
+        data.uf,
+        data.cep,
+      ].filter(Boolean);
+      if (enderecoParts.length > 0) setFieldValue("endereco", enderecoParts.join(", "));
 
-      const razaoSocial = data.company?.name || data.alias || "";
-      const nomeFantasia = data.alias || data.company?.name || "";
-      const email =
-        data.emails && data.emails.length > 0
-          ? data.emails[0].address || ""
-          : "";
-      const telefone =
-        data.phones && data.phones.length > 0
-          ? `(${data.phones[0].area}) ${data.phones[0].number}`
-          : "";
+      if (data.telefone) setFieldValue("telefone", data.telefone);
+      if (data.email) setFieldValue("email", data.email);
 
-      const addr = data.address || {};
-      const endereco = [
-        addr.street,
-        addr.number,
-        addr.details,
-        addr.district,
-        addr.city,
-        addr.state,
-        addr.zip,
-      ]
-        .filter(Boolean)
-        .join(", ");
-
-      // Fill available fields
-      if (razaoSocial) setFieldValue("razaoSocial", razaoSocial);
-      if (nomeFantasia) setFieldValue("nome", nomeFantasia);
-      if (endereco) setFieldValue("endereco", endereco);
-      if (email) setFieldValue("email", email);
-      if (telefone) setFieldValue("telefone", telefone);
-
-      toast.success("CNPJ encontrado!", {
-        description: `${razaoSocial}`,
-      });
-    } catch (error) {
-      toast.error("Erro ao consultar CNPJ", {
-        description:
-          "Não foi possível encontrar os dados. Verifique o CNPJ e tente novamente.",
-      });
+      toast.success("CNPJ encontrado!", { description: data.nome });
+    } catch (error: any) {
+      const msg = error.response?.data?.error ?? "Verifique o CNPJ e tente novamente.";
+      toast.error("Erro ao consultar CNPJ", { description: msg });
     } finally {
       setIsSearching(false);
     }
   };
 
-  return { consultarCnpj, isSearching, formatCnpj };
+  return { consultarCnpj, isSearching };
 };

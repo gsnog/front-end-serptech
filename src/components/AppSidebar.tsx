@@ -39,6 +39,7 @@ const menuItems = [
           { title: "Itens", url: "/cadastro/estoque/itens" },
           { title: "Setores", url: "/cadastro/estoque/setores" },
           { title: "Unidades", url: "/cadastro/estoque/unidades" },
+          { title: "Softwares", url: "/cadastro/estoque/software", roles: ["admin", "admin ti"] },
         ]
       },
       {
@@ -146,7 +147,8 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<string[]>([])
   const [activeItem, setActiveItem] = useState<string>("Dashboard")
   const { theme, toggleTheme } = useTheme()
-  const { logout } = usePermissions()
+  const { logout, currentUser } = usePermissions()
+  const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase()
 
   const toggleMenu = (label: string, isSubMenu = false) => {
     setOpenMenus((prev) => {
@@ -277,7 +279,10 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
                             {openMenus.includes(`${item.title}-${subItem.title}`) && (
                               <ul className="mt-1 space-y-1 pl-4">
-                                {subItem.subItems.map((nestedItem) => (
+                                {subItem.subItems.filter((nestedItem) =>
+                                  !('roles' in nestedItem && nestedItem.roles) ||
+                                  (nestedItem as any).roles.includes(currentRole)
+                                ).map((nestedItem) => (
                                   <li key={nestedItem.title}>
                                     <NavLink
                                       to={nestedItem.url}

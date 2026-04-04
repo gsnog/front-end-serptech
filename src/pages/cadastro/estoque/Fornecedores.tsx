@@ -8,7 +8,7 @@ import { FilterSection } from "@/components/FilterSection";
 import { TableActions } from "@/components/TableActions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, FileText, Loader2 } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
@@ -53,10 +53,6 @@ const FornecedoresEstoque = () => {
   const deleteItem = items.find(i => i.id === deleteId);
   const openEdit = (f: any) => { setEditItem(f); setEditData({ fornecedor: f.fornecedor, cnpj: f.cnpj, razaoSocial: f.razaoSocial, vendedor: f.vendedor, email: f.email, telefone: f.telefone }); };
 
-  if (isLoading) {
-    return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
-  }
-
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="space-y-6">
@@ -77,7 +73,11 @@ const FornecedoresEstoque = () => {
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum fornecedor encontrado.</TableCell></TableRow>) : (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground"><Loader2 className="animate-spin h-5 w-5 mx-auto" /></TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum fornecedor encontrado.</TableCell></TableRow>
+              ) : (
                 filtered.map((f) => (
                   <TableRow key={f.id} className="hover:bg-table-hover transition-colors">
                     <TableCell className="text-center font-medium">{f.fornecedor}</TableCell>

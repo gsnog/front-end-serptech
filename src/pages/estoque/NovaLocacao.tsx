@@ -9,56 +9,173 @@ import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { MapPin, Trash2 } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ValidatedSelect } from "@/components/ui/validated-select";
 import { toast } from "@/hooks/use-toast";
+import api from "@/lib/api";
 
-interface ItemLocacao {
-  id: number;
-  item: string;
-  marca: string;
+interface ItemLocacaoRow {
+  _key: number;
+  itemId: string;
+  itemNome: string;
   quantidade: string;
-  especificacoes: string;
+  dataEntrega: string;
 }
+
+const saveLocacao = async ({
+  form,
+  itens,
+  contrato,
+}: {
+  form: {
+    locador: string;
+    unidade: string;
+    dataInicio: string;
+    previsaoEntrega: string;
+    valor: string;
+    adicional: string;
+    desconto: string;
+    descricao: string;
+  };
+  itens: ItemLocacaoRow[];
+  contrato: File | null;
+}) => {
+  const fd = new FormData();
+  fd.append("locador", form.locador);
+  fd.append("unidade", form.unidade);
+  fd.append("data_inicio", form.dataInicio);
+  if (form.previsaoEntrega) fd.append("previsao_de_entrega", form.previsaoEntrega);
+  fd.append("status", "Em Andamento");
+  fd.append("valor", form.valor || "0");
+  fd.append("adicional", form.adicional || "0");
+  fd.append("desconto", form.desconto || "0");
+  if (form.descricao) fd.append("descricao", form.descricao);
+  if (contrato) fd.append("contrato", contrato);
+
+  const { data } = await api.post("/api/estoque/locacoes/", fd, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  if (itens.length > 0) {
+    await Promise.all(
+      itens.map((it) =>
+        api.post("/api/estoque/item-locacao/", {
+          locacao: data.id,
+          item: parseInt(it.itemId),
+          quantidade: parseFloat(it.quantidade),
+          data_de_entrega: it.dataEntrega || null,
+        })
+      )
+    );
+  }
+
+  return data;
+};
 
 export default function NovaLocacao() {
   const navigate = useNavigate();
-  const { handleSalvar, isSaving } = useSaveWithDelay({
-    redirectTo: "/estoque/locacoes",
-    successMessage: "Locação salva!",
-    successDescription: "O registro foi salvo com sucesso.",
+
+  const [form, setForm] = useState({
+    locador: "",
+    unidade: "",
+    dataInicio: "",
+    previsaoEntrega: "",
+    valor: "",
+    adicional: "0",
+    desconto: "0",
+    descricao: "",
+  });
+  const setField = (key: keyof typeof form, value: string) =>
+    setForm((p) => ({ ...p, [key]: value }));
+
+  const [contrato, setContrato] = useState<File | null>(null);
+  const [itens, setItens] = useState<ItemLocacaoRow[]>([]);
+  const [itemForm, setItemForm] = useState({ itemId: "", itemNome: "", quantidade: "", dataEntrega: "" });
+
+  // ── Dados externos ──────────────────────────────────────────────────────────
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ["fornecedores_locacao"],
+    queryFn: () =>
+      api.get("/api/estoque/fornecedores/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
   });
 
-  const handleCancelar = () => navigate("/estoque/locacoes");
+  const { data: unidades = [] } = useQuery({
+    queryKey: ["unidades_locacao"],
+    queryFn: () =>
+      api.get("/api/estoque/unidades/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
+  });
 
-  const [locador, setLocador] = useState("");
-  const fornecedorOptions = [
-    { value: "forn1", label: "Fornecedor 1" },
-    { value: "forn2", label: "Fornecedor 2" },
-    { value: "forn3", label: "João Silva" },
-    { value: "forn4", label: "Maria Santos" },
-  ];
+  const { data: itensEstoque = [] } = useQuery({
+    queryKey: ["itens_locacao"],
+    queryFn: () =>
+      api.get("/api/estoque/itens/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
+  });
 
-  const [unidade, setUnidade] = useState("");
-  const unidadeOptions = [
-    { value: "almoxarifado-sp", label: "Almoxarifado SP" },
-    { value: "ti-central", label: "TI Central" },
-    { value: "deposito-rj", label: "Depósito RJ" },
-  ];
+  const fornecedorOptions = (fornecedores as any[]).map((f: any) => ({
+    value: String(f.id),
+    label: f.nome,
+  }));
 
-  const [itens, setItens] = useState<ItemLocacao[]>([]);
-  const [itemForm, setItemForm] = useState({ item: "", marca: "", quantidade: "", especificacoes: "" });
+  const unidadeOptions = (unidades as any[]).map((u: any) => ({
+    value: String(u.id),
+    label: u.unidade,
+  }));
 
+  const itemOptions = (itensEstoque as any[]).map((i: any) => ({
+    value: String(i.id),
+    label: i.itens_do_estoque,
+  }));
+
+  // ── Mutation ────────────────────────────────────────────────────────────────
+  const mutation = useMutation({
+    mutationFn: saveLocacao,
+    onSuccess: () => {
+      toast({ title: "Locação salva com sucesso!" });
+      navigate("/estoque/locacoes");
+    },
+    onError: (error: any) => {
+      const data = error.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Verifique os dados e tente novamente.";
+      toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
+    },
+  });
+
+  // ── Itens ───────────────────────────────────────────────────────────────────
   const handleAddItem = () => {
-    if (!itemForm.item || !itemForm.quantidade) {
-      toast({ title: "Campos obrigatórios", description: "Informe o item e a quantidade.", variant: "destructive" });
+    if (!itemForm.itemId || !itemForm.quantidade) {
+      toast({ title: "Campos obrigatórios", description: "Selecione o item e informe a quantidade.", variant: "destructive" });
       return;
     }
-    setItens([...itens, { id: Date.now(), ...itemForm }]);
-    setItemForm({ item: "", marca: "", quantidade: "", especificacoes: "" });
+    setItens((prev) => [
+      ...prev,
+      { _key: Date.now(), ...itemForm },
+    ]);
+    setItemForm({ itemId: "", itemNome: "", quantidade: "", dataEntrega: "" });
   };
 
-  const handleRemoveItem = (id: number) => setItens(itens.filter(i => i.id !== id));
+  const handleRemoveItem = (key: number) => setItens((prev) => prev.filter((i) => i._key !== key));
+
+  // ── Salvar ──────────────────────────────────────────────────────────────────
+  const handleSalvar = () => {
+    if (!form.locador || !form.unidade || !form.dataInicio) {
+      toast({ title: "Campos obrigatórios", description: "Preencha locador, unidade e data de início.", variant: "destructive" });
+      return;
+    }
+    mutation.mutate({ form, itens, contrato });
+  };
+
+  const valorTotal =
+    (parseFloat(form.valor) || 0) +
+    (parseFloat(form.adicional) || 0) -
+    (parseFloat(form.desconto) || 0);
 
   return (
     <SimpleFormWizard title="Nova Locação">
@@ -76,91 +193,111 @@ export default function NovaLocacao() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Locador <span className="text-destructive">*</span></Label>
-                <Select value={locador} onValueChange={setLocador}>
-                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione o locador" /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {fornecedorOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Unidade <span className="text-destructive">*</span></Label>
-                <Select value={unidade} onValueChange={setUnidade}>
-                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {unidadeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <ValidatedSelect
+                label="Locador"
+                required
+                value={form.locador}
+                onValueChange={(v) => setField("locador", v)}
+                placeholder="Selecione o fornecedor"
+                options={fornecedorOptions}
+                searchable
+                searchPlaceholder="Buscar fornecedor..."
+              />
+              <ValidatedSelect
+                label="Unidade"
+                required
+                value={form.unidade}
+                onValueChange={(v) => setField("unidade", v)}
+                placeholder="Selecione a unidade"
+                options={unidadeOptions}
+                searchable
+                searchPlaceholder="Buscar unidade..."
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Data de Início <span className="text-destructive">*</span></Label>
-                <Input type="date" className="form-input" />
+                <Input type="date" className="form-input" value={form.dataInicio} onChange={(e) => setField("dataInicio", e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Previsão de Entrega <span className="text-destructive">*</span></Label>
-                <Input type="date" className="form-input" />
+                <Label className="text-sm font-medium">Data Prevista de Finalização</Label>
+                <Input type="date" className="form-input" value={form.previsaoEntrega} onChange={(e) => setField("previsaoEntrega", e.target.value)} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Contrato</Label>
-                <Input type="file" className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                <Input
+                  type="file"
+                  className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                  onChange={(e) => setContrato(e.target.files?.[0] ?? null)}
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Valor</Label>
-                <Input type="text" className="form-input" />
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="form-input"
+                  value={form.valor}
+                  onChange={(e) => setField("valor", e.target.value)}
+                  placeholder="0.00"
+                />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Adicional</Label>
-                <Input type="number" defaultValue="0" className="form-input" />
+                <Input type="number" min="0" step="0.01" className="form-input" value={form.adicional} onChange={(e) => setField("adicional", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Desconto</Label>
-                <Input type="number" defaultValue="0" className="form-input" />
+                <Input type="number" min="0" step="0.01" className="form-input" value={form.desconto} onChange={(e) => setField("desconto", e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Valor Total</Label>
-                <Input type="text" className="form-input" />
+                <Input type="text" className="form-input bg-muted" readOnly value={valorTotal.toFixed(2)} />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Descrição</Label>
-                <Textarea className="form-input min-h-[80px]" />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Descrição</Label>
+              <Textarea className="form-input min-h-[80px]" value={form.descricao} onChange={(e) => setField("descricao", e.target.value)} />
             </div>
 
-            {/* Lista de Itens */}
+            {/* Itens */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">Itens</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Item</Label>
-                  <Input value={itemForm.item} onChange={(e) => setItemForm(p => ({ ...p, item: e.target.value }))} placeholder="Nome do item" className="form-input" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2">
+                  <ValidatedSelect
+                    label="Item"
+                    value={itemForm.itemId}
+                    onValueChange={(v) => {
+                      const found = itemOptions.find((o) => o.value === v);
+                      setItemForm((p) => ({ ...p, itemId: v, itemNome: found?.label ?? "" }));
+                    }}
+                    placeholder="Selecionar item"
+                    options={itemOptions}
+                    searchable
+                    searchPlaceholder="Buscar item..."
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Marca</Label>
-                  <Input value={itemForm.marca} onChange={(e) => setItemForm(p => ({ ...p, marca: e.target.value }))} placeholder="Marca" className="form-input" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Quantidade</Label>
-                  <Input type="number" value={itemForm.quantidade} onChange={(e) => setItemForm(p => ({ ...p, quantidade: e.target.value }))} placeholder="Qtd" className="form-input" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Especificações</Label>
-                  <Input value={itemForm.especificacoes} onChange={(e) => setItemForm(p => ({ ...p, especificacoes: e.target.value }))} placeholder="Specs" className="form-input" />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="form-input"
+                    value={itemForm.quantidade}
+                    onChange={(e) => setItemForm((p) => ({ ...p, quantidade: e.target.value }))}
+                    placeholder="Qtd"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 mt-4">
@@ -172,24 +309,22 @@ export default function NovaLocacao() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-center">Item</TableHead>
-                  <TableHead className="text-center">Marca</TableHead>
                   <TableHead className="text-center">Quantidade</TableHead>
-                  <TableHead className="text-center">Especificações</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {itens.length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
                 ) : (
                   itens.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center">{item.item}</TableCell>
-                      <TableCell className="text-center">{item.marca}</TableCell>
+                    <TableRow key={item._key}>
+                      <TableCell className="text-center">{item.itemNome}</TableCell>
                       <TableCell className="text-center">{item.quantidade}</TableCell>
-                      <TableCell className="text-center">{item.especificacoes}</TableCell>
                       <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item._key)} className="text-destructive hover:text-destructive">
+                          <Trash2 size={16} />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -197,7 +332,7 @@ export default function NovaLocacao() {
               </TableBody>
             </Table>
 
-            <FormActionBar onSave={handleSalvar} onCancel={handleCancelar} isSaving={isSaving} />
+            <FormActionBar onSave={handleSalvar} onCancel={() => navigate("/estoque/locacoes")} isSaving={mutation.isPending} />
           </div>
         </CardContent>
       </Card>

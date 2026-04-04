@@ -1,11 +1,13 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Layers } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
+import api from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
 
 const validationFields = [
   { name: "nome", label: "Nome do Setor", required: true, minLength: 2, maxLength: 100 },
@@ -13,25 +15,30 @@ const validationFields = [
 
 const NovoSetor = () => {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
+  const queryClient = useQueryClient();
 
-  const {
-    formData,
-    setFieldValue,
-    setFieldTouched,
-    validateAll,
-    getFieldError,
-    touched,
-  } = useFormValidation({ nome: "" }, validationFields);
+  const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } =
+    useFormValidation({ nome: "" }, validationFields);
 
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      await handleSave("/cadastro/estoque/setores", "Setor salvo com sucesso!");
-    }
-  };
+  const mutation = useMutation({
+    mutationFn: (data: any) => api.post('/api/setores-estoque/', data).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["setores"] });
+      toast({ title: "Setor salvo com sucesso!" });
+      navigate("/cadastro/estoque/setores");
+    },
+    onError: (error: any) => {
+      const data = error.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Verifique os dados e tente novamente.";
+      toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
+    },
+  });
 
-  const handleCancelar = () => {
-    navigate("/cadastro/estoque/setores");
+  const handleSalvar = () => {
+    if (!validateAll()) return;
+    mutation.mutate({ setor: formData.nome } as any);
   };
 
   return (
@@ -63,8 +70,8 @@ const NovoSetor = () => {
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/estoque/setores")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

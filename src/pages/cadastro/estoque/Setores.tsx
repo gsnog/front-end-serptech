@@ -12,39 +12,49 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Plus } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
-import { fetchSetores, updateSetor, deleteSetor, type Setor } from "@/services/pessoas";
+import { fetchSetores, type Setor } from "@/services/pessoas";
+import api from "@/lib/api";
+
+const updateSetorEstoque = (id: number, data: Partial<Setor>) =>
+  api.put(`/api/setores-estoque/${id}/`, data).then(r => r.data);
+
+const deleteSetorEstoque = (id: number) =>
+  api.delete(`/api/setores-estoque/${id}/`);
 
 const SetoresCadastro = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchSetor, setSearchSetor] = useState("");
+  const handleSearch = (v: string) => { setSearchSetor(v); setCurrentPage(1); };
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<Setor | null>(null);
   const [editItem, setEditItem] = useState<Setor | null>(null);
   const [editNome, setEditNome] = useState("");
 
+  const PAGE_SIZE = 20;
   const [currentPage, setCurrentPage] = useState(1);
-  const { data: response, isLoading } = useQuery({ queryKey: ["setores", currentPage], queryFn: () => fetchSetores(currentPage) });
-  const items: Setor[] = Array.isArray(response) ? response : (response?.results ?? []);
-  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
+  const { data: response, isLoading } = useQuery({ queryKey: ["setores"], queryFn: fetchSetores });
+  const allItems: Setor[] = Array.isArray(response) ? response : (response?.results ?? []);
 
   const updateMut = useMutation({
-    mutationFn: (d: { id: number; payload: Partial<Setor> }) => updateSetor(d.id, d.payload),
+    mutationFn: (d: { id: number; payload: Partial<Setor> }) => updateSetorEstoque(d.id, d.payload),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["setores"] }); setEditItem(null); toast({ title: "Salvo", description: "Setor atualizado." }); },
     onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
-    mutationFn: deleteSetor,
+    mutationFn: deleteSetorEstoque,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["setores"] }); setDeleteId(null); toast({ title: "Removido", description: "Setor excluído." }); },
     onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
   });
 
   const getName = (s: Setor) => s.nome || s.setor || "—";
-  const filtered = items.filter(s => getName(s).toLowerCase().includes(searchSetor.toLowerCase()));
+  const filtered = allItems.filter(s => getName(s).toLowerCase().includes(searchSetor.toLowerCase()));
+  const totalCount = filtered.length;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const items = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const getExportData = () => filtered.map(s => ({ Setor: getName(s) }));
-  const deleteItem = items.find(i => i.id === deleteId);
+  const deleteItem = allItems.find(i => i.id === deleteId);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -53,7 +63,7 @@ const SetoresCadastro = () => {
           <Button onClick={() => navigate("/cadastro/estoque/setores/novo")} className="gap-2"><Plus className="w-4 h-4" />Novo Setor</Button>
           <ExportButton getData={getExportData} fileName="setores-estoque" />
         </div>
-        <FilterSection fields={[{ type: "text" as const, label: "Setor", placeholder: "Buscar setor...", value: searchSetor, onChange: setSearchSetor, width: "flex-1 min-w-[200px]" }]} resultsCount={totalCount} />
+        <FilterSection fields={[{ type: "text" as const, label: "Setor", placeholder: "Buscar setor...", value: searchSetor, onChange: handleSearch, width: "flex-1 min-w-[200px]" }]} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Setor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>

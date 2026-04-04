@@ -5,15 +5,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Eye, Edit, Trash2, ChevronDown } from "lucide-react";
+import { Eye, Edit, Trash2, ChevronDown, CheckCircle } from "lucide-react";
 
 interface TableActionsProps {
   onView?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onFinalize?: () => void;
 }
 
-export function TableActions({ onView, onEdit, onDelete }: TableActionsProps) {
+export function TableActions({ onView, onEdit, onDelete, onFinalize }: TableActionsProps) {
   return (
     <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -35,9 +36,15 @@ export function TableActions({ onView, onEdit, onDelete }: TableActionsProps) {
               Editar
             </DropdownMenuItem>
           )}
+          {onFinalize && (
+            <DropdownMenuItem onClick={onFinalize} className="gap-2 cursor-pointer text-green-600 focus:text-green-600">
+              <CheckCircle className="h-4 w-4" />
+              Finalizar
+            </DropdownMenuItem>
+          )}
           {onDelete && (
-            <DropdownMenuItem 
-              onClick={onDelete} 
+            <DropdownMenuItem
+              onClick={onDelete}
               className="gap-2 cursor-pointer text-destructive focus:text-destructive"
             >
               <Trash2 className="h-4 w-4" />
