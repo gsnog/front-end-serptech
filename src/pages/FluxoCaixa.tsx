@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { useQuery } from "@tanstack/react-query"
-import { fetchParcelas, fetchEstatisticasFinanceiras, parcelasQueryKey } from "@/services/financeiro"
+import { fetchParcelas, fetchFluxoCaixaEstatisticas, parcelasQueryKey } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Loader2 } from "lucide-react"
@@ -29,14 +29,14 @@ const FluxoCaixa = () => {
 
   const { data: response, isLoading: isLoadingParcelas } = useQuery({
     queryKey: [...parcelasQueryKey, page],
-    queryFn: () => fetchParcelas(page),
+    queryFn: () => fetchParcelas(page, 'Pago'),
   })
   const parcelas = response?.results ?? [];
   const serverTotal = response?.count ?? 0;
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ['estatisticasFinanceiras'],
-    queryFn: fetchEstatisticasFinanceiras
+    queryKey: ['estatisticasFluxoCaixa'],
+    queryFn: fetchFluxoCaixaEstatisticas
   })
 
   const [filterTipo, setFilterTipo] = useState("")

@@ -1,56 +1,61 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { FileText } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { useFormValidation } from "@/hooks/useFormValidation";
-import { ValidatedInput } from "@/components/ui/validated-input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const validationFields = [
-  { name: "categoria", label: "Categoria", required: false },
-  { name: "subcategoria", label: "Subcategoria", required: true },
-  { name: "contabil", label: "Contábil", required: true },
-  { name: "id", label: "ID", required: true },
-];
-
-const categoriaOptions = [
-  { value: "cat1", label: "Categoria 1" },
-  { value: "cat2", label: "Categoria 2" },
-];
-const subcategoriaOptions = [
-  { value: "sub1", label: "Subcategoria 1" },
-  { value: "sub2", label: "Subcategoria 2" },
-];
-const contabilOptions = [
-  { value: "cont1", label: "Contábil 1" },
-  { value: "cont2", label: "Contábil 2" },
-];
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import {
+  createPlanoContas, planoContasQueryKey,
+  fetchCategoriasFinanceiras, categoriasFinanceirasQueryKey,
+  fetchClassificacoesFinanceiras, classificacoesFinanceirasQueryKey,
+} from "@/services/financeiro";
 
 const NovoPlanoContas = () => {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
+  const queryClient = useQueryClient();
 
-  const {
-    formData,
-    setFieldValue,
-    setFieldTouched,
-    validateAll,
-    getFieldError,
-    touched,
-  } = useFormValidation({ categoria: "", subcategoria: "", contabil: "", id: "" }, validationFields);
+  const [idPlano, setIdPlano] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [classificacao, setClassificacao] = useState("");
 
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      await handleSave("/cadastro/financeiro/plano-contas", "Plano de contas salvo com sucesso!");
-    }
-  };
+  const { data: catRaw = [] } = useQuery({
+    queryKey: [...categoriasFinanceirasQueryKey],
+    queryFn: () => fetchCategoriasFinanceiras(),
+  });
+  const categorias = Array.isArray(catRaw) ? catRaw : (catRaw as any)?.results ?? [];
 
-  const handleCancelar = () => {
-    navigate("/cadastro/financeiro/plano-contas");
+  const { data: classRaw = [] } = useQuery({
+    queryKey: [...classificacoesFinanceirasQueryKey],
+    queryFn: fetchClassificacoesFinanceiras,
+  });
+  const classificacoes = Array.isArray(classRaw) ? classRaw : (classRaw as any)?.results ?? [];
+
+  const mutation = useMutation({
+    mutationFn: createPlanoContas,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: planoContasQueryKey });
+      toast({ title: "Plano de contas salvo!", description: "O registro foi salvo com sucesso." });
+      navigate("/cadastro/financeiro/plano-contas");
+    },
+    onError: (error: any) => {
+      const data = error?.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" | ")
+        : "Erro ao salvar plano de contas.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
+  });
+
+  const handleSalvar = () => {
+    if (!idPlano.trim()) { toast({ title: "Informe o ID do plano.", variant: "destructive" }); return; }
+    if (!categoria) { toast({ title: "Selecione a categoria.", variant: "destructive" }); return; }
+    if (!classificacao) { toast({ title: "Selecione a classificação.", variant: "destructive" }); return; }
+    mutation.mutate({ id_plano: idPlano, categoria: Number(categoria), classificacao: Number(classificacao) });
   };
 
   return (
@@ -70,21 +75,25 @@ const NovoPlanoContas = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Categoria</Label>
-                <Select value={formData.categoria} onValueChange={(v) => setFieldValue("categoria", v)}>
-                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    {categoriaOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium">ID do Plano <span className="text-destructive">*</span></Label>
+                <Input
+                  placeholder="Ex: 1.1.01"
+                  className="form-input font-mono"
+                  value={idPlano}
+                  onChange={e => setIdPlano(e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Subcategoria <span className="text-destructive">*</span></Label>
-                <Select value={formData.subcategoria} onValueChange={(v) => setFieldValue("subcategoria", v)}>
-                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a subcategoria" /></SelectTrigger>
+                <Label className="text-sm font-medium">Categoria <span className="text-destructive">*</span></Label>
+                <Select value={categoria} onValueChange={setCategoria}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar categoria" />
+                  </SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {subcategoriaOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {categorias.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -92,30 +101,24 @@ const NovoPlanoContas = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Contábil <span className="text-destructive">*</span></Label>
-                <Select value={formData.contabil} onValueChange={(v) => setFieldValue("contabil", v)}>
-                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione o contábil" /></SelectTrigger>
+                <Label className="text-sm font-medium">Classificação <span className="text-destructive">*</span></Label>
+                <Select value={classificacao} onValueChange={setClassificacao}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar classificação" />
+                  </SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {contabilOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {classificacoes.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              <ValidatedInput
-                label="ID"
-                required
-                value={formData.id}
-                onChange={(e) => setFieldValue("id", e.target.value)}
-                onBlur={() => setFieldTouched("id")}
-                error={getFieldError("id")}
-                touched={touched.id}
-              />
             </div>
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/financeiro/plano-contas")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

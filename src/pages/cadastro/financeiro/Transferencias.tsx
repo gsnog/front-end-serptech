@@ -37,7 +37,9 @@ const Transferencias = () => {
   const items: Transacao[] = Array.isArray(response) ? response : (response?.results ?? []);
   const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
   const totalPages = Math.ceil(totalCount / 5);
-  const { data: contas = [] } = useQuery({ queryKey: ['contasBancarias'], queryFn: fetchContasBancarias });
+  const { data: contasRaw } = useQuery({ queryKey: ['contasBancarias'], queryFn: fetchContasBancarias });
+  const contas = Array.isArray(contasRaw) ? contasRaw : (contasRaw as any)?.results ?? [];
+  const contaLabel = (c: any) => [c.banco, c.numero_conta ? `nº ${c.numero_conta}` : null, c.tipo ? `(${c.tipo})` : null].filter(Boolean).join(' — ');
 
   const deleteMutation = useMutation({
     mutationFn: deleteTransferencia,
@@ -100,13 +102,13 @@ const Transferencias = () => {
             <div className="space-y-2"><Label>Conta Origem</Label>
               <select className="w-full border rounded px-3 py-2 bg-background text-sm" value={editForm.conta_origem} onChange={e => setEditForm(p => ({ ...p, conta_origem: Number(e.target.value) }))}>
                 <option value={0}>Selecione...</option>
-                {contas.map(c => <option key={c.id} value={c.id}>{c.banco}</option>)}
+                {contas.map((c: any) => <option key={c.id} value={c.id}>{contaLabel(c)}</option>)}
               </select>
             </div>
             <div className="space-y-2"><Label>Conta Destino</Label>
               <select className="w-full border rounded px-3 py-2 bg-background text-sm" value={editForm.conta_destino} onChange={e => setEditForm(p => ({ ...p, conta_destino: Number(e.target.value) }))}>
                 <option value={0}>Selecione...</option>
-                {contas.map(c => <option key={c.id} value={c.id}>{c.banco}</option>)}
+                {contas.map((c: any) => <option key={c.id} value={c.id}>{contaLabel(c)}</option>)}
               </select>
             </div>
             <div className="space-y-2"><Label>Valor (R$)</Label><Input type="number" value={editForm.valor} onChange={e => setEditForm(p => ({ ...p, valor: Number(e.target.value) }))} /></div>
@@ -114,7 +116,14 @@ const Transferencias = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
-            <Button onClick={() => saveMutation.mutate({ id: editItem?.id || undefined, ...editForm })} disabled={saveMutation.isPending}>Salvar</Button>
+            <Button onClick={() => {
+              const origem = contas.find((c: any) => c.id === editForm.conta_origem);
+              if (origem && editForm.valor > (origem.saldo ?? Infinity)) {
+                toast({ title: "Saldo insuficiente", description: `Saldo disponível: R$ ${Number(origem.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, variant: "destructive" });
+                return;
+              }
+              saveMutation.mutate({ id: editItem?.id || undefined, ...editForm });
+            }} disabled={saveMutation.isPending}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

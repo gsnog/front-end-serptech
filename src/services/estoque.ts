@@ -175,16 +175,26 @@ export interface FormaApresentacao {
     forma_apresentacao: string;
 }
 
+export interface ItemSaida {
+    id: number;
+    saida_estoque: number;
+    item: number;
+    item_nome: string;
+    quantidade: number;
+}
+
 export interface Saida {
     id: number;
     data: string;
-    quantidade: number;
-    produto?: number;
-    produto_nome?: string;
-    setor?: number;
-    setor_nome?: string;
-    criado_por?: number;
+    setor_destino: number;
+    setor_destino_nome?: string;
+    estoque_origem: number;
+    estoque_origem_nome?: string;
+    observacao?: string;
+    requisicao?: number | null;
+    user_create?: number;
     criado_por_nome?: string;
+    itens: ItemSaida[];
 }
 
 // ─── Fornecedores ─────────────────────────────────────────────────────────────
@@ -414,10 +424,21 @@ export const fetchAllEntradas = async (): Promise<any[]> => {
 
 export const entradasQueryKey = ['entradas_estoque'] as const;
 
+// ─── Transferências ─────────────────────────────────────────────────────────────
+
+export const createTransferencia = async (data: any): Promise<any> => {
+    const res = await api.post('/api/estoque/transferencias/', data);
+    return res.data;
+};
+
 // ─── Saídas ───────────────────────────────────────────────────────────────────
 
 export const fetchSaidas = async (page = 1): Promise<PaginatedResponse<Saida>> => {
     const res = await api.get('/api/estoque/saidas/', { params: { page, page_size: 20 } });
+    return res.data;
+};
+export const createSaida = async (data: Partial<Saida> & { itens: any[] }): Promise<Saida> => {
+    const res = await api.post('/api/estoque/saidas/', data);
     return res.data;
 };
 export const deleteSaida = async (id: number): Promise<void> => {

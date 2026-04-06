@@ -50,7 +50,6 @@ const menuItems = [
           { title: "Clientes", url: "/cadastro/financeiro/clientes" },
           { title: "Centro de Custo", url: "/cadastro/financeiro/centro-custo" },
           { title: "Centro de Receita", url: "/cadastro/financeiro/centro-receita" },
-          { title: "Contábil", url: "/cadastro/financeiro/contabil" },
           { title: "Categorias", url: "/cadastro/financeiro/categorias" },
           { title: "Fornecedores", url: "/cadastro/financeiro/fornecedores" },
           { title: "Subcategorias", url: "/cadastro/financeiro/subcategorias" },
@@ -94,6 +93,7 @@ const menuItems = [
       { title: "Ordem de Serviço", url: "/estoque/ordem-servico" },
       { title: "Pedidos Internos", url: "/estoque/pedidos-internos" },
       { title: "Saídas", url: "/estoque/saidas" },
+      { title: "Transferências", url: "/estoque/transferencias" },
       { title: "Patrimônio", url: "/patrimonio" },
     ]
   },

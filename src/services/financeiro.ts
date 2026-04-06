@@ -27,25 +27,46 @@ export interface ContaPagar {
     beneficiario?: number;
     fornecedor_nome?: string;
     documento?: string;
+    numero_documento?: string;
     valor_do_titulo?: number;
     valor_total?: number;
     data_de_lancamento?: string;
     data_de_faturamento?: string;
     data_de_vencimento?: string;
     status?: string;
+    parcelas?: ParcelaReceber[];
 }
+
+export interface ParcelaReceber {
+    id: number;
+    numero: number;
+    data_de_vencimento: string | null;
+    valor: number;
+    valor_pago: number | null;
+    status: string;
+    data_de_pagamento: string | null;
+    forma_de_pagamento: string | null;
+    conta_bancaria: number | null;
+}
+
+export const updateParcelaReceber = async (id: number, data: Partial<ParcelaReceber>): Promise<ParcelaReceber> => {
+    const res = await api.patch(`/api/financial/parcelas/${id}/`, data);
+    return res.data;
+};
 
 export interface ContaReceber {
     id: number;
     cliente?: number;
     cliente_nome?: string;
     documento?: string;
+    numero_documento?: string;
     valor_do_titulo?: number;
     valor_total?: number;
     data_de_lancamento?: string;
     data_de_faturamento?: string;
     data_de_vencimento?: string;
     status?: string;
+    parcelas?: ParcelaReceber[];
 }
 
 export interface ContaBancaria {
@@ -142,6 +163,17 @@ export const fetchEstatisticasFinanceiras = async (): Promise<EstatisticasFinanc
     return res.data;
 };
 
+export interface FluxoCaixaEstatisticas {
+    saldo: number;
+    entradas: number;
+    saidas: number;
+}
+
+export const fetchFluxoCaixaEstatisticas = async (): Promise<FluxoCaixaEstatisticas> => {
+    const res = await api.get('/api/financial/fluxo-caixa/estatisticas/');
+    return res.data;
+};
+
 export const fetchDashboardFull = async (): Promise<any> => {
     const res = await api.get('/api/dashboard-full/');
     return res.data;
@@ -149,8 +181,15 @@ export const fetchDashboardFull = async (): Promise<any> => {
 
 // ─── Parcelas ─────────────────────────────────────────────────────────────────
 
-export const fetchParcelas = async (page = 1): Promise<PaginatedResponse<Parcela>> => {
-    const res = await api.get('/api/financial/parcelas/', { params: { page, page_size: 20 } });
+export const fetchParcelas = async (page = 1, status?: string): Promise<PaginatedResponse<Parcela>> => {
+    const params: any = { page, page_size: 20 };
+    if (status) params.status = status;
+    const res = await api.get('/api/financial/parcelas/', { params });
+    return res.data;
+};
+
+export const createParcela = async (data: Record<string, unknown>): Promise<ParcelaReceber> => {
+    const res = await api.post('/api/financial/parcelas/', data);
     return res.data;
 };
 
@@ -172,6 +211,17 @@ export const deleteContaPagar = async (id: number): Promise<void> => {
     await api.delete(`/api/financial/contas_pagar/${id}/`);
 };
 
+export interface ContasPagarEstatisticas {
+    total_pago: number;
+    total_a_pagar: number;
+    total_projetado: number;
+}
+
+export const fetchContasPagarEstatisticas = async (): Promise<ContasPagarEstatisticas> => {
+    const res = await api.get('/api/financial/contas_pagar/estatisticas/');
+    return res.data;
+};
+
 // ─── Contas a Receber ─────────────────────────────────────────────────────────
 
 export const fetchContasReceber = async (page = 1): Promise<PaginatedResponse<ContaReceber>> => {
@@ -188,6 +238,17 @@ export const updateContaReceber = async (id: number, data: Partial<ContaReceber>
 };
 export const deleteContaReceber = async (id: number): Promise<void> => {
     await api.delete(`/api/financial/contas_receber/${id}/`);
+};
+
+export interface ContasReceberEstatisticas {
+    total_recebido: number;
+    total_a_receber: number;
+    total_projetado: number;
+}
+
+export const fetchContasReceberEstatisticas = async (): Promise<ContasReceberEstatisticas> => {
+    const res = await api.get('/api/financial/contas_receber/estatisticas/');
+    return res.data;
 };
 
 // ─── Conta Bancária ───────────────────────────────────────────────────────────
@@ -319,7 +380,7 @@ export const fetchConciliacoes = async (): Promise<Conciliacao[]> => {
 };
 
 export const fetchConciliacaoParaConciliar = async (id: number): Promise<ConciliacaoParaConciliar> => {
-    const res = await api.get(`/api/financial/conciliacao/${id}/conciliar/`);
+    const res = await api.get(`/api/financial/conciliacoes/${id}/conciliar/`);
     return res.data;
 };
 
@@ -327,7 +388,7 @@ export const efetivarConciliacaoBancaria = async (
     conciliacaoId: number,
     payload: { conta_tipo: 'receber' | 'pagar'; conta_id: number }
 ): Promise<any> => {
-    const res = await api.post(`/api/financial/conciliacao/${conciliacaoId}/conciliar/efetivar/`, payload);
+    const res = await api.post(`/api/financial/conciliacoes/${conciliacaoId}/conciliar/efetivar/`, payload);
     return res.data;
 };
 export const deleteConciliacao = async (id: number): Promise<void> => {
@@ -377,6 +438,93 @@ export const conciliarLancamento = async (
     });
     return res.data;
 };
+
+// ─── Subcategorias Financeiras ───────────────────────────────────────────────
+
+export interface SubcategoriaFinanceira {
+    id: number;
+    nome: string;
+    categoria: number;
+    categoria_nome?: string;
+}
+
+export const fetchSubcategorias = async (): Promise<SubcategoriaFinanceira[] | PaginatedResponse<SubcategoriaFinanceira>> => {
+    const res = await api.get('/api/financial/subcategorias/');
+    return res.data;
+};
+export const createSubcategoria = async (data: Partial<SubcategoriaFinanceira>): Promise<SubcategoriaFinanceira> => {
+    const res = await api.post('/api/financial/subcategorias/', data);
+    return res.data;
+};
+export const updateSubcategoria = async (id: number, data: Partial<SubcategoriaFinanceira>): Promise<SubcategoriaFinanceira> => {
+    const res = await api.put(`/api/financial/subcategorias/${id}/`, data);
+    return res.data;
+};
+export const deleteSubcategoria = async (id: number): Promise<void> => {
+    await api.delete(`/api/financial/subcategorias/${id}/`);
+};
+export const subcategoriasQueryKey = ['subcategorias'] as const;
+
+// ─── Lançamento Contábil ─────────────────────────────────────────────────────
+
+export interface LancamentoContabil {
+    id: number;
+    data: string;
+    plano_de_contas: number;
+    plano_de_contas_nome?: string;
+    descricao: string;
+    valor: number;
+    tipo: 'debito' | 'credito';
+    unidade: number;
+    unidade_nome?: string;
+}
+
+export const fetchLancamentosContabeis = async (): Promise<LancamentoContabil[] | PaginatedResponse<LancamentoContabil>> => {
+    const res = await api.get('/api/financial/contabil/');
+    return res.data;
+};
+export const createLancamentoContabil = async (data: Partial<LancamentoContabil>): Promise<LancamentoContabil> => {
+    const res = await api.post('/api/financial/contabil/', data);
+    return res.data;
+};
+export const updateLancamentoContabil = async (id: number, data: Partial<LancamentoContabil>): Promise<LancamentoContabil> => {
+    const res = await api.put(`/api/financial/contabil/${id}/`, data);
+    return res.data;
+};
+export const deleteLancamentoContabil = async (id: number): Promise<void> => {
+    await api.delete(`/api/financial/contabil/${id}/`);
+};
+export const lancamentosContabeisQueryKey = ['lancamentosContabeis'] as const;
+
+// ─── Clientes (lab) ───────────────────────────────────────────────────────────
+
+export interface Cliente {
+    id: number;
+    tipo: 'convenio' | 'procedencia';
+    nome: string;
+    cnpj: string;
+    endereco: string;
+    email: string;
+    telefone: string;
+    data_de_recebimento?: string | null;
+}
+
+export const fetchClientes = async (): Promise<Cliente[] | PaginatedResponse<Cliente>> => {
+    const res = await api.get('/api/lab/clientes/');
+    return res.data;
+};
+export const createCliente = async (data: Partial<Cliente>): Promise<Cliente> => {
+    const res = await api.post('/api/lab/clientes/', data);
+    return res.data;
+};
+export const updateCliente = async (id: number, data: Partial<Cliente>): Promise<Cliente> => {
+    const res = await api.put(`/api/lab/clientes/${id}/`, data);
+    return res.data;
+};
+export const deleteCliente = async (id: number): Promise<void> => {
+    await api.delete(`/api/lab/clientes/${id}/`);
+};
+export const clientesQueryKey = ['clientes'] as const;
 
 // ─── Query Keys ───────────────────────────────────────────────────────────────
 export const parcelasQueryKey = ['parcelas'] as const;

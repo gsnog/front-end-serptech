@@ -1,45 +1,58 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { CircleDollarSign } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { useFormValidation } from "@/hooks/useFormValidation";
-import { ValidatedInput } from "@/components/ui/validated-input";
-import { DropdownWithAdd } from "@/components/DropdownWithAdd";
-
-const validationFields = [
-  { name: "diretoria", label: "Diretoria", required: true },
-  { name: "gerencia", label: "Gerência", required: false },
-  { name: "departamento", label: "Departamento", required: false },
-];
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import {
+  createCentroCusto, centrosCustoQueryKey,
+  fetchAreas, areasQueryKey,
+} from "@/services/financeiro";
+import { fetchSetoresEstoque, setoresEstoqueQueryKey } from "@/services/estoque";
 
 const NovoCentroCusto = () => {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
-  const [diretorias, setDiretorias] = useState([
-    { value: "dir1", label: "Diretoria 1" },
-    { value: "dir2", label: "Diretoria 2" },
-  ]);
+  const queryClient = useQueryClient();
 
-  const {
-    formData,
-    setFieldValue,
-    setFieldTouched,
-    validateAll,
-    getFieldError,
-    touched,
-  } = useFormValidation({ diretoria: "", gerencia: "", departamento: "" }, validationFields);
+  const [setor, setSetor] = useState("");
+  const [area, setArea] = useState("");
 
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      await handleSave("/cadastro/financeiro/centro-custo", "Centro de custo salvo com sucesso!");
-    }
-  };
+  const { data: setoresRaw = [] } = useQuery({
+    queryKey: [...setoresEstoqueQueryKey],
+    queryFn: fetchSetoresEstoque,
+  });
+  const setores = Array.isArray(setoresRaw) ? setoresRaw : (setoresRaw as any)?.results ?? [];
 
-  const handleCancelar = () => {
-    navigate("/cadastro/financeiro/centro-custo");
+  const { data: areasRaw = [] } = useQuery({
+    queryKey: [...areasQueryKey],
+    queryFn: fetchAreas,
+  });
+  const areas = Array.isArray(areasRaw) ? areasRaw : (areasRaw as any)?.results ?? [];
+
+  const mutation = useMutation({
+    mutationFn: createCentroCusto,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: centrosCustoQueryKey });
+      toast({ title: "Centro de custo salvo!", description: "O registro foi salvo com sucesso." });
+      navigate("/cadastro/financeiro/centro-custo");
+    },
+    onError: (error: any) => {
+      const data = error?.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" | ")
+        : "Erro ao salvar centro de custo.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
+  });
+
+  const handleSalvar = () => {
+    if (!setor) { toast({ title: "Selecione o setor.", variant: "destructive" }); return; }
+    if (!area) { toast({ title: "Selecione a área.", variant: "destructive" }); return; }
+    mutation.mutate({ setor: Number(setor), area: Number(area) });
   };
 
   return (
@@ -53,49 +66,48 @@ const NovoCentroCusto = () => {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-foreground">Dados do Centro de Custo</h2>
-                <p className="text-sm text-muted-foreground">Preencha as informações abaixo</p>
+                <p className="text-sm text-muted-foreground">O código do centro será gerado automaticamente</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DropdownWithAdd
-                label="Diretoria"
-                required
-                value={formData.diretoria}
-                onChange={(value) => setFieldValue("diretoria", value)}
-                options={diretorias}
-                onAddNew={(name) => {
-                  const newVal = name.toLowerCase().replace(/\s/g, "-");
-                  setDiretorias(prev => [...prev, { value: newVal, label: name }]);
-                  setFieldValue("diretoria", newVal);
-                }}
-              />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Setor <span className="text-destructive">*</span></Label>
+                <Select value={setor} onValueChange={setSetor}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar setor" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {setores.map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.setor || s.nome || `Setor ${s.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <ValidatedInput
-                label="Gerência"
-                value={formData.gerencia}
-                onChange={(e) => setFieldValue("gerencia", e.target.value)}
-                onBlur={() => setFieldTouched("gerencia")}
-                error={getFieldError("gerencia")}
-                touched={touched.gerencia}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ValidatedInput
-                label="Departamento"
-                value={formData.departamento}
-                onChange={(e) => setFieldValue("departamento", e.target.value)}
-                onBlur={() => setFieldTouched("departamento")}
-                error={getFieldError("departamento")}
-                touched={touched.departamento}
-              />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Área <span className="text-destructive">*</span></Label>
+                <Select value={area} onValueChange={setArea}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar área" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {areas.map((a: any) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/financeiro/centro-custo")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

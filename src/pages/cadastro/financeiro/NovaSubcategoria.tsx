@@ -1,22 +1,51 @@
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Tag } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import {
+  createSubcategoria, subcategoriasQueryKey,
+  fetchCategoriasFinanceiras, categoriasFinanceirasQueryKey,
+} from "@/services/financeiro";
 
 const NovaSubcategoria = () => {
   const navigate = useNavigate();
-  const { handleSalvar, isSaving } = useSaveWithDelay({
-    redirectTo: "/cadastro/financeiro/subcategorias",
-    successMessage: "Subcategoria salva!",
-    successDescription: "O registro foi salvo com sucesso.",
+  const queryClient = useQueryClient();
+  const [nome, setNome] = useState("");
+  const [categoria, setCategoria] = useState("");
+
+  const { data: catRaw = [] } = useQuery({
+    queryKey: [...categoriasFinanceirasQueryKey],
+    queryFn: () => fetchCategoriasFinanceiras(),
+  });
+  const categorias = Array.isArray(catRaw) ? catRaw : (catRaw as any)?.results ?? [];
+
+  const mutation = useMutation({
+    mutationFn: createSubcategoria,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: subcategoriasQueryKey });
+      toast({ title: "Subcategoria salva!", description: "O registro foi salvo com sucesso." });
+      navigate("/cadastro/financeiro/subcategorias");
+    },
+    onError: (error: any) => {
+      const data = error?.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" | ")
+        : "Erro ao salvar subcategoria.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
   });
 
-  const handleCancelar = () => {
-    navigate("/cadastro/financeiro/subcategorias");
+  const handleSalvar = () => {
+    if (!nome.trim()) { toast({ title: "Informe o nome.", variant: "destructive" }); return; }
+    if (!categoria) { toast({ title: "Selecione a categoria.", variant: "destructive" }); return; }
+    mutation.mutate({ nome, categoria: Number(categoria) });
   };
 
   return (
@@ -37,14 +66,33 @@ const NovaSubcategoria = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Nome <span className="text-destructive">*</span></Label>
-                <Input placeholder="" className="form-input" />
+                <Input
+                  placeholder="Nome da subcategoria"
+                  className="form-input"
+                  value={nome}
+                  onChange={e => setNome(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Categoria <span className="text-destructive">*</span></Label>
+                <Select value={categoria} onValueChange={setCategoria}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar categoria" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {categorias.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/financeiro/subcategorias")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

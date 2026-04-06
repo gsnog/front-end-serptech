@@ -1,10 +1,11 @@
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
 import { SortableHead } from "@/components/SortableHead"
-import { Plus, FileText, ArrowUpRight, Wallet } from "lucide-react"
+import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -13,10 +14,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchContasReceber, updateContaReceber, deleteContaReceber, type ContaReceber as Conta, fetchEstatisticasFinanceiras, contasReceberQueryKey } from "@/services/financeiro"
+import { fetchContasReceber, updateContaReceber, deleteContaReceber, updateParcelaReceber, fetchContasBancarias, type ContaReceber as Conta, type ParcelaReceber, type ContaBancaria, fetchContasReceberEstatisticas, contasReceberQueryKey, contasBancariasQueryKey } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 
@@ -35,6 +38,34 @@ const ContasReceber = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<Conta | null>(null)
   const [editData, setEditData] = useState<Partial<Conta>>({})
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const toggleExpand = (id: number) => setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; })
+
+  const [pagamentoModal, setPagamentoModal] = useState<{ parcela: ParcelaReceber; conta: Conta } | null>(null)
+  const [pagamentoForm, setPagamentoForm] = useState({ valor_pago: "", data_de_pagamento: "", forma_de_pagamento: "", conta_bancaria: "" })
+
+  const openPagamento = (parcela: ParcelaReceber, conta: Conta) => {
+    setPagamentoModal({ parcela, conta })
+    setPagamentoForm({
+      valor_pago: String(parcela.valor),
+      data_de_pagamento: new Date().toISOString().split("T")[0],
+      forma_de_pagamento: "",
+      conta_bancaria: "",
+    })
+  }
+
+  const pagamentoMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<ParcelaReceber> }) => updateParcelaReceber(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: contasReceberQueryKey })
+      setPagamentoModal(null)
+      toast({ title: "Pagamento registrado!", description: "Parcela marcada como paga." })
+    },
+    onError: () => toast({ title: "Erro", description: "Não foi possível registrar o pagamento.", variant: "destructive" }),
+  })
+
+  const { data: contasBancariasRaw } = useQuery({ queryKey: contasBancariasQueryKey, queryFn: fetchContasBancarias })
+  const contasBancarias: ContaBancaria[] = Array.isArray(contasBancariasRaw) ? contasBancariasRaw : (contasBancariasRaw as any)?.results ?? []
 
   useRealtimeUpdates([[...contasReceberQueryKey]]);
 
@@ -71,7 +102,7 @@ const ContasReceber = () => {
   const filtered = useMemo(() => {
     return items.filter((conta: Conta) => {
       const matchCliente = (conta.cliente_nome || "").toLowerCase().includes(filterCliente.toLowerCase())
-      const matchDocumento = (conta.documento || "").toLowerCase().includes(filterDocumento.toLowerCase())
+      const matchDocumento = (conta.numero_documento || conta.documento || "").toLowerCase().includes(filterDocumento.toLowerCase())
       const matchDataInicio = filterDataInicio ? (conta.data_de_faturamento || "") >= filterDataInicio : true
       const matchDataFim = filterDataFim ? (conta.data_de_faturamento || "") <= filterDataFim : true
       return matchCliente && matchDocumento && matchDataInicio && matchDataFim
@@ -86,24 +117,24 @@ const ContasReceber = () => {
   const hasPrev = page > 1;
   const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
 
-  const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Cliente: c.cliente_nome, Documento: c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
+  const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Cliente: c.cliente_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
   const openEdit = (c: Conta) => { setEditItem(c); setEditData({ ...c }); };
   const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: editData }); } };
   const deleteItemData = items.find((i: Conta) => i.id === deleteId);
 
   const { data: stats } = useQuery({
-    queryKey: ["financeiro_estatisticas"],
-    queryFn: fetchEstatisticasFinanceiras,
+    queryKey: ["contas_receber_estatisticas"],
+    queryFn: fetchContasReceberEstatisticas,
   });
 
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <GradientCard title="Total Recebido" value={formatBRL(stats?.entradas)} icon={ArrowUpRight} variant="success" />
-          <GradientCard title="Total a Receber" value={formatBRL(stats?.saidas)} icon={ArrowUpRight} variant="info" />
-          <GradientCard title="Saldo Projetado" value={formatBRL(stats?.saldo)} icon={Wallet} variant="orange" />
+          <GradientCard title="Total Recebido" value={formatBRL(stats?.total_recebido)} icon={ArrowUpRight} variant="success" />
+          <GradientCard title="Total a Receber" value={formatBRL(stats?.total_a_receber)} icon={ArrowUpRight} variant="info" />
+          <GradientCard title="Total a Receber Projetado" value={formatBRL(stats?.total_projetado)} icon={Wallet} variant="orange" />
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
@@ -123,37 +154,110 @@ const ContasReceber = () => {
         />
 
         <div className="rounded border border-border overflow-hidden">
-          <Table>
+          <Table className="table-fixed w-full">
+            <colgroup>
+              <col className="w-8" />
+              <col className="w-[90px]" />
+              <col className="w-[90px]" />
+              <col className="w-[14%]" />
+              <col className="w-[12%]" />
+              <col className="w-[100px]" />
+              <col className="w-[100px]" />
+              <col className="w-[90px]" />
+              <col className="w-[110px]" />
+              <col className="w-[72px]" />
+            </colgroup>
             <TableHeader><TableRow className="bg-table-header">
+              <TableHead className="w-8" />
               <SortableHead label="Lançamento" field="data_de_lancamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Faturamento" field="data_de_faturamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Cliente" field="cliente_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Documento" field="documento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Documento" field="numero_documento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Título" field="valor_do_titulo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Recebido" field="valor_total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Total" field="valor_total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Vencimento" field="data_de_vencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : paginatedItems.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
               ) : (
-                paginatedItems.map((conta: Conta) => (
-                  <TableRow key={conta.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
-                    <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
-                    <TableCell className="text-center">{conta.cliente_nome || "—"}</TableCell>
-                    <TableCell className="text-center">{conta.documento || "—"}</TableCell>
-                    <TableCell className="text-center">{formatBRL(conta.valor_do_titulo)}</TableCell>
-                    <TableCell className="text-center">{formatBRL(conta.valor_total)}</TableCell>
-                    <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
-                    <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
-                  </TableRow>
-                ))
+                paginatedItems.map((conta: Conta) => {
+                  const expanded = expandedIds.has(conta.id)
+                  const parcelas: ParcelaReceber[] = conta.parcelas ?? []
+                  return (
+                    <React.Fragment key={conta.id}>
+                      <TableRow className="hover:bg-table-hover transition-colors">
+                        <TableCell className="text-center w-8 px-1">
+                          {parcelas.length > 0 && (
+                            <button onClick={() => toggleExpand(conta.id)} className="p-1 rounded hover:bg-muted transition-colors">
+                              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
+                        <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
+                        <TableCell className="text-center">{conta.cliente_nome || "—"}</TableCell>
+                        <TableCell className="text-center">
+                          <span className="block truncate max-w-full" title={conta.numero_documento || ""}>
+                            {conta.numero_documento || conta.documento || "—"}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">{formatBRL(conta.valor_do_titulo)}</TableCell>
+                        <TableCell className="text-center">{formatBRL(conta.valor_total)}</TableCell>
+                        <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
+                        <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
+                        <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
+                      </TableRow>
+                      {expanded && parcelas.length > 0 && (
+                        <TableRow className="bg-muted/40">
+                          <TableCell colSpan={10} className="p-0">
+                            <div className="px-6 py-3">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">PARCELAS</p>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted">
+                                    <TableHead className="text-center text-xs h-8">Nº</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Valor</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Valor Pago</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Pagamento</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Status</TableHead>
+                                    {conta.status !== 'Pago' && <TableHead className="text-center text-xs h-8">Ação</TableHead>}
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {parcelas.map(p => (
+                                    <TableRow key={p.id} className="text-sm">
+                                      <TableCell className="text-center py-1">{p.numero}</TableCell>
+                                      <TableCell className="text-center py-1">{p.data_de_vencimento || "—"}</TableCell>
+                                      <TableCell className="text-center py-1">{formatBRL(p.valor)}</TableCell>
+                                      <TableCell className="text-center py-1">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
+                                      <TableCell className="text-center py-1">{p.data_de_pagamento || "—"}</TableCell>
+                                      <TableCell className="text-center py-1"><StatusBadge status={p.status} /></TableCell>
+                                      {conta.status !== 'Pago' && (
+                                        <TableCell className="text-center py-1">
+                                          {p.status !== 'Pago' && (
+                                            <button onClick={() => openPagamento(p, conta)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                                              <DollarSign className="h-3 w-3" />Pagar
+                                            </button>
+                                          )}
+                                        </TableCell>
+                                      )}
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -170,8 +274,98 @@ const ContasReceber = () => {
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Detalhes - Conta a Receber</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Lançamento: viewItem.data_de_lancamento, Faturamento: viewItem.data_de_faturamento, Cliente: viewItem.cliente_nome, Documento: viewItem.documento, "Valor Título": viewItem.valor_do_titulo, "Valor Total": viewItem.valor_total, "Próx. Vencimento": viewItem.data_de_vencimento, Status: viewItem.status }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{String(v || "—")}</span></div>))}</div>}
+        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+          {viewItem && (
+            <>
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
+                <div className="min-w-0">
+                  <DialogHeader>
+                    <DialogTitle className="text-base font-semibold truncate">{viewItem.cliente_nome || "—"}</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-xs text-muted-foreground mt-1">Nº Documento: {viewItem.numero_documento || viewItem.documento || "—"}</p>
+                </div>
+                <StatusBadge status={viewItem.status || "Em Aberto"} />
+              </div>
+
+              <Separator />
+
+              <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+                {/* Info grid */}
+                <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Datas</p>
+                    {[["Lançamento", viewItem.data_de_lancamento], ["Faturamento", viewItem.data_de_faturamento], ["Vencimento", viewItem.data_de_vencimento]].map(([l, v]) => (
+                      <div key={l} className="flex justify-between items-baseline py-1.5 border-b border-border/50 last:border-0">
+                        <span className="text-xs text-muted-foreground">{l}</span>
+                        <span className="text-xs font-medium">{v || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Valores</p>
+                    <div className="flex justify-between items-baseline py-1.5 border-b border-border/50">
+                      <span className="text-xs text-muted-foreground">Valor Título</span>
+                      <span className="text-xs font-medium">{formatBRL(viewItem.valor_do_titulo)}</span>
+                    </div>
+                    <div className="flex justify-between items-baseline py-1.5">
+                      <span className="text-xs text-muted-foreground">Valor Total</span>
+                      <span className="text-sm font-semibold text-primary">{formatBRL(viewItem.valor_total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Parcelas */}
+                {(viewItem.parcelas ?? []).length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Parcelas</p>
+                        <span className="text-xs text-muted-foreground">
+                          {(viewItem.parcelas ?? []).filter(p => p.status === 'Pago').length} / {viewItem.parcelas?.length} pagas
+                        </span>
+                      </div>
+                      <div className="rounded border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="text-center text-xs h-8 w-10">Nº</TableHead>
+                              <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
+                              <TableHead className="text-center text-xs h-8">Valor</TableHead>
+                              <TableHead className="text-center text-xs h-8">Pago</TableHead>
+                              <TableHead className="text-center text-xs h-8">Status</TableHead>
+                              {viewItem.status !== 'Pago' && <TableHead className="w-16 h-8" />}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(viewItem.parcelas ?? []).map(p => (
+                              <TableRow key={p.id} className="text-xs hover:bg-muted/30">
+                                <TableCell className="text-center py-2 font-medium">{p.numero}</TableCell>
+                                <TableCell className="text-center py-2">{p.data_de_vencimento || "—"}</TableCell>
+                                <TableCell className="text-center py-2">{formatBRL(p.valor)}</TableCell>
+                                <TableCell className="text-center py-2">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
+                                <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
+                                {viewItem.status !== 'Pago' && (
+                                  <TableCell className="text-center py-2">
+                                    {p.status !== 'Pago' && (
+                                      <button onClick={() => { setViewItem(null); openPagamento(p, viewItem) }} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                                        <DollarSign className="h-3 w-3" />Pagar
+                                      </button>
+                                    )}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -179,11 +373,93 @@ const ContasReceber = () => {
         <DialogContent><DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div><Label>Cliente (ID)</Label><Input type="number" value={editData.cliente || ""} onChange={e => setEditData({ ...editData, cliente: parseInt(e.target.value) })} /></div>
-            <div><Label>Documento</Label><Input value={editData.documento || ""} onChange={e => setEditData({ ...editData, documento: e.target.value })} /></div>
+            <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
             <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo || ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
             <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
           </div>
           <DialogFooter><Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pagamentoModal} onOpenChange={() => setPagamentoModal(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar Pagamento — Parcela {pagamentoModal?.parcela.numero}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Valor Pago (R$)</Label>
+              <Input
+                type="number" min="0" step="0.01"
+                value={pagamentoForm.valor_pago}
+                onChange={e => setPagamentoForm(p => ({ ...p, valor_pago: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Data de Pagamento</Label>
+              <Input
+                type="date"
+                value={pagamentoForm.data_de_pagamento}
+                onChange={e => setPagamentoForm(p => ({ ...p, data_de_pagamento: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Forma de Pagamento <span className="text-destructive">*</span></Label>
+              <Select value={pagamentoForm.forma_de_pagamento} onValueChange={v => setPagamentoForm(p => ({ ...p, forma_de_pagamento: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {["Dinheiro", "Débito", "Cartão de Crédito", "Cartão de Débito", "Boleto", "PIX", "TED", "DOC", "Cheque"].map(op => (
+                    <SelectItem key={op} value={op}>{op}</SelectItem>
+                  ))}
+
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Conta Bancária <span className="text-destructive">*</span></Label>
+              <Select value={pagamentoForm.conta_bancaria} onValueChange={v => setPagamentoForm(p => ({ ...p, conta_bancaria: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                <SelectContent>
+                  {contasBancarias.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.banco}{c.numero_conta ? ` — nº ${c.numero_conta}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPagamentoModal(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!pagamentoModal) return
+                if (!pagamentoForm.valor_pago || Number(pagamentoForm.valor_pago) <= 0) {
+                  toast({ title: "Informe o valor pago.", variant: "destructive" }); return
+                }
+                if (!pagamentoForm.data_de_pagamento) {
+                  toast({ title: "Informe a data de pagamento.", variant: "destructive" }); return
+                }
+                if (!pagamentoForm.forma_de_pagamento) {
+                  toast({ title: "Selecione a forma de pagamento.", variant: "destructive" }); return
+                }
+                if (!pagamentoForm.conta_bancaria) {
+                  toast({ title: "Selecione a conta bancária.", variant: "destructive" }); return
+                }
+                pagamentoMutation.mutate({
+                  id: pagamentoModal.parcela.id,
+                  data: {
+                    valor_pago: Number(pagamentoForm.valor_pago),
+                    data_de_pagamento: pagamentoForm.data_de_pagamento,
+                    forma_de_pagamento: pagamentoForm.forma_de_pagamento,
+                    conta_bancaria: Number(pagamentoForm.conta_bancaria),
+                    status: 'Pago',
+                  },
+                })
+              }}
+              disabled={pagamentoMutation.isPending}
+            >
+              {pagamentoMutation.isPending ? "Salvando..." : "Confirmar Pagamento"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
