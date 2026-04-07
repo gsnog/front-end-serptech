@@ -16,8 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Search, Shield, Users, Edit, Lock, ChevronDown, ChevronRight } from "lucide-react";
 import { systemRoles } from "@/contexts/PermissionsContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
-import { useQuery } from "@tanstack/react-query";
-import { fetchPessoas, pessoasQueryKey, type Pessoa } from "@/services/pessoas";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchPessoas, setGrupoPessoa, pessoasQueryKey, type Pessoa } from "@/services/pessoas";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -84,12 +84,38 @@ export default function Acessos() {
     return map;
   });
 
-  const { data: pessoas = [], isLoading } = useQuery<Pessoa[]>({
+  const queryClient = useQueryClient();
+
+  const { data: pessoasResponse, isLoading } = useQuery({
     queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas,
+    queryFn: () => fetchPessoas(1, '', 200),
   });
+  const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
 
   const [userRoles, setUserRoles] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
+
+  const grupoMutation = useMutation({
+    mutationFn: ({ id, grupo }: { id: number; grupo: string }) => setGrupoPessoa(id, grupo),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: pessoasQueryKey });
+      setUserRoles(prev => { const n = { ...prev }; delete n[updated.id]; return n; });
+      toast({ title: "Perfil atualizado", description: `${updated.nome} → ${updated.role}` });
+      setSavingId(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Erro ao atualizar perfil.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+      setSavingId(null);
+    },
+  });
+
+  const handleApplyRole = (pessoa: Pessoa) => {
+    const grupo = userRoles[pessoa.id];
+    if (!grupo) return;
+    setSavingId(pessoa.id);
+    grupoMutation.mutate({ id: pessoa.id, grupo });
+  };
 
   const filteredPessoas = useMemo(() =>
     pessoas.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase())),
@@ -247,8 +273,8 @@ export default function Acessos() {
                       <TableHead>Pessoa</TableHead>
                       <TableHead>Setor</TableHead>
                       <TableHead>Cargo</TableHead>
-                      <TableHead>Perfil (Django)</TableHead>
-                      <TableHead>Override Local</TableHead>
+                      <TableHead>Perfil Atual</TableHead>
+                      <TableHead>Alterar Perfil</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -270,19 +296,30 @@ export default function Acessos() {
                         <TableCell>{pessoa.cargo || "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{pessoa.role}</TableCell>
                         <TableCell>
-                          <Select
-                            value={userRoles[pessoa.id] || ''}
-                            onValueChange={(v) => setUserRoles(prev => ({ ...prev, [pessoa.id]: v }))}
-                          >
-                            <SelectTrigger className="w-36">
-                              <SelectValue placeholder="Padrão (role)" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {allRoles.map((role) => (
-                                <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center gap-2">
+                            <Select
+                              value={userRoles[pessoa.id] || ''}
+                              onValueChange={(v) => setUserRoles(prev => ({ ...prev, [pessoa.id]: v }))}
+                            >
+                              <SelectTrigger className="w-36">
+                                <SelectValue placeholder={pessoa.role} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allRoles.map((role) => (
+                                  <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {userRoles[pessoa.id] && userRoles[pessoa.id] !== pessoa.role && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleApplyRole(pessoa)}
+                                disabled={savingId === pessoa.id}
+                              >
+                                {savingId === pessoa.id ? "..." : "Aplicar"}
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

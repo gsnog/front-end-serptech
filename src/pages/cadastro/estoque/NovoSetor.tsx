@@ -1,13 +1,15 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Layers } from "lucide-react";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
-import api from "@/lib/api";
+import { ValidatedSelect } from "@/components/ui/validated-select";
 import { toast } from "@/hooks/use-toast";
+import { createSetor, fetchFuncionarios, setoresQueryKey } from "@/services/pessoas";
 
 const validationFields = [
   { name: "nome", label: "Nome do Setor", required: true, minLength: 2, maxLength: 100 },
@@ -16,29 +18,38 @@ const validationFields = [
 const NovoSetor = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const [responsavelId, setResponsavelId] = useState<string>("");
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } =
     useFormValidation({ nome: "" }, validationFields);
 
+  const { data: funcionarios = [] } = useQuery({
+    queryKey: ["funcionarios"],
+    queryFn: fetchFuncionarios,
+  });
+
+  const responsavelOptions = funcionarios.map(f => ({ value: String(f.id), label: f.nome }));
+
   const mutation = useMutation({
-    mutationFn: (data: any) => api.post('/api/setores-estoque/', data).then(r => r.data),
+    mutationFn: () => createSetor({
+      nome: formData.nome.trim(),
+      responsavel_id: responsavelId ? Number(responsavelId) : null,
+    }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["setores"] });
+      queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       toast({ title: "Setor salvo com sucesso!" });
       navigate("/cadastro/estoque/setores");
     },
     onError: (error: any) => {
       const data = error.response?.data;
-      const msg = data
-        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(" | ")
-        : "Verifique os dados e tente novamente.";
+      const msg = data ? Object.values(data).flat().join(" | ") : "Verifique os dados e tente novamente.";
       toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
     },
   });
 
   const handleSalvar = () => {
     if (!validateAll()) return;
-    mutation.mutate({ setor: formData.nome } as any);
+    mutation.mutate();
   };
 
   return (
@@ -65,6 +76,13 @@ const NovoSetor = () => {
                 onBlur={() => setFieldTouched("nome")}
                 error={getFieldError("nome")}
                 touched={touched.nome}
+              />
+              <ValidatedSelect
+                label="Responsável"
+                value={responsavelId}
+                onValueChange={setResponsavelId}
+                placeholder="Selecionar responsável"
+                options={responsavelOptions}
               />
             </div>
 

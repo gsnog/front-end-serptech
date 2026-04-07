@@ -152,6 +152,7 @@ interface FormData {
   // Step 7 - Dados da Empresa (NOVO)
   setor: string;
   cargo: string;
+  cargoId: string;
   gestorDireto: string;
   tipoVinculo: string;
   dataAdmissao: string;
@@ -212,10 +213,11 @@ const initialFormData: FormData = {
   aposentado: "nao",
   setor: "",
   cargo: "",
+  cargoId: "",
   gestorDireto: "",
   tipoVinculo: "",
   dataAdmissao: "",
-  statusPessoa: "Ativo",
+  statusPessoa: "ativo",
   funcaoDescricao: "",
   salario: "",
 }
@@ -234,10 +236,11 @@ export default function NovaPessoa() {
     queryFn: fetchCargos
   })
 
-  const { data: pessoas = [] } = useQuery({
+  const { data: pessoasResponse } = useQuery({
     queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas
+    queryFn: () => fetchPessoas(1, '', 200),
   })
+  const pessoas = pessoasResponse?.results ?? []
   const [currentStep, setCurrentStep] = useState(1)
   const [formData, setFormData] = useState<FormData>(initialFormData)
   const [showValidationDialog, setShowValidationDialog] = useState(false)
@@ -305,16 +308,67 @@ export default function NovaPessoa() {
   const handleSalvar = async () => {
     if (validateStep(currentStep)) {
       try {
+        const endereco = [formData.endereco, formData.numero, formData.bairro, formData.cidade, formData.estado, formData.cep]
+          .filter(Boolean).join(', ');
+
         const payload = {
+          // User + UserProfile
           first_name: formData.nomeCompleto.split(' ')[0],
           last_name: formData.nomeCompleto.substring(formData.nomeCompleto.indexOf(' ') + 1),
           email: formData.emailCorporativo || formData.emailPessoal,
           telefone: formData.celular,
-          endereco: `${formData.endereco}, ${formData.numero} - ${formData.bairro}, ${formData.cidade} - ${formData.estado}, ${formData.cep}`,
+          endereco,
           cargo: formData.cargo,
+          cargo_id: formData.cargoId ? Number(formData.cargoId) : null,
           setor_id: formData.setor,
           supervisor_id: formData.gestorDireto === 'none' ? null : formData.gestorDireto,
           data_admissao: formData.dataAdmissao,
+          // DadosPessoais
+          dataNascimento: formData.dataNascimento,
+          nomePai: formData.nomePai,
+          nomeMae: formData.nomeMae,
+          sexo: formData.sexo,
+          estadoCivil: formData.estadoCivil,
+          nacionalidade: formData.nacionalidade,
+          racaCor: formData.racaCor,
+          grauInstrucao: formData.grauInstrucao,
+          contatoEmergenciaNome: formData.contatoEmergenciaNome,
+          contatoEmergenciaTelefone: formData.contatoEmergenciaTelefone,
+          // DadosBancarios
+          banco: formData.banco,
+          tipoConta: formData.tipoConta,
+          agencia: formData.agencia,
+          conta: formData.conta,
+          digito: formData.digito,
+          chavePix: formData.chavePix,
+          // Documentos
+          cpf: formData.cpf,
+          rg: formData.rg,
+          orgaoExpedidor: formData.orgaoExpedidor,
+          ufRg: formData.ufRg,
+          dataExpedicaoRg: formData.dataExpedicaoRg || null,
+          ctps: formData.ctps,
+          ctpsSerie: formData.ctpsSerie,
+          ctpsUf: formData.ctpsUf,
+          ctpsDataExpedicao: formData.ctpsDataExpedicao || null,
+          pisPasep: formData.pisPasep,
+          cnh: formData.cnh,
+          cnhCategoria: formData.cnhCategoria,
+          cnhValidade: formData.cnhValidade || null,
+          tituloEleitor: formData.tituloEleitor,
+          tituloZona: formData.tituloZona,
+          tituloSecao: formData.tituloSecao,
+          // DadosDiversidade
+          lgbtqia: formData.lgbtqia,
+          neurodivergente: formData.neurodivergente,
+          pcd: formData.pcd,
+          filhos: formData.filhos,
+          aposentado: formData.aposentado,
+          // Dados laborais (Funcionario)
+          tipoVinculo: formData.tipoVinculo,
+          salario: formData.salario,
+          funcaoDescricao: formData.funcaoDescricao,
+          statusPessoa: formData.statusPessoa,
         };
         await createPessoa(payload);
         handleSave("/cadastro/pessoas/pessoas", "Pessoa cadastrada com sucesso!")
@@ -431,7 +485,11 @@ export default function NovaPessoa() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <ValidatedSelect label="Setor/Área" required value={formData.setor} onValueChange={(v) => updateField("setor", v)}
                     placeholder="Selecionar setor" options={setores.map((s: any) => ({ value: s.id.toString(), label: s.nome }))} />
-                  <ValidatedSelect label="Cargo" required value={formData.cargo} onValueChange={(v) => updateField("cargo", v)}
+                  <ValidatedSelect label="Cargo" required value={formData.cargo} onValueChange={(v) => {
+                    updateField("cargo", v);
+                    const found = cargos.find((c: any) => c.nome === v);
+                    if (found) updateField("cargoId", String(found.id));
+                  }}
                     placeholder="Selecionar cargo" options={cargos.map((c: any) => ({ value: c.nome, label: c.nome }))} />
                 </div>
 
@@ -457,9 +515,10 @@ export default function NovaPessoa() {
                   </div>
                   <ValidatedSelect label="Status" required value={formData.statusPessoa} onValueChange={(v) => updateField("statusPessoa", v)}
                     placeholder="Selecionar status" options={[
-                      { value: "Ativo", label: "Ativo" },
-                      { value: "Afastado", label: "Afastado" },
-                      { value: "Desligado", label: "Desligado" },
+                      { value: "ativo", label: "Ativo" },
+                      { value: "afastado", label: "Afastado" },
+                      { value: "inativo", label: "Inativo" },
+                      { value: "ferias", label: "Férias" },
                     ]} />
                 </div>
 

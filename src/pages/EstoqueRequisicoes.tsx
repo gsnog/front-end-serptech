@@ -51,7 +51,8 @@ export default function EstoqueRequisicoes() {
   });
   const items = Array.isArray(response) ? response : (response?.results ?? []);
 
-  const { data: setores = [] } = useQuery({ queryKey: setoresQueryKey, queryFn: fetchSetores })
+  const { data: setoresResponse } = useQuery({ queryKey: setoresQueryKey, queryFn: fetchSetores })
+  const setores = Array.isArray(setoresResponse) ? setoresResponse : (setoresResponse?.results ?? [])
 
   // Inventário da unidade da requisição em análise
   const { data: inventarioUnidade = [] } = useQuery({
@@ -75,8 +76,8 @@ export default function EstoqueRequisicoes() {
   const setorOptions = [
     { value: "todos", label: "Todos" },
     ...setores
-      .filter(s => (s.setor != null && String(s.setor).trim() !== '') || (s.nome != null && String(s.nome).trim() !== ''))
-      .map(s => ({ value: s.id != null ? String(s.id) : String(s.nome || s.setor), label: String(s.nome || s.setor || '') }))
+      .filter(s => s.nome.trim() !== '')
+      .map(s => ({ value: String(s.id), label: s.nome }))
   ]
 
   const updateMutation = useMutation({

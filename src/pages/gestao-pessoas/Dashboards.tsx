@@ -17,10 +17,11 @@ export default function Dashboards() {
   const [activeTab, setActiveTab] = useState("perfis");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: pessoas = [], isLoading } = useQuery<Pessoa[]>({
+  const { data: pessoasResponse, isLoading } = useQuery({
     queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas,
+    queryFn: () => fetchPessoas(1, '', 200),
   });
+  const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
 
   const filteredPessoas = useMemo(() =>
     pessoas.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase())),

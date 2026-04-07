@@ -14,8 +14,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, Search } from "lucide-react";
 import { TableActions } from "@/components/TableActions";
-import { fetchCargos } from "@/services/pessoas";
-import { useQuery } from "@tanstack/react-query";
+import { fetchCargos, updateCargo, deleteCargo, cargosQueryKey } from "@/services/pessoas";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
 
@@ -23,6 +23,7 @@ type Cargo = { id: number; nome: string };
 
 export default function Cargos() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<Cargo | null>(null);
@@ -31,7 +32,7 @@ export default function Cargos() {
 
   const [currentPage, setCurrentPage] = useState(1);
   const { data: cargosApi = [], isLoading } = useQuery({
-    queryKey: ['cargos', currentPage],
+    queryKey: [...cargosQueryKey, currentPage],
     queryFn: fetchCargos,
   });
   const items: Cargo[] = cargosApi;
@@ -42,9 +43,35 @@ export default function Cargos() {
   const filtered = items.filter(c => c.nome.toLowerCase().includes(searchTerm.toLowerCase()));
   const getExportData = () => filtered.map(c => ({ Cargo: c.nome }));
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteCargo(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cargosQueryKey });
+      toast({ title: "Cargo excluído com sucesso." });
+      setDeleteId(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || "Erro ao excluir cargo.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+      setDeleteId(null);
+    },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: () => updateCargo(editItem!.id, { nome: editNome.trim() }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: cargosQueryKey });
+      toast({ title: "Cargo atualizado com sucesso." });
+      setEditItem(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.nome?.[0] || "Erro ao atualizar cargo.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
+  });
+
   const handleDelete = () => {
-    toast({ title: "Informação", description: "Exclusão via API ainda não implementada." });
-    setDeleteId(null);
+    if (deleteId) deleteMutation.mutate(deleteId);
   };
 
   const deleteItem = items.find(c => c.id === deleteId);
@@ -127,8 +154,10 @@ export default function Cargos() {
             <div className="space-y-2"><Label>Nome do Cargo</Label><Input value={editNome} onChange={e => setEditNome(e.target.value)} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
-            <Button onClick={() => { toast({ title: "Informação", description: "Edição via API ainda não implementada." }); setEditItem(null); }}>Salvar</Button>
+            <Button variant="outline" onClick={() => setEditItem(null)} disabled={editMutation.isPending}>Cancelar</Button>
+            <Button onClick={() => editMutation.mutate()} disabled={editMutation.isPending || !editNome.trim()}>
+              {editMutation.isPending ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -140,8 +169,10 @@ export default function Cargos() {
             <AlertDialogDescription>Deseja realmente excluir <strong>{deleteItem?.nome}</strong>?</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deleteMutation.isPending} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

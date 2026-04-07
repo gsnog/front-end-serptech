@@ -25,15 +25,15 @@ export default function PessoasVisao360() {
     queryKey: [...pessoasQueryKey, currentPage, searchTerm],
     queryFn: () => fetchPessoas(currentPage, searchTerm),
   });
-  const pessoas: Pessoa[] = Array.isArray(pessoasResponse) ? pessoasResponse : (pessoasResponse?.results ?? []);
-  const totalCount = Array.isArray(pessoasResponse) ? pessoasResponse.length : (pessoasResponse?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
+  const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
+  const totalCount = pessoasResponse?.count ?? 0;
+  const totalPages = Math.ceil(totalCount / 10);
 
   const { data: setoresResponse } = useQuery({
     queryKey: setoresQueryKey,
-    queryFn: fetchSetores,
+    queryFn: () => fetchSetores(),
   });
-  const setores = Array.isArray(setoresResponse) ? setoresResponse : (setoresResponse?.results ?? []);
+  const setores = Array.isArray(setoresResponse) ? setoresResponse : (setoresResponse as any)?.results ?? [];
 
   const filteredPessoas = useMemo(() => pessoas.filter((pessoa) => {
     const matchesSetor = setorFilter === "all" || String(pessoa.setor_id) === setorFilter;

@@ -57,9 +57,8 @@ const menuItems = [
         ]
       },
       {
-        title: "Pessoas", help: "Cadastro de pessoas, setores e cargos.", subItems: [
+        title: "Pessoas", help: "Cadastro de pessoas e cargos.", subItems: [
           { title: "Pessoas", url: "/cadastro/pessoas/pessoas" },
-          { title: "Setores/Áreas", url: "/cadastro/pessoas/setores" },
           { title: "Cargos", url: "/cadastro/pessoas/cargos" },
         ]
       },

@@ -30,10 +30,11 @@ const FadeIn = ({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 );
 
 export default function VisaoGeralRH() {
-  const { data: pessoas, isLoading } = useQuery({
+  const { data: pessoasResponse, isLoading } = useQuery({
     queryKey: ['pessoas'],
-    queryFn: fetchPessoas
+    queryFn: () => fetchPessoas(1, '', 200),
   });
+  const pessoas = pessoasResponse?.results ?? [];
 
   const [periodo, setPeriodo] = useState("30d");
   const [statusFilter, setStatusFilter] = useState("todos");

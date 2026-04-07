@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchSetoresOperacional, createSetor, updateSetor, deleteSetor, type Setor as SetorType } from "@/services/pessoas";
+import { fetchSetores, createSetor, updateSetor, deleteSetor, setoresQueryKey, type Setor as SetorType } from "@/services/pessoas";
 
 
 const Setor = () => {
@@ -26,8 +26,8 @@ const Setor = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const { data: response, isLoading } = useQuery({
-    queryKey: ['setores_operacional', currentPage],
-    queryFn: () => fetchSetoresOperacional(currentPage),
+    queryKey: [...setoresQueryKey, currentPage],
+    queryFn: () => fetchSetores(currentPage, 20),
   });
   const items: SetorType[] = Array.isArray(response) ? response : (response?.results ?? []);
   const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
@@ -36,7 +36,7 @@ const Setor = () => {
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; payload: Partial<SetorType> }) => updateSetor(data.id, data.payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['setores_operacional'] });
+      queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       setEditItem(null);
       toast({ title: "Salvo", description: "Setor atualizado." });
     },
@@ -46,18 +46,18 @@ const Setor = () => {
   const deleteMutation = useMutation({
     mutationFn: deleteSetor,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['setores_operacional'] });
+      queryClient.invalidateQueries({ queryKey: setoresQueryKey });
       setDeleteId(null);
       toast({ title: "Removido", description: "Setor excluído." });
     },
     onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
   });
 
-  const filtered = useMemo(() => items.filter((s: SetorType) => (String(s.nome || s.setor || "")).toLowerCase().includes(filterNome.toLowerCase())), [items, filterNome]);
+  const filtered = useMemo(() => items.filter((s: SetorType) => (String(s.nome || "")).toLowerCase().includes(filterNome.toLowerCase())), [items, filterNome]);
 
-  const getExportData = () => filtered.map((s: SetorType) => ({ Setor: String(s.nome || s.setor || "") }));
-  const openEdit = (s: SetorType) => { setEditItem(s); setEditData({ nome: s.nome || s.setor || "" }) };
-  const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: { setor: editData.nome } }); } };
+  const getExportData = () => filtered.map((s: SetorType) => ({ Setor: String(s.nome || "") }));
+  const openEdit = (s: SetorType) => { setEditItem(s); setEditData({ nome: s.nome || "" }) };
+  const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: { nome: editData.nome } }); } };
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
   const deleteItemData = items.find((i: SetorType) => i.id === deleteId);
 
@@ -84,7 +84,7 @@ const Setor = () => {
               ) : (
                 filtered.map((setor: SetorType) => (
                   <TableRow key={setor.id}>
-                    <TableCell className="text-center">{String(setor.nome || setor.setor || "")}</TableCell>
+                    <TableCell className="text-center">{setor.nome || "—"}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(setor)} onEdit={() => openEdit(setor)} onDelete={() => setDeleteId(setor.id)} /></TableCell>
                   </TableRow>
                 ))

@@ -46,11 +46,12 @@ export function PersonHierarchyPanel({
   const [equipeOpen, setEquipeOpen] = useState(true);
 
   // Fetch real list of users
-  const { data: pessoasDb = [] } = useQuery({
+  const { data: pessoasDbResponse } = useQuery({
     queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas,
+    queryFn: () => fetchPessoas(1, '', 200),
     staleTime: 5 * 60 * 1000,
   });
+  const pessoasDb = pessoasDbResponse?.results ?? [];
 
   const scope = getScope('chat', 'all');
 

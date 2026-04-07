@@ -18,21 +18,14 @@ import {
   fetchPessoa,
   fetchPessoas,
   fetchSetores,
+  fetchCargos,
   updatePessoa,
   updatePessoaWithImage,
   pessoasQueryKey,
   setoresQueryKey,
+  cargosQueryKey,
   type Pessoa,
 } from "@/services/pessoas";
-
-const CARGO_OPTIONS = [
-  { value: "estagiario", label: "Estagiário" },
-  { value: "auxiliar", label: "Auxiliar" },
-  { value: "assistente", label: "Assistente" },
-  { value: "analista", label: "Analista" },
-  { value: "gestor", label: "Gestor" },
-  { value: "diretor", label: "Diretor" },
-];
 
 export default function PessoaDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -47,16 +40,24 @@ export default function PessoaDetalhe() {
   });
 
   // Get all pessoas to find subordinates and for supervisor dropdown
-  const { data: todas = [] } = useQuery<Pessoa[]>({
+  const { data: todasResponse } = useQuery({
     queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas,
+    queryFn: () => fetchPessoas(1, '', 100),
     enabled: !!pessoa,
   });
+  const todas: Pessoa[] = todasResponse?.results ?? [];
 
   // Sectors for the dropdown
-  const { data: setores = [] } = useQuery({
+  const { data: setoresRaw } = useQuery({
     queryKey: setoresQueryKey,
-    queryFn: fetchSetores,
+    queryFn: () => fetchSetores(),
+  });
+  const setores = Array.isArray(setoresRaw) ? setoresRaw : (setoresRaw as any)?.results ?? [];
+
+  // Cargos dinâmicos (peopleManagement.Cargo)
+  const { data: cargos = [] } = useQuery({
+    queryKey: [...cargosQueryKey],
+    queryFn: fetchCargos,
   });
 
   const [editOpen, setEditOpen] = useState(false);
@@ -65,6 +66,7 @@ export default function PessoaDetalhe() {
     last_name: "",
     email: "",
     cargo: "",
+    cargo_id: null as number | null,
     setor_id: "" as string | number,
     supervisor_id: "" as string | number,
   });
@@ -82,6 +84,7 @@ export default function PessoaDetalhe() {
       last_name: pessoa.last_name || "",
       email: pessoa.email || "",
       cargo: pessoa.cargo || "",
+      cargo_id: pessoa.cargo_id ?? null,
       setor_id: pessoa.setor_id ?? "",
       supervisor_id: pessoa.supervisor_id ?? "",
     });
@@ -112,6 +115,7 @@ export default function PessoaDetalhe() {
       last_name: editData.last_name,
       email: editData.email,
       cargo: editData.cargo || "",
+      cargo_id: editData.cargo_id ?? null,
     };
     if (editData.setor_id !== "") payload.setor_id = Number(editData.setor_id);
     if (editData.supervisor_id !== "") {
@@ -366,13 +370,21 @@ export default function PessoaDetalhe() {
             <div className="space-y-2">
               <Label>Cargo</Label>
               <Select
-                value={editData.cargo}
-                onValueChange={v => setEditData(p => ({ ...p, cargo: v }))}
+                value={editData.cargo_id ? String(editData.cargo_id) : "__none__"}
+                onValueChange={v => {
+                  if (v === "__none__") {
+                    setEditData(p => ({ ...p, cargo: "", cargo_id: null }));
+                  } else {
+                    const found = cargos.find((c: any) => String(c.id) === v);
+                    setEditData(p => ({ ...p, cargo: found?.nome ?? "", cargo_id: Number(v) }));
+                  }
+                }}
               >
                 <SelectTrigger><SelectValue placeholder="Selecionar cargo" /></SelectTrigger>
                 <SelectContent className="bg-popover">
-                  {CARGO_OPTIONS.map(c => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  <SelectItem value="__none__">— Sem cargo —</SelectItem>
+                  {cargos.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

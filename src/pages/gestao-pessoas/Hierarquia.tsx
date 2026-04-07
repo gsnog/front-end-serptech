@@ -70,10 +70,11 @@ export default function Hierarquia() {
   const [viewMode, setViewMode] = useState<"gestor" | "area">("gestor");
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
 
-  const { data: pessoas = [], isLoading } = useQuery<Pessoa[]>({
+  const { data: pessoasResponse, isLoading } = useQuery({
     queryKey: pessoasQueryKey,
-    queryFn: fetchPessoas,
+    queryFn: () => fetchPessoas(1, '', 200),
   });
+  const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
 
   const pessoasSemGestor = useMemo(() =>
     pessoas.filter(p => !p.supervisor_id && p.cargo !== 'Diretor'),

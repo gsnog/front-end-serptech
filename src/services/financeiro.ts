@@ -71,6 +71,7 @@ export interface ContaReceber {
 
 export interface ContaBancaria {
     id: number;
+    unidade?: number;
     codigo_banco?: string;
     banco?: string;
     agencia?: string;

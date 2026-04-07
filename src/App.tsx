@@ -96,8 +96,6 @@ import Notificacoes from "./pages/Notificacoes";
 // Cadastro - Pessoas
 import Pessoas from "./pages/cadastro/pessoas/Pessoas";
 import NovaPessoa from "./pages/cadastro/pessoas/NovaPessoa";
-import SetoresAreas from "./pages/cadastro/pessoas/SetoresAreas";
-import NovoSetorPessoas from "./pages/cadastro/pessoas/NovoSetor";
 import Cargos from "./pages/cadastro/pessoas/Cargos";
 import NovoCargo from "./pages/cadastro/pessoas/NovoCargo";
 
@@ -237,8 +235,6 @@ const App = () => (
                   {/* Cadastro - Pessoas */}
                   <Route path="/cadastro/pessoas/pessoas" element={<Pessoas />} />
                   <Route path="/cadastro/pessoas/pessoas/nova" element={<NovaPessoa />} />
-                  <Route path="/cadastro/pessoas/setores" element={<SetoresAreas />} />
-                  <Route path="/cadastro/pessoas/setores/novo" element={<NovoSetorPessoas />} />
                   <Route path="/cadastro/pessoas/cargos" element={<Cargos />} />
                   <Route path="/cadastro/pessoas/cargos/novo" element={<NovoCargo />} />
 

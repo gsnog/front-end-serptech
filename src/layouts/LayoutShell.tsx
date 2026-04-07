@@ -101,8 +101,6 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   // Cadastro - Pessoas
   "/cadastro/pessoas/pessoas": { title: "Pessoas", description: "Cadastro de colaboradores" },
   "/cadastro/pessoas/pessoas/nova": { title: "Pessoas", description: "Nova Pessoa" },
-  "/cadastro/pessoas/setores": { title: "Setores/Áreas", description: "Cadastro de setores da empresa" },
-  "/cadastro/pessoas/setores/novo": { title: "Setores/Áreas", description: "Novo Setor" },
   
   // Gestão de Pessoas
   "/gestao-pessoas/visao-geral": { title: "Visão Geral RH", description: "Dashboard de Recursos Humanos" },

@@ -45,33 +45,37 @@ export default function Pessoas() {
   const BASE_URL = api.defaults.baseURL || "http://127.0.0.1:8000";
 
   const [currentPage, setCurrentPage] = useState(1);
+  // Resetar para página 1 quando filtros mudam
+  const handleSearchChange = (v: string) => { setSearchTerm(v); setCurrentPage(1); };
+  const handleSetorChange = (v: string) => { setSetorFilter(v); setCurrentPage(1); };
+  const handleCargoChange = (v: string) => { setCargoFilter(v); setCurrentPage(1); };
+
   const { data: pessoasResponse, isLoading, isError } = useQuery({
-    queryKey: [...pessoasQueryKey, currentPage],
-    queryFn: () => fetchPessoas(currentPage),
+    queryKey: [...pessoasQueryKey, currentPage, searchTerm],
+    queryFn: () => fetchPessoas(currentPage, searchTerm),
   });
-  const pessoas: Pessoa[] = Array.isArray(pessoasResponse) ? pessoasResponse : (pessoasResponse?.results ?? []);
-  const totalCount = Array.isArray(pessoasResponse) ? pessoasResponse.length : (pessoasResponse?.count ?? 0);
-  const totalPages = Math.ceil(totalCount / 5);
+  const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
+  const totalCount = pessoasResponse?.count ?? 0;
+  const totalPages = Math.ceil(totalCount / 10);
 
-  const { data: setores = [] } = useQuery({
+  const { data: setoresRaw = [] } = useQuery({
     queryKey: setoresQueryKey,
-    queryFn: fetchSetores,
+    queryFn: () => fetchSetores(),
   });
+  const setores = Array.isArray(setoresRaw) ? setoresRaw : (setoresRaw as any)?.results ?? [];
 
-  // Unique cargos from API data
+  // Unique cargos from current page data (server handles search; client handles setor/cargo filters)
   const uniqueCargos = useMemo(() => {
     const seen = new Set<string>();
     return pessoas.filter(p => p.cargo && !seen.has(p.cargo) && seen.add(p.cargo)).map(p => p.cargo);
   }, [pessoas]);
 
+  // Setor e cargo são filtrados client-side (não enviados como params ao backend)
   const filteredPessoas = useMemo(() => pessoas.filter((pessoa) => {
-    const matchesSearch =
-      pessoa.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pessoa.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSetor = setorFilter === "all" || String(pessoa.setor_id) === setorFilter;
     const matchesCargo = cargoFilter === "all" || pessoa.cargo === cargoFilter;
-    return matchesSearch && matchesSetor && matchesCargo;
-  }), [pessoas, searchTerm, setorFilter, cargoFilter]);
+    return matchesSetor && matchesCargo;
+  }), [pessoas, setorFilter, cargoFilter]);
 
   const getExportData = () => filteredPessoas.map(p => ({
     Nome: p.nome, Email: p.email, Cargo: p.cargo, Setor: p.setor || "—",
@@ -96,9 +100,9 @@ export default function Pessoas() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por nome ou e-mail..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+            <Input placeholder="Buscar por nome ou e-mail..." value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} className="pl-10" />
           </div>
-          <Select value={setorFilter} onValueChange={setSetorFilter}>
+          <Select value={setorFilter} onValueChange={handleSetorChange}>
             <SelectTrigger><SelectValue placeholder="Setor/Área" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os setores</SelectItem>
@@ -107,7 +111,7 @@ export default function Pessoas() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={cargoFilter} onValueChange={setCargoFilter}>
+          <Select value={cargoFilter} onValueChange={handleCargoChange}>
             <SelectTrigger><SelectValue placeholder="Cargo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os cargos</SelectItem>
