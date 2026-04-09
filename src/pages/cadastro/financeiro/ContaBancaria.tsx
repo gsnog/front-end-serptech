@@ -64,12 +64,12 @@ const ContaBancaria = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">Código do Banco</TableHead>
-              <TableHead className="text-center font-semibold">Banco</TableHead>
-              <TableHead className="text-center font-semibold">Agência</TableHead>
-              <TableHead className="text-center font-semibold">Número da Conta</TableHead>
+              <TableHead className="font-semibold">Código do Banco</TableHead>
+              <TableHead className="font-semibold">Banco</TableHead>
+              <TableHead className="font-semibold">Agência</TableHead>
+              <TableHead className="font-semibold">Número da Conta</TableHead>
               <TableHead className="text-center font-semibold">Tipo</TableHead>
-              <TableHead className="text-center font-semibold">Saldo</TableHead>
+              <TableHead className="text-right font-semibold">Saldo</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -79,12 +79,12 @@ const ContaBancaria = () => {
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
               ) : filtered.map((c) => (
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center">{c.codigo_banco || "—"}</TableCell>
-                  <TableCell className="text-center font-medium">{c.banco || "—"}</TableCell>
-                  <TableCell className="text-center">{c.agencia || "—"}</TableCell>
-                  <TableCell className="text-center">{c.numero_conta || "—"}</TableCell>
-                  <TableCell className="text-center">{c.tipo || "—"}</TableCell>
-                  <TableCell className="text-center font-semibold">{c.saldo !== undefined ? `R$ ${Number(c.saldo).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                  <TableCell >{c.codigo_banco || "—"}</TableCell>
+                  <TableCell className="font-medium">{c.banco || "—"}</TableCell>
+                  <TableCell >{c.agencia || "—"}</TableCell>
+                  <TableCell >{c.numero_conta || "—"}</TableCell>
+                  <TableCell >{c.tipo || "—"}</TableCell>
+                  <TableCell className="text-right font-semibold">{c.saldo !== undefined ? `R$ ${Number(c.saldo).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
                   <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
                 </TableRow>
               ))}

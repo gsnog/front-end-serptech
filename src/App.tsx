@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LayoutShell from "@/layouts/LayoutShell";
 import { PermissionsProvider } from "@/contexts/PermissionsContext";
 import { WebRTCProvider } from "@/contexts/WebRTCContext";
@@ -53,7 +53,7 @@ import NotFound from "./pages/NotFound";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Cadastro - Estoque
-import FornecedoresEstoque from "./pages/cadastro/estoque/Fornecedores";
+import FornecedoresEstoque from "./pages/cadastro/financeiro/Fornecedores";
 import NovoFornecedor from "./pages/cadastro/estoque/NovoFornecedor";
 import Itens from "./pages/cadastro/estoque/Itens";
 import NovoItem from "./pages/cadastro/estoque/NovoItem";
@@ -76,8 +76,6 @@ import CentroReceita from "./pages/cadastro/financeiro/CentroReceita";
 import NovoCentroReceita from "./pages/cadastro/financeiro/NovoCentroReceita";
 import Categorias from "./pages/cadastro/financeiro/Categorias";
 import NovaCategoria from "./pages/cadastro/financeiro/NovaCategoria";
-import FornecedoresFinanceiro from "./pages/cadastro/financeiro/Fornecedores";
-import NovoFornecedorFinanceiro from "./pages/cadastro/financeiro/NovoFornecedorFinanceiro";
 import Subcategorias from "./pages/cadastro/financeiro/Subcategorias";
 import NovaSubcategoria from "./pages/cadastro/financeiro/NovaSubcategoria";
 import PlanoContas from "./pages/cadastro/financeiro/PlanoContas";
@@ -106,6 +104,8 @@ import Hierarquia from "./pages/gestao-pessoas/Hierarquia";
 import Acessos from "./pages/gestao-pessoas/Acessos";
 import DashboardsGestao from "./pages/gestao-pessoas/Dashboards";
 import Auditoria from "./pages/gestao-pessoas/Auditoria";
+import Medicos from "./pages/gestao-pessoas/Medicos";
+import NovoMedico from "./pages/gestao-pessoas/NovoMedico";
 
 // Módulos Globais (Header)
 import Calendario from "./pages/Calendario";
@@ -217,8 +217,8 @@ const App = () => (
                   <Route path="/cadastro/financeiro/centro-receita/novo" element={<NovoCentroReceita />} />
                   <Route path="/cadastro/financeiro/categorias" element={<Categorias />} />
                   <Route path="/cadastro/financeiro/categorias/nova" element={<NovaCategoria />} />
-                  <Route path="/cadastro/financeiro/fornecedores" element={<FornecedoresFinanceiro />} />
-                  <Route path="/cadastro/financeiro/fornecedores/novo" element={<NovoFornecedorFinanceiro />} />
+                  <Route path="/cadastro/financeiro/fornecedores" element={<Navigate to="/cadastro/estoque/fornecedores" replace />} />
+                  <Route path="/cadastro/financeiro/fornecedores/novo" element={<Navigate to="/cadastro/estoque/fornecedores/novo" replace />} />
                   <Route path="/cadastro/financeiro/subcategorias" element={<Subcategorias />} />
                   <Route path="/cadastro/financeiro/subcategorias/nova" element={<NovaSubcategoria />} />
                   <Route path="/cadastro/financeiro/plano-contas" element={<PlanoContas />} />
@@ -245,6 +245,8 @@ const App = () => (
                   <Route path="/gestao-pessoas/acessos" element={<Acessos />} />
                   <Route path="/gestao-pessoas/dashboards" element={<DashboardsGestao />} />
                   <Route path="/gestao-pessoas/auditoria" element={<Auditoria />} />
+                  <Route path="/gestao-pessoas/medicos" element={<Medicos />} />
+                  <Route path="/gestao-pessoas/medicos/novo" element={<Navigate to="/cadastro/pessoas/pessoas/nova" replace />} />
 
                   {/* Usuário e Notificações */}
                   <Route path="/usuario/visualizar" element={<VisualizarPerfil />} />

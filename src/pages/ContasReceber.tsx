@@ -191,7 +191,7 @@ const ContasReceber = () => {
                   return (
                     <React.Fragment key={conta.id}>
                       <TableRow className="hover:bg-table-hover transition-colors">
-                        <TableCell className="text-center w-8 px-1">
+                        <TableCell className="w-8 px-1">
                           {parcelas.length > 0 && (
                             <button onClick={() => toggleExpand(conta.id)} className="p-1 rounded hover:bg-muted transition-colors">
                               {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -200,14 +200,14 @@ const ContasReceber = () => {
                         </TableCell>
                         <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
                         <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
-                        <TableCell className="text-center">{conta.cliente_nome || "—"}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell >{conta.cliente_nome || "—"}</TableCell>
+                        <TableCell >
                           <span className="block truncate max-w-full" title={conta.numero_documento || ""}>
                             {conta.numero_documento || conta.documento || "—"}
                           </span>
                         </TableCell>
-                        <TableCell className="text-center">{formatBRL(conta.valor_do_titulo)}</TableCell>
-                        <TableCell className="text-center">{formatBRL(conta.valor_total)}</TableCell>
+                        <TableCell >{formatBRL(conta.valor_do_titulo)}</TableCell>
+                        <TableCell >{formatBRL(conta.valor_total)}</TableCell>
                         <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
                         <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
@@ -220,26 +220,26 @@ const ContasReceber = () => {
                               <Table>
                                 <TableHeader>
                                   <TableRow className="bg-muted">
-                                    <TableHead className="text-center text-xs h-8">Nº</TableHead>
+                                    <TableHead className="text-xs h-8">Nº</TableHead>
                                     <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
-                                    <TableHead className="text-center text-xs h-8">Valor</TableHead>
-                                    <TableHead className="text-center text-xs h-8">Valor Pago</TableHead>
-                                    <TableHead className="text-center text-xs h-8">Pagamento</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Valor</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Valor Pago</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Pagamento</TableHead>
                                     <TableHead className="text-center text-xs h-8">Status</TableHead>
-                                    {conta.status !== 'Pago' && <TableHead className="text-center text-xs h-8">Ação</TableHead>}
+                                    {conta.status !== 'Pago' && <TableHead className="text-xs h-8">Ação</TableHead>}
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {parcelas.map(p => (
                                     <TableRow key={p.id} className="text-sm">
-                                      <TableCell className="text-center py-1">{p.numero}</TableCell>
+                                      <TableCell className="py-1">{p.numero}</TableCell>
                                       <TableCell className="text-center py-1">{p.data_de_vencimento || "—"}</TableCell>
-                                      <TableCell className="text-center py-1">{formatBRL(p.valor)}</TableCell>
-                                      <TableCell className="text-center py-1">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
+                                      <TableCell className="py-1">{formatBRL(p.valor)}</TableCell>
+                                      <TableCell className="py-1">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
                                       <TableCell className="text-center py-1">{p.data_de_pagamento || "—"}</TableCell>
                                       <TableCell className="text-center py-1"><StatusBadge status={p.status} /></TableCell>
                                       {conta.status !== 'Pago' && (
-                                        <TableCell className="text-center py-1">
+                                        <TableCell className="py-1">
                                           {p.status !== 'Pago' && (
                                             <button onClick={() => openPagamento(p, conta)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
                                               <DollarSign className="h-3 w-3" />Pagar
@@ -330,10 +330,10 @@ const ContasReceber = () => {
                         <Table>
                           <TableHeader>
                             <TableRow className="bg-muted/50">
-                              <TableHead className="text-center text-xs h-8 w-10">Nº</TableHead>
+                              <TableHead className="text-xs h-8 w-10">Nº</TableHead>
                               <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
-                              <TableHead className="text-center text-xs h-8">Valor</TableHead>
-                              <TableHead className="text-center text-xs h-8">Pago</TableHead>
+                              <TableHead className="text-right text-xs h-8">Valor</TableHead>
+                              <TableHead className="text-xs h-8">Pago</TableHead>
                               <TableHead className="text-center text-xs h-8">Status</TableHead>
                               {viewItem.status !== 'Pago' && <TableHead className="w-16 h-8" />}
                             </TableRow>
@@ -341,13 +341,13 @@ const ContasReceber = () => {
                           <TableBody>
                             {(viewItem.parcelas ?? []).map(p => (
                               <TableRow key={p.id} className="text-xs hover:bg-muted/30">
-                                <TableCell className="text-center py-2 font-medium">{p.numero}</TableCell>
+                                <TableCell className="py-2 font-medium">{p.numero}</TableCell>
                                 <TableCell className="text-center py-2">{p.data_de_vencimento || "—"}</TableCell>
-                                <TableCell className="text-center py-2">{formatBRL(p.valor)}</TableCell>
-                                <TableCell className="text-center py-2">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
+                                <TableCell className="py-2">{formatBRL(p.valor)}</TableCell>
+                                <TableCell className="py-2">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
                                 <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
                                 {viewItem.status !== 'Pago' && (
-                                  <TableCell className="text-center py-2">
+                                  <TableCell className="py-2">
                                     {p.status !== 'Pago' && (
                                       <button onClick={() => { setViewItem(null); openPagamento(p, viewItem) }} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
                                         <DollarSign className="h-3 w-3" />Pagar

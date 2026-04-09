@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { maskCpf, maskRg, maskCelular, maskTelefoneFixo, maskCep, maskPisPasep } from "@/utils/masks"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,12 +21,13 @@ import {
   ChevronRight,
   ChevronLeft,
   AlertCircle,
-  Loader2
+  Loader2,
+  Stethoscope,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { estadosBrasil, opcoesSelecao, bancosBrasil } from "@/data/brasil-localidades"
-import { fetchSetores, fetchCargos, setoresQueryKey, tiposVinculo, fetchPessoas, pessoasQueryKey, createPessoa } from "@/services/pessoas";
+import { fetchSetores, fetchCargos, setoresQueryKey, tiposVinculo, fetchPessoas, pessoasQueryKey, createPessoa, createMedico, fetchEspecialidades, medicosQueryKey } from "@/services/pessoas";
 import { useSaveWithDelay } from "@/hooks/useSaveWithDelay"
 import {
 
@@ -67,7 +69,7 @@ const requiredFieldsByStep: Record<number, string[]> = {
   4: ["banco", "tipoConta", "agencia", "conta"],
   5: ["cpf", "rg"],
   6: [],
-  7: ["setor", "cargo", "tipoVinculo", "dataAdmissao", "statusPessoa"],
+  7: [], // handled dynamically in validateStep
 }
 
 const fieldLabels: Record<string, string> = {
@@ -89,7 +91,7 @@ const fieldLabels: Record<string, string> = {
   setor: "Setor/Área",
   cargo: "Cargo",
   tipoVinculo: "Tipo de Vínculo",
-  dataAdmissao: "Data de Admissão",
+  dataAdmissao: "Data de Admissão / Início",
   statusPessoa: "Status",
 }
 
@@ -159,6 +161,11 @@ interface FormData {
   statusPessoa: string;
   funcaoDescricao: string;
   salario: string;
+  // Perfil médico
+  eMedico: boolean;
+  medicocrm: string;
+  medicoEspecialidadeId: string;
+  valorLaminaLida: string;
 }
 
 const initialFormData: FormData = {
@@ -220,10 +227,15 @@ const initialFormData: FormData = {
   statusPessoa: "ativo",
   funcaoDescricao: "",
   salario: "",
+  eMedico: false,
+  medicocrm: "",
+  medicoEspecialidadeId: "",
+  valorLaminaLida: "",
 }
 
 export default function NovaPessoa() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { isSaving, handleSave } = useSaveWithDelay()
 
   const { data: setores = [] } = useQuery({
@@ -234,6 +246,11 @@ export default function NovaPessoa() {
   const { data: cargos = [] } = useQuery({
     queryKey: ['cargos'],
     queryFn: fetchCargos
+  })
+
+  const { data: especialidades = [] } = useQuery({
+    queryKey: ['especialidades'],
+    queryFn: fetchEspecialidades,
   })
 
   const { data: pessoasResponse } = useQuery({
@@ -247,7 +264,7 @@ export default function NovaPessoa() {
   const [missingFields, setMissingFields] = useState<string[]>([])
   const [isLoadingCep, setIsLoadingCep] = useState(false)
 
-  const updateField = (field: keyof FormData, value: string) => {
+  const updateField = (field: keyof FormData, value: string | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
@@ -294,7 +311,14 @@ export default function NovaPessoa() {
   }, [])
 
   const validateStep = (step: number): boolean => {
-    const required = requiredFieldsByStep[step] || []
+    let required = requiredFieldsByStep[step] || []
+
+    if (step === 7) {
+      required = formData.eMedico
+        ? ["tipoVinculo", "dataAdmissao"]
+        : ["setor", "cargo", "tipoVinculo", "dataAdmissao", "statusPessoa"]
+    }
+
     const missing = required.filter(field => !formData[field as keyof FormData])
 
     if (missing.length > 0) {
@@ -370,7 +394,23 @@ export default function NovaPessoa() {
           funcaoDescricao: formData.funcaoDescricao,
           statusPessoa: formData.statusPessoa,
         };
-        await createPessoa(payload);
+        const pessoa = await createPessoa(payload);
+
+        if (formData.eMedico) {
+          if (!formData.medicocrm.trim()) {
+            toast({ title: "CRM obrigatório para cadastro de médico", variant: "destructive" });
+            return;
+          }
+          await createMedico({
+            user: pessoa.id,
+            crm: formData.medicocrm.trim(),
+            telefone: formData.celular,
+            especialidade_ids: formData.medicoEspecialidadeId ? [Number(formData.medicoEspecialidadeId)] : [],
+            ...(formData.valorLaminaLida ? { valor_lamina_lida: Number(formData.valorLaminaLida) } : {}),
+          });
+          queryClient.invalidateQueries({ queryKey: medicosQueryKey });
+        }
+
         handleSave("/cadastro/pessoas/pessoas", "Pessoa cadastrada com sucesso!")
       } catch (e: any) {
         toast({
@@ -469,7 +509,7 @@ export default function NovaPessoa() {
         {/* Form Content */}
         <Card className="border-border shadow-lg">
           <CardContent className="p-6 md:p-8">
-            {/* Step 7: Dados da Empresa (NEW) */}
+            {/* Step 7: Dados da Empresa */}
             {currentStep === 7 && (
               <div className="space-y-6 animate-in fade-in duration-300">
                 <div className="flex items-center gap-3 mb-6">
@@ -482,69 +522,165 @@ export default function NovaPessoa() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <ValidatedSelect label="Setor/Área" required value={formData.setor} onValueChange={(v) => updateField("setor", v)}
-                    placeholder="Selecionar setor" options={setores.map((s: any) => ({ value: s.id.toString(), label: s.nome }))} />
-                  <ValidatedSelect label="Cargo" required value={formData.cargo} onValueChange={(v) => {
-                    updateField("cargo", v);
-                    const found = cargos.find((c: any) => c.nome === v);
-                    if (found) updateField("cargoId", String(found.id));
-                  }}
-                    placeholder="Selecionar cargo" options={cargos.map((c: any) => ({ value: c.nome, label: c.nome }))} />
+                {/* Tipo de perfil — médico ou funcionário */}
+                <div className="border border-border rounded-lg p-4 space-y-4">
+                  <button
+                    type="button"
+                    onClick={() => updateField("eMedico", !formData.eMedico)}
+                    className="flex items-center gap-3 w-full text-left transition-colors"
+                  >
+                    <div className={cn(
+                      "w-10 h-10 rounded flex items-center justify-center transition-colors",
+                      formData.eMedico ? "bg-primary/10" : "bg-muted"
+                    )}>
+                      <Stethoscope className={cn("h-5 w-5", formData.eMedico ? "text-primary" : "text-muted-foreground")} />
+                    </div>
+                    <div className="flex-1">
+                      <p className={cn("text-sm font-semibold", formData.eMedico ? "text-primary" : "text-foreground")}>
+                        Cadastrar como médico (prestador de serviço)
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Médicos não possuem setor/cargo — apenas vínculo, CRM e especialidade
+                      </p>
+                    </div>
+                    <div className={cn(
+                      "w-11 h-6 rounded-full transition-colors relative shrink-0",
+                      formData.eMedico ? "bg-primary" : "bg-muted"
+                    )}>
+                      <div className={cn(
+                        "absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform",
+                        formData.eMedico ? "translate-x-6" : "translate-x-1"
+                      )} />
+                    </div>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <ValidatedSelect label="Gestor Direto" value={formData.gestorDireto} onValueChange={(v) => updateField("gestorDireto", v)}
-                    placeholder="Selecionar gestor" options={[
-                      { value: "none", label: "Sem gestor (cargo de liderança)" },
-                      ...gestoresDisponiveis.map(p => ({ value: p.id.toString(), label: `${p.nome} - ${p.cargo}` }))
-                    ]} />
-                  <ValidatedSelect label="Tipo de Vínculo" required value={formData.tipoVinculo} onValueChange={(v) => updateField("tipoVinculo", v)}
-                    placeholder="Selecionar vínculo" options={tiposVinculo} />
-                </div>
+                {/* Campos de médico */}
+                {formData.eMedico && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <ValidatedSelect label="Tipo de Vínculo" required value={formData.tipoVinculo} onValueChange={(v) => updateField("tipoVinculo", v)}
+                        placeholder="Selecionar vínculo" options={tiposVinculo} />
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Data de Início <span className="text-destructive">*</span></Label>
+                        <Input
+                          type="date"
+                          className="form-input"
+                          value={formData.dataAdmissao}
+                          onChange={(e) => updateField("dataAdmissao", e.target.value)}
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Data de Admissão <span className="text-destructive">*</span></Label>
-                    <Input
-                      type="date"
-                      className="form-input"
-                      value={formData.dataAdmissao}
-                      onChange={(e) => updateField("dataAdmissao", e.target.value)}
-                    />
-                  </div>
-                  <ValidatedSelect label="Status" required value={formData.statusPessoa} onValueChange={(v) => updateField("statusPessoa", v)}
-                    placeholder="Selecionar status" options={[
-                      { value: "ativo", label: "Ativo" },
-                      { value: "afastado", label: "Afastado" },
-                      { value: "inativo", label: "Inativo" },
-                      { value: "ferias", label: "Férias" },
-                    ]} />
-                </div>
+                    <div className="h-px bg-border" />
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Função / Descrição do que faz</Label>
-                  <Input
-                    placeholder="Descreva as principais atividades"
-                    className="form-input"
-                    value={formData.funcaoDescricao}
-                    onChange={(e) => updateField("funcaoDescricao", e.target.value)}
-                  />
-                </div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <Stethoscope className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-semibold text-foreground">Dados Médicos</span>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Salário (R$) - Campo Sensível</Label>
-                  <Input
-                    type="number"
-                    placeholder="0,00"
-                    className="form-input"
-                    value={formData.salario}
-                    onChange={(e) => updateField("salario", e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Este campo é visível apenas para perfis autorizados (RH/Admin)
-                  </p>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">CRM <span className="text-destructive">*</span></Label>
+                        <Input
+                          placeholder="Ex: CRM/SP 123456"
+                          className="form-input"
+                          value={formData.medicocrm}
+                          onChange={(e) => updateField("medicocrm", e.target.value)}
+                        />
+                      </div>
+                      <ValidatedSelect
+                        label="Especialidade"
+                        value={formData.medicoEspecialidadeId}
+                        onValueChange={(v) => updateField("medicoEspecialidadeId", v)}
+                        placeholder="Selecionar especialidade"
+                        options={especialidades.map(e => ({ value: String(e.id), label: e.nome }))}
+                      />
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Valor por lâmina lida (R$)</Label>
+                        <Input
+                          type="number"
+                          placeholder="0,00"
+                          className="form-input"
+                          value={formData.valorLaminaLida}
+                          onChange={(e) => updateField("valorLaminaLida", e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Remuneração por lâmina analisada — campo sensível
+                        </p>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Campos de funcionário */}
+                {!formData.eMedico && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <ValidatedSelect label="Setor/Área" required value={formData.setor} onValueChange={(v) => updateField("setor", v)}
+                        placeholder="Selecionar setor" options={setores.map((s: any) => ({ value: s.id.toString(), label: s.nome }))} />
+                      <ValidatedSelect label="Cargo" required value={formData.cargo} onValueChange={(v) => {
+                        updateField("cargo", v);
+                        const found = cargos.find((c: any) => c.nome === v);
+                        if (found) updateField("cargoId", String(found.id));
+                      }}
+                        placeholder="Selecionar cargo" options={cargos.map((c: any) => ({ value: c.nome, label: c.nome }))} />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <ValidatedSelect label="Gestor Direto" value={formData.gestorDireto} onValueChange={(v) => updateField("gestorDireto", v)}
+                        placeholder="Selecionar gestor" options={[
+                          { value: "none", label: "Sem gestor (cargo de liderança)" },
+                          ...gestoresDisponiveis.map(p => ({ value: p.id.toString(), label: `${p.nome} - ${p.cargo}` }))
+                        ]} />
+                      <ValidatedSelect label="Tipo de Vínculo" required value={formData.tipoVinculo} onValueChange={(v) => updateField("tipoVinculo", v)}
+                        placeholder="Selecionar vínculo" options={tiposVinculo} />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Data de Admissão <span className="text-destructive">*</span></Label>
+                        <Input
+                          type="date"
+                          className="form-input"
+                          value={formData.dataAdmissao}
+                          onChange={(e) => updateField("dataAdmissao", e.target.value)}
+                        />
+                      </div>
+                      <ValidatedSelect label="Status" required value={formData.statusPessoa} onValueChange={(v) => updateField("statusPessoa", v)}
+                        placeholder="Selecionar status" options={[
+                          { value: "ativo", label: "Ativo" },
+                          { value: "afastado", label: "Afastado" },
+                          { value: "inativo", label: "Inativo" },
+                          { value: "ferias", label: "Férias" },
+                        ]} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Função / Descrição do que faz</Label>
+                      <Input
+                        placeholder="Descreva as principais atividades"
+                        className="form-input"
+                        value={formData.funcaoDescricao}
+                        onChange={(e) => updateField("funcaoDescricao", e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Salário (R$) — Campo Sensível</Label>
+                      <Input
+                        type="number"
+                        placeholder="0,00"
+                        className="form-input"
+                        value={formData.salario}
+                        onChange={(e) => updateField("salario", e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Este campo é visível apenas para perfis autorizados (RH/Admin)
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -641,7 +777,7 @@ export default function NovaPessoa() {
                       placeholder="(00) 00000-0000"
                       className="form-input"
                       value={formData.celular}
-                      onChange={(e) => updateField("celular", e.target.value)}
+                      onChange={(e) => updateField("celular", maskCelular(e.target.value))}
                     />
                   </div>
                   <div className="space-y-2">
@@ -650,7 +786,7 @@ export default function NovaPessoa() {
                       placeholder="(00) 0000-0000"
                       className="form-input"
                       value={formData.telefoneFixo}
-                      onChange={(e) => updateField("telefoneFixo", e.target.value)}
+                      onChange={(e) => updateField("telefoneFixo", maskTelefoneFixo(e.target.value))}
                     />
                   </div>
                 </div>
@@ -694,7 +830,7 @@ export default function NovaPessoa() {
                       placeholder="(00) 00000-0000"
                       className="form-input"
                       value={formData.contatoEmergenciaTelefone}
-                      onChange={(e) => updateField("contatoEmergenciaTelefone", e.target.value)}
+                      onChange={(e) => updateField("contatoEmergenciaTelefone", maskCelular(e.target.value))}
                     />
                   </div>
                 </div>
@@ -722,7 +858,7 @@ export default function NovaPessoa() {
                         placeholder="00000-000"
                         className="form-input"
                         value={formData.cep}
-                        onChange={(e) => updateField("cep", e.target.value)}
+                        onChange={(e) => updateField("cep", maskCep(e.target.value))}
                         onBlur={(e) => fetchAddressByCep(e.target.value)}
                       />
                       {isLoadingCep && (
@@ -886,7 +1022,7 @@ export default function NovaPessoa() {
                       placeholder="000.000.000-00"
                       className="form-input"
                       value={formData.cpf}
-                      onChange={(e) => updateField("cpf", e.target.value)}
+                      onChange={(e) => updateField("cpf", maskCpf(e.target.value))}
                     />
                   </div>
                   <div className="space-y-2">
@@ -895,7 +1031,7 @@ export default function NovaPessoa() {
                       placeholder="00.000.000-0"
                       className="form-input"
                       value={formData.rg}
-                      onChange={(e) => updateField("rg", e.target.value)}
+                      onChange={(e) => updateField("rg", maskRg(e.target.value))}
                     />
                   </div>
                 </div>
@@ -929,7 +1065,7 @@ export default function NovaPessoa() {
                     placeholder="000.00000.00-0"
                     className="form-input"
                     value={formData.pisPasep}
-                    onChange={(e) => updateField("pisPasep", e.target.value)}
+                    onChange={(e) => updateField("pisPasep", maskPisPasep(e.target.value))}
                   />
                 </div>
               </div>

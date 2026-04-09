@@ -74,7 +74,7 @@ const Setor = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Setor</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead >Setor</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
@@ -84,7 +84,7 @@ const Setor = () => {
               ) : (
                 filtered.map((setor: SetorType) => (
                   <TableRow key={setor.id}>
-                    <TableCell className="text-center">{setor.nome || "—"}</TableCell>
+                    <TableCell >{setor.nome || "—"}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(setor)} onEdit={() => openEdit(setor)} onDelete={() => setDeleteId(setor.id)} /></TableCell>
                   </TableRow>
                 ))

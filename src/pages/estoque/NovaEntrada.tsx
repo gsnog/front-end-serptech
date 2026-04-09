@@ -519,9 +519,9 @@ export default function NovaEntrada() {
                 <TableHeader>
                   <TableRow className="bg-table-header">
                     <TableHead>Item</TableHead>
-                    <TableHead className="text-center">Quantidade</TableHead>
-                    <TableHead className="text-center">Custo Unit.</TableHead>
-                    <TableHead className="text-center">Total</TableHead>
+                    <TableHead className="text-right">Quantidade</TableHead>
+                    <TableHead className="text-right">Custo Unit.</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
                     {!isFieldLocked && <TableHead className="text-center">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
@@ -535,11 +535,11 @@ export default function NovaEntrada() {
                           <div>{item.itemNome}</div>
                           {!item.itemId && <span className="text-xs text-amber-600">Pré-cadastro (item novo)</span>}
                         </TableCell>
-                        <TableCell className="text-center">{item.quantidade}</TableCell>
-                        <TableCell className="text-center">R$ {parseFloat(item.custoUnitario || "0").toFixed(2).replace(".", ",")}</TableCell>
-                        <TableCell className="text-center">R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}</TableCell>
+                        <TableCell >{item.quantidade}</TableCell>
+                        <TableCell className="text-right">R$ {parseFloat(item.custoUnitario || "0").toFixed(2).replace(".", ",")}</TableCell>
+                        <TableCell className="text-right">R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}</TableCell>
                         {!isFieldLocked && (
-                          <TableCell className="text-center">
+                          <TableCell >
                             <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
                           </TableCell>
                         )}

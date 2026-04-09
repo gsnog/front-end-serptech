@@ -165,7 +165,7 @@ export default function NovaSaida() {
                 <TableHeader>
                   <TableRow className="bg-table-header">
                     <TableHead>Item</TableHead>
-                    <TableHead className="text-center">Quantidade</TableHead>
+                    <TableHead className="text-right">Quantidade</TableHead>
                     <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -176,8 +176,8 @@ export default function NovaSaida() {
                     itens.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{item.item}</TableCell>
-                        <TableCell className="text-center">{item.quantidade}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell >{item.quantidade}</TableCell>
+                        <TableCell >
                           <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
                         </TableCell>
                       </TableRow>

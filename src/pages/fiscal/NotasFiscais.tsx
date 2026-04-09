@@ -69,8 +69,8 @@ const NotasFiscais = () => {
       <div className="rounded border border-border overflow-hidden">
         <Table>
           <TableHeader><TableRow className="bg-table-header">
-            <TableHead className="text-center font-semibold">Nº</TableHead>
-            <TableHead className="text-center font-semibold">Série</TableHead>
+            <TableHead className="font-semibold">Nº</TableHead>
+            <TableHead className="font-semibold">Série</TableHead>
             <TableHead className="font-semibold">Cliente</TableHead>
             <TableHead className="text-center font-semibold">Data</TableHead>
             <TableHead className="text-right font-semibold">Valor Total</TableHead>
@@ -83,15 +83,15 @@ const NotasFiscais = () => {
             {filtered.length === 0 ? <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma nota encontrada.</TableCell></TableRow> :
               filtered.map(n => (
                 <TableRow key={n.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-mono font-bold">{n.numero}</TableCell>
-                  <TableCell className="text-center">{n.serie}</TableCell>
+                  <TableCell className="font-mono font-bold">{n.numero}</TableCell>
+                  <TableCell >{n.serie}</TableCell>
                   <TableCell className="font-medium">{n.cliente}</TableCell>
                   <TableCell className="text-center text-sm">{n.data}</TableCell>
-                  <TableCell className="text-right font-semibold">{n.valor}</TableCell>
+                  <TableCell className="font-semibold">{n.valor}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.tipo} /></TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.status} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate">{n.ultimoRetorno}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell >
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-popover">

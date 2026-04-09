@@ -194,12 +194,12 @@ const SoftwarePage = () => {
           <Table>
             <TableHeader>
               <TableRow className="bg-table-header">
-                <TableHead className="text-center font-semibold">Nome</TableHead>
-                <TableHead className="text-center font-semibold">Fornecedor</TableHead>
-                <TableHead className="text-center font-semibold">Licença</TableHead>
-                <TableHead className="text-center font-semibold">Aquisição</TableHead>
+                <TableHead className="font-semibold">Nome</TableHead>
+                <TableHead className="font-semibold">Fornecedor</TableHead>
+                <TableHead className="font-semibold">Licença</TableHead>
+                <TableHead className="font-semibold">Aquisição</TableHead>
                 <TableHead className="text-center font-semibold">Vencimento</TableHead>
-                <TableHead className="text-center font-semibold">Valor</TableHead>
+                <TableHead className="text-right font-semibold">Valor</TableHead>
                 <TableHead className="text-center font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -210,12 +210,12 @@ const SoftwarePage = () => {
                 <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum software encontrado.</TableCell></TableRow>
               ) : filtered.map(s => (
                 <TableRow key={s.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-medium">{s.nome}</TableCell>
-                  <TableCell className="text-center">{s.fornecedor_nome ?? "—"}</TableCell>
-                  <TableCell className="text-center">{s.licenca ?? "—"}</TableCell>
+                  <TableCell className="font-medium">{s.nome}</TableCell>
+                  <TableCell >{s.fornecedor_nome ?? "—"}</TableCell>
+                  <TableCell >{s.licenca ?? "—"}</TableCell>
                   <TableCell className="text-center">{s.data_aquisicao ?? "—"}</TableCell>
                   <TableCell className="text-center">{s.data_vencimento ?? "—"}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-right">
                     {s.valor != null ? `R$ ${s.valor.toFixed(2)}` : "—"}
                   </TableCell>
                   <TableCell className="text-center">

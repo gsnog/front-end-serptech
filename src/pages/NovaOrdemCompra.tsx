@@ -254,10 +254,10 @@ export default function NovaOrdemCompra() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Item</TableHead>
-                  <TableHead className="text-center">Marca</TableHead>
-                  <TableHead className="text-center">Quantidade</TableHead>
-                  <TableHead className="text-center">Especificações</TableHead>
+                  <TableHead >Item</TableHead>
+                  <TableHead >Marca</TableHead>
+                  <TableHead className="text-right">Quantidade</TableHead>
+                  <TableHead >Especificações</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -267,11 +267,11 @@ export default function NovaOrdemCompra() {
                 ) : (
                   itens.map((item) => (
                     <TableRow key={item.localId}>
-                      <TableCell className="text-center">{item.item}</TableCell>
-                      <TableCell className="text-center">{item.marca}</TableCell>
-                      <TableCell className="text-center">{item.quantidade}</TableCell>
-                      <TableCell className="text-center">{item.especificacoes}</TableCell>
-                      <TableCell className="text-center">
+                      <TableCell >{item.item}</TableCell>
+                      <TableCell >{item.marca}</TableCell>
+                      <TableCell >{item.quantidade}</TableCell>
+                      <TableCell >{item.especificacoes}</TableCell>
+                      <TableCell >
                         <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.localId)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
                       </TableCell>
                     </TableRow>

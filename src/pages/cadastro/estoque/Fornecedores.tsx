@@ -64,12 +64,12 @@ const FornecedoresEstoque = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">Fornecedor</TableHead>
-              <TableHead className="text-center font-semibold">CNPJ/CPF</TableHead>
-              <TableHead className="text-center font-semibold">Razão Social</TableHead>
-              <TableHead className="text-center font-semibold">Vendedor</TableHead>
-              <TableHead className="text-center font-semibold">Email</TableHead>
-              <TableHead className="text-center font-semibold">Telefone</TableHead>
+              <TableHead className="font-semibold">Fornecedor</TableHead>
+              <TableHead className="font-semibold">CNPJ/CPF</TableHead>
+              <TableHead className="font-semibold">Razão Social</TableHead>
+              <TableHead className="font-semibold">Vendedor</TableHead>
+              <TableHead className="font-semibold">Email</TableHead>
+              <TableHead className="font-semibold">Telefone</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -80,12 +80,12 @@ const FornecedoresEstoque = () => {
               ) : (
                 filtered.map((f) => (
                   <TableRow key={f.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center font-medium">{f.fornecedor}</TableCell>
-                    <TableCell className="text-center">{f.cnpj}</TableCell>
-                    <TableCell className="text-center">{f.razaoSocial}</TableCell>
-                    <TableCell className="text-center">{f.vendedor}</TableCell>
-                    <TableCell className="text-center">{f.email}</TableCell>
-                    <TableCell className="text-center">{f.telefone}</TableCell>
+                    <TableCell className="font-medium">{f.fornecedor}</TableCell>
+                    <TableCell >{f.cnpj}</TableCell>
+                    <TableCell >{f.razaoSocial}</TableCell>
+                    <TableCell >{f.vendedor}</TableCell>
+                    <TableCell >{f.email}</TableCell>
+                    <TableCell >{f.telefone}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(f)} onEdit={() => openEdit(f)} onDelete={() => setDeleteId(f.id)} /></TableCell>
                   </TableRow>
                 ))

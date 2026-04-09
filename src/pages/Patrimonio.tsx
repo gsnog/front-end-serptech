@@ -241,11 +241,11 @@ const Patrimonio = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-center">Código</TableHead>
-                <TableHead className="text-center">Item</TableHead>
-                <TableHead className="text-center">Unidade</TableHead>
+                <TableHead >Código</TableHead>
+                <TableHead >Item</TableHead>
+                <TableHead >Unidade</TableHead>
                 <TableHead className="text-center">Data de Aquisição</TableHead>
-                <TableHead className="text-center">Valor</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
                 <TableHead className="text-center">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -259,13 +259,13 @@ const Patrimonio = () => {
               ) : (
                 filteredAssets.map(asset => (
                   <TableRow key={asset.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center font-mono font-medium">{asset.codigo}</TableCell>
-                    <TableCell className="text-center">{asset.item_nome}</TableCell>
-                    <TableCell className="text-center">{asset.unidade_nome || "—"}</TableCell>
+                    <TableCell className="font-mono font-medium">{asset.codigo}</TableCell>
+                    <TableCell >{asset.item_nome}</TableCell>
+                    <TableCell >{asset.unidade_nome || "—"}</TableCell>
                     <TableCell className="text-center">
                       {asset.data_de_aquisicao ? new Date(asset.data_de_aquisicao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
                     </TableCell>
-                    <TableCell className="text-center font-semibold">
+                    <TableCell className="text-right font-semibold">
                       {asset.valor != null ? `R$ ${Number(asset.valor).toFixed(2)}` : '—'}
                     </TableCell>
                     <TableCell className="text-center">

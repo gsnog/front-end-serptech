@@ -51,7 +51,7 @@ const menuItems = [
           { title: "Centro de Custo", url: "/cadastro/financeiro/centro-custo" },
           { title: "Centro de Receita", url: "/cadastro/financeiro/centro-receita" },
           { title: "Categorias", url: "/cadastro/financeiro/categorias" },
-          { title: "Fornecedores", url: "/cadastro/financeiro/fornecedores" },
+          { title: "Fornecedores", url: "/cadastro/estoque/fornecedores" },
           { title: "Subcategorias", url: "/cadastro/financeiro/subcategorias" },
           { title: "Plano de Contas", url: "/cadastro/financeiro/plano-contas" },
         ]
@@ -127,6 +127,7 @@ const menuItems = [
     help: "RH e gestão de pessoas: visão 360º, hierarquia, permissões e auditoria.",
     subItems: [
       { title: "Pessoas (360º)", url: "/gestao-pessoas/pessoas" },
+      { title: "Médicos", url: "/gestao-pessoas/medicos" },
       { title: "Hierarquia", url: "/gestao-pessoas/hierarquia" },
       { title: "Permissões", url: "/gestao-pessoas/acessos" },
       { title: "Dashboards", url: "/gestao-pessoas/dashboards" },

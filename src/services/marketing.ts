@@ -20,7 +20,7 @@ export const canaisMarketing = [
 export type { Campanha, LeadMarketing, Segmento, ConteudoAsset, LandingPage, Automacao, Evento, OrcamentoMarketing, Canal };
 
 interface Canal { id: number; nome: string; tipo_canal: string; custo_estimado: string; status: string; criado_em: string; }
-interface Campanha { id: number; nome: string; tipo_campanha: string; status: string; data_inicio: string; data_fim: string; orcamento: string; custo_real: string; criador: number; criado_em: string; }
+interface Campanha { id: number; nome: string; tipo_campanha: string; status: string; data_inicio: string; data_fim: string; orcamento: string; gasto: string; criador: number; criado_em: string; }
 interface LeadMarketing { id: number; nome: string; email: string; empresa: string; status: string; pontuacao: number; campanha_origem?: number; canal_origem?: number; criado_em: string; }
 interface Segmento { id: string; nome: string; descricao: string; totalContatos: number; ativo: boolean; }
 interface ConteudoAsset { id: string; titulo: string; tipo: string; url: string; tema: string; funil: string; downloads: number; createdAt: string; }

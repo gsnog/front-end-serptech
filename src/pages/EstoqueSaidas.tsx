@@ -90,11 +90,11 @@ export default function EstoqueSaidas() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-center w-12"></TableHead>
+                <TableHead className="w-12"></TableHead>
                 <TableHead className="text-center">Data</TableHead>
-                <TableHead className="text-center">Setor Destino</TableHead>
-                <TableHead className="text-center">Estoque Origem</TableHead>
-                <TableHead className="text-center">Itens</TableHead>
+                <TableHead >Setor Destino</TableHead>
+                <TableHead >Estoque Origem</TableHead>
+                <TableHead >Itens</TableHead>
                 <TableHead className="text-center">Criado Por</TableHead>
                 <TableHead className="text-center">Ações</TableHead>
               </TableRow>
@@ -108,7 +108,7 @@ export default function EstoqueSaidas() {
                 filtered.map(saida => (
                   <React.Fragment key={saida.id}>
                     <TableRow className="hover:bg-table-hover transition-colors">
-                      <TableCell className="text-center">
+                      <TableCell >
                         <Button
                           variant="ghost"
                           size="sm"
@@ -122,10 +122,10 @@ export default function EstoqueSaidas() {
                         </Button>
                       </TableCell>
                       <TableCell className="text-center">{saida.data}</TableCell>
-                      <TableCell className="text-center">{saida.setor_destino_nome || "—"}</TableCell>
-                      <TableCell className="text-center">{saida.estoque_origem_nome || "—"}</TableCell>
-                      <TableCell className="text-center">{saida.itens?.length ?? 0} item(s)</TableCell>
-                      <TableCell className="text-center">{saida.criado_por_nome || "—"}</TableCell>
+                      <TableCell >{saida.setor_destino_nome || "—"}</TableCell>
+                      <TableCell >{saida.estoque_origem_nome || "—"}</TableCell>
+                      <TableCell >{saida.itens?.length ?? 0} item(s)</TableCell>
+                      <TableCell >{saida.criado_por_nome || "—"}</TableCell>
                       <TableCell className="text-center">
                         <TableActions
                           onView={() => setViewItem(saida)}
@@ -142,15 +142,15 @@ export default function EstoqueSaidas() {
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/50">
-                                  <TableHead className="text-center text-xs">Item</TableHead>
-                                  <TableHead className="text-center text-xs">Quantidade</TableHead>
+                                  <TableHead className="text-xs">Item</TableHead>
+                                  <TableHead className="text-right text-xs">Quantidade</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {saida.itens.map(item => (
                                   <TableRow key={item.id}>
-                                    <TableCell className="text-center text-sm">{item.item_nome || "—"}</TableCell>
-                                    <TableCell className="text-center text-sm">{item.quantidade}</TableCell>
+                                    <TableCell className="text-sm">{item.item_nome || "—"}</TableCell>
+                                    <TableCell className="text-sm">{item.quantidade}</TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -220,14 +220,14 @@ export default function EstoqueSaidas() {
                       <TableHeader>
                         <TableRow className="bg-muted/50">
                           <TableHead className="text-xs">Item</TableHead>
-                          <TableHead className="text-center text-xs">Qtd</TableHead>
+                          <TableHead className="text-right text-xs">Qtd</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {viewItem.itens.map(item => (
                           <TableRow key={item.id}>
                             <TableCell className="text-sm">{item.item_nome || "—"}</TableCell>
-                            <TableCell className="text-center text-sm">{item.quantidade}</TableCell>
+                            <TableCell className="text-sm">{item.quantidade}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

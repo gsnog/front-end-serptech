@@ -64,9 +64,9 @@ const PlanoContasPage = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">ID Plano</TableHead>
-              <TableHead className="text-center font-semibold">Categoria</TableHead>
-              <TableHead className="text-center font-semibold">Classificação</TableHead>
+              <TableHead className="font-semibold">ID Plano</TableHead>
+              <TableHead className="font-semibold">Categoria</TableHead>
+              <TableHead className="font-semibold">Classificação</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -74,9 +74,9 @@ const PlanoContasPage = () => {
                 filtered.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum plano de contas encontrado.</TableCell></TableRow>) : (
                   filtered.map(p => (
                     <TableRow key={p.id} className="hover:bg-table-hover transition-colors">
-                      <TableCell className="text-center font-mono font-medium">{p.id_plano}</TableCell>
-                      <TableCell className="text-center">{p.categoria_nome}</TableCell>
-                      <TableCell className="text-center">{p.classificacao_nome}</TableCell>
+                      <TableCell className="font-mono font-medium">{p.id_plano}</TableCell>
+                      <TableCell >{p.categoria_nome}</TableCell>
+                      <TableCell >{p.classificacao_nome}</TableCell>
                       <TableCell className="text-center"><TableActions onView={() => setViewItem(p)} onEdit={() => { setEditItem(p); setEditForm({ id_plano: p.id_plano, categoria: p.categoria || 0, classificacao: p.classificacao || 0 }); }} onDelete={() => setDeleteId(p.id)} /></TableCell>
                     </TableRow>
                   ))

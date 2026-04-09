@@ -98,7 +98,7 @@ export default function Propostas() {
       <div className="rounded border border-border">
         <Table>
           <TableHeader><TableRow className="bg-table-header">
-            <TableHead>Nº Proposta</TableHead><TableHead>Conta</TableHead><TableHead>Oportunidade</TableHead><TableHead>Valor</TableHead><TableHead>Status</TableHead><TableHead>Validade</TableHead><TableHead>Versão</TableHead><TableHead>Responsável</TableHead><TableHead className="w-[50px]"></TableHead>
+            <TableHead>Nº Proposta</TableHead><TableHead>Conta</TableHead><TableHead>Oportunidade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Validade</TableHead><TableHead>Versão</TableHead><TableHead>Responsável</TableHead><TableHead className="w-[50px]"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {filteredPropostas.map((proposta) => {
@@ -108,7 +108,7 @@ export default function Propostas() {
                   <TableCell><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-primary" /><span className="font-medium">{proposta.numero}</span></div></TableCell>
                   <TableCell>{getContaNome(proposta.conta)}</TableCell>
                   <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{getOpTitulo(proposta.oportunidade)}</TableCell>
-                  <TableCell className="font-semibold">{formatCurrency(Number(proposta.valor))}</TableCell>
+                  <TableCell className="text-right font-semibold">{formatCurrency(Number(proposta.valor))}</TableCell>
                   <TableCell><StatusBadge status={isExpired ? 'Crítico' : getStatusBadgeStatus(proposta.status)} /></TableCell>
                   <TableCell className={isExpired ? 'text-destructive' : ''}>{proposta.validade ? new Date(proposta.validade).toLocaleDateString('pt-BR') : '-'}</TableCell>
                   <TableCell><Badge variant="outline">v{proposta.versao}</Badge></TableCell>

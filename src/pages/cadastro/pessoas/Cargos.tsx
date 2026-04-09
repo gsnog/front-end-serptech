@@ -102,7 +102,7 @@ export default function Cargos() {
           <TableHeader>
             <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
               <TableHead className="text-foreground font-semibold">Cargo</TableHead>
-              <TableHead className="text-foreground font-semibold text-center">Ações</TableHead>
+              <TableHead className="text-center text-foreground font-semibold">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

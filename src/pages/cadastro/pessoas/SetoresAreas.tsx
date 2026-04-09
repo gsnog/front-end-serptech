@@ -138,7 +138,7 @@ export default function SetoresAreas() {
               <TableHead className="text-foreground font-semibold">Código</TableHead>
               <TableHead className="text-foreground font-semibold">Nome</TableHead>
               <TableHead className="text-foreground font-semibold">Responsável</TableHead>
-              <TableHead className="text-foreground font-semibold text-center">Ações</TableHead>
+              <TableHead className="text-center text-foreground font-semibold">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

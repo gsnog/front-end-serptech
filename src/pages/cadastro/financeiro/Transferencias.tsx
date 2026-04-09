@@ -71,15 +71,15 @@ const Transferencias = () => {
         { type: "date" as const, label: "Data", value: searchData, onChange: setSearchData, width: "min-w-[160px]" }
       ]} resultsCount={totalCount} />
       <div className="rounded border border-border overflow-hidden"><Table><TableHeader><TableRow className="bg-table-header">
-        <TableHead className="text-center font-semibold">Data</TableHead><TableHead className="text-center font-semibold">Conta Origem</TableHead><TableHead className="text-center font-semibold">Conta Destino</TableHead><TableHead className="text-center font-semibold">Valor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
+        <TableHead className="text-center font-semibold">Data</TableHead><TableHead className="font-semibold">Conta Origem</TableHead><TableHead className="font-semibold">Conta Destino</TableHead><TableHead className="text-right font-semibold">Valor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
       </TableRow></TableHeader><TableBody>
           {isLoading ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma transferência encontrada.</TableCell></TableRow> :
               filtered.map(t => <TableRow key={t.id} className="hover:bg-table-hover transition-colors">
                 <TableCell className="text-center">{t.data_de_lancamento}</TableCell>
-                <TableCell className="text-center font-medium">{t.conta_origem_nome}</TableCell>
-                <TableCell className="text-center">{t.conta_destino_nome}</TableCell>
-                <TableCell className="text-center font-semibold">R$ {t.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell className="font-medium">{t.conta_origem_nome}</TableCell>
+                <TableCell >{t.conta_destino_nome}</TableCell>
+                <TableCell className="text-right font-semibold">R$ {t.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                 <TableCell className="text-center"><TableActions onView={() => setViewItem(t)} onEdit={() => openEdit(t)} onDelete={() => setDeleteId(t.id)} /></TableCell>
               </TableRow>)}
         </TableBody></Table>

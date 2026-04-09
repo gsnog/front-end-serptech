@@ -95,12 +95,12 @@ export default function EstoqueTransferencias() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-center w-12"></TableHead>
+                <TableHead className="w-12"></TableHead>
                 <TableHead className="text-center">Data</TableHead>
-                <TableHead className="text-center">Origem</TableHead>
-                <TableHead className="text-center">Destino</TableHead>
-                <TableHead className="text-center">Itens</TableHead>
-                <TableHead className="text-center">Responsável</TableHead>
+                <TableHead >Origem</TableHead>
+                <TableHead >Destino</TableHead>
+                <TableHead >Itens</TableHead>
+                <TableHead >Responsável</TableHead>
                 <TableHead className="text-center">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -113,7 +113,7 @@ export default function EstoqueTransferencias() {
                 filtered.map(t => (
                   <React.Fragment key={t.id}>
                     <TableRow className="hover:bg-table-hover transition-colors">
-                      <TableCell className="text-center">
+                      <TableCell >
                         <Button
                           variant="ghost"
                           size="sm"
@@ -127,10 +127,10 @@ export default function EstoqueTransferencias() {
                         </Button>
                       </TableCell>
                       <TableCell className="text-center">{t.data}</TableCell>
-                      <TableCell className="text-center">{t.origem}</TableCell>
-                      <TableCell className="text-center">{t.destino}</TableCell>
-                      <TableCell className="text-center">{t.itens.length} item(s)</TableCell>
-                      <TableCell className="text-center">{t.criado_por_nome || "—"}</TableCell>
+                      <TableCell >{t.origem}</TableCell>
+                      <TableCell >{t.destino}</TableCell>
+                      <TableCell >{t.itens.length} item(s)</TableCell>
+                      <TableCell >{t.criado_por_nome || "—"}</TableCell>
                       <TableCell className="text-center">
                         <TableActions onView={() => setViewItem(t)} onDelete={() => setDeleteId(t.id)} />
                       </TableCell>
@@ -143,15 +143,15 @@ export default function EstoqueTransferencias() {
                             <Table>
                               <TableHeader>
                                 <TableRow className="bg-muted/50">
-                                  <TableHead className="text-center text-xs">Item</TableHead>
-                                  <TableHead className="text-center text-xs">Quantidade</TableHead>
+                                  <TableHead className="text-xs">Item</TableHead>
+                                  <TableHead className="text-right text-xs">Quantidade</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {t.itens.map((item: any) => (
                                   <TableRow key={item.id}>
-                                    <TableCell className="text-center text-sm">{item.item_nome || "—"}</TableCell>
-                                    <TableCell className="text-center text-sm">{item.quantidade}</TableCell>
+                                    <TableCell className="text-sm">{item.item_nome || "—"}</TableCell>
+                                    <TableCell className="text-sm">{item.quantidade}</TableCell>
                                   </TableRow>
                                 ))}
                               </TableBody>
@@ -221,14 +221,14 @@ export default function EstoqueTransferencias() {
                       <TableHeader>
                         <TableRow className="bg-muted/50">
                           <TableHead className="text-xs">Item</TableHead>
-                          <TableHead className="text-center text-xs">Qtd</TableHead>
+                          <TableHead className="text-right text-xs">Qtd</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {viewItem.itens.map((it: any) => (
                           <TableRow key={it.id}>
                             <TableCell className="text-sm">{it.item_nome || "—"}</TableCell>
-                            <TableCell className="text-center text-sm">{it.quantidade}</TableCell>
+                            <TableCell className="text-sm">{it.quantidade}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

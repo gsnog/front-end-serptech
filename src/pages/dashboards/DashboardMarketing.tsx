@@ -40,13 +40,17 @@ export default function DashboardMarketing() {
   const { data: canais = [] } = useQuery({ queryKey: ['marketing_canais'], queryFn: fetchCanais });
   const { data: leads = [] } = useQuery({ queryKey: ['marketing_leads'], queryFn: fetchLeadsMarketing });
 
+  const conversoes = leads.filter(l => l.status === 'convertido').length;
+  const totalGasto = campanhas.reduce((sum, c) => sum + (Number(c.gasto) || 0), 0);
+  const cac = conversoes > 0 ? totalGasto / conversoes : 0;
+
   const metricas = {
     leads: leads.length,
     mql: leads.filter(l => l.status === 'mql').length,
     sql: leads.filter(l => l.status === 'sql').length,
-    conversoes: leads.filter(l => l.status === 'convertido').length,
+    conversoes,
     roi: 0,
-    cac: 0
+    cac,
   };
 
   const funilMarketingData = [
@@ -63,8 +67,8 @@ export default function DashboardMarketing() {
 
   const roiPorCampanhaData = campanhas.map(c => ({
     campanha: c.nome,
-    gasto: Number(c.custo_real) || 0,
-    roi: 0 // Placeholder
+    gasto: Number(c.gasto) || 0,
+    roi: 0,
   }));
 
   return (

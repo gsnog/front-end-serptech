@@ -50,9 +50,9 @@ const SeriesNumeracao = () => {
         <Table>
           <TableHeader><TableRow className="bg-table-header">
             <TableHead className="text-center font-semibold">Tipo</TableHead>
-            <TableHead className="text-center font-semibold">Série</TableHead>
-            <TableHead className="text-center font-semibold">Próximo Nº</TableHead>
-            <TableHead className="text-center font-semibold">Prefixo</TableHead>
+            <TableHead className="font-semibold">Série</TableHead>
+            <TableHead className="font-semibold">Próximo Nº</TableHead>
+            <TableHead className="font-semibold">Prefixo</TableHead>
             <TableHead className="text-center font-semibold">Ações</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -60,9 +60,9 @@ const SeriesNumeracao = () => {
               filtered.map(c => (
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
                   <TableCell className="text-center"><StatusBadge status={c.tipo} /></TableCell>
-                  <TableCell className="text-center font-medium">{c.serie}</TableCell>
-                  <TableCell className="text-center font-mono font-bold">{String(c.proximoNumero).padStart(6, '0')}</TableCell>
-                  <TableCell className="text-center text-muted-foreground">{c.prefixo || "—"}</TableCell>
+                  <TableCell className="font-medium">{c.serie}</TableCell>
+                  <TableCell className="font-mono font-bold">{String(c.proximoNumero).padStart(6, '0')}</TableCell>
+                  <TableCell className="text-muted-foreground">{c.prefixo || "—"}</TableCell>
                   <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => { setEditItem(c); setEditForm({ tipo: c.tipo, serie: c.serie, proximoNumero: c.proximoNumero, prefixo: c.prefixo, observacao: c.observacao }); }} onDelete={() => setDeleteId(c.id)} /></TableCell>
                 </TableRow>
               ))}

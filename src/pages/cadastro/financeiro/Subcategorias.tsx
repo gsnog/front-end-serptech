@@ -96,8 +96,8 @@ const Subcategorias = () => {
           <Table>
             <TableHeader>
               <TableRow className="bg-table-header">
-                <TableHead className="text-center font-semibold">Subcategoria</TableHead>
-                <TableHead className="text-center font-semibold">Categoria</TableHead>
+                <TableHead className="font-semibold">Subcategoria</TableHead>
+                <TableHead className="font-semibold">Categoria</TableHead>
                 <TableHead className="text-center font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -108,8 +108,8 @@ const Subcategorias = () => {
                 <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhuma subcategoria encontrada.</TableCell></TableRow>
               ) : filtered.map(s => (
                 <TableRow key={s.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-medium">{s.nome}</TableCell>
-                  <TableCell className="text-center">{s.categoria_nome || "—"}</TableCell>
+                  <TableCell className="font-medium">{s.nome}</TableCell>
+                  <TableCell >{s.categoria_nome || "—"}</TableCell>
                   <TableCell className="text-center">
                     <TableActions onView={() => setViewItem(s)} onEdit={() => openEdit(s)} onDelete={() => setDeleteId(s.id)} />
                   </TableCell>

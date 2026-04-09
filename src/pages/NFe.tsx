@@ -74,9 +74,9 @@ const NFe = () => {
           <Table>
             <TableHeader><TableRow>
               <TableHead className="text-center">Data Emissão</TableHead>
-              <TableHead className="text-center">Número</TableHead>
-              <TableHead className="text-center">Valor Total</TableHead>
-              <TableHead className="text-center">Arquivos</TableHead>
+              <TableHead >Número</TableHead>
+              <TableHead className="text-right">Valor Total</TableHead>
+              <TableHead >Arquivos</TableHead>
               <TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -90,9 +90,9 @@ const NFe = () => {
                 filteredNfes.map((nfe) => (
                   <TableRow key={nfe.id}>
                     <TableCell className="text-center">{nfe.data_emissao ? new Date(nfe.data_emissao).toLocaleDateString('pt-BR') : '—'}</TableCell>
-                    <TableCell className="text-center font-medium">{nfe.numero}</TableCell>
-                    <TableCell className="text-center font-semibold">R$ {nfe.valor_total?.toFixed(2)}</TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="font-medium">{nfe.numero}</TableCell>
+                    <TableCell className="text-right font-semibold">R$ {nfe.valor_total?.toFixed(2)}</TableCell>
+                    <TableCell >
                       <div className="flex justify-center gap-2">
                         {nfe.xml_arquivo && (
                           <a href={nfe.xml_arquivo} target="_blank" rel="noopener noreferrer" title="Baixar XML">

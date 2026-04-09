@@ -61,18 +61,18 @@ const Clientes = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">Nome</TableHead><TableHead className="text-center font-semibold">Razão Social</TableHead><TableHead className="text-center font-semibold">CNPJ</TableHead><TableHead className="text-center font-semibold">Email</TableHead><TableHead className="text-center font-semibold">Telefone</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
+              <TableHead className="font-semibold">Nome</TableHead><TableHead className="font-semibold">Razão Social</TableHead><TableHead className="font-semibold">CNPJ</TableHead><TableHead className="font-semibold">Email</TableHead><TableHead className="font-semibold">Telefone</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (<TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>) :
                 filtered.length === 0 ? (<TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum cliente encontrado.</TableCell></TableRow>) :
                   filtered.map((c) => (
                     <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                      <TableCell className="text-center font-medium">{c.nome || "—"}</TableCell>
-                      <TableCell className="text-center">{c.razao_social || "—"}</TableCell>
-                      <TableCell className="text-center">{c.cnpj || "—"}</TableCell>
-                      <TableCell className="text-center">{c.email || "—"}</TableCell>
-                      <TableCell className="text-center">{c.telefone || "—"}</TableCell>
+                      <TableCell className="font-medium">{c.nome || "—"}</TableCell>
+                      <TableCell >{c.razao_social || "—"}</TableCell>
+                      <TableCell >{c.cnpj || "—"}</TableCell>
+                      <TableCell >{c.email || "—"}</TableCell>
+                      <TableCell >{c.telefone || "—"}</TableCell>
                       <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
                     </TableRow>
                   ))}

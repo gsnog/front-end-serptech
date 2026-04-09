@@ -194,8 +194,8 @@ export default function LeadsMarketing() {
               <TableHead>Canal</TableHead>
               <TableHead>Campanha</TableHead>
               <TableHead>Score</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Data</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-center">Data</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
@@ -239,7 +239,7 @@ export default function LeadsMarketing() {
                     <StatusBadge status={getStatusBadgeStatus(lead.status)} />
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="text-center text-muted-foreground">
                   {lead.criado_em ? new Date(lead.criado_em).toLocaleDateString('pt-BR') : '-'}
                 </TableCell>
                 <TableCell>

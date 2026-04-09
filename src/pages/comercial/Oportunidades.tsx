@@ -288,7 +288,7 @@ export default function Oportunidades() {
                     <TableRow key={op.id} className="hover:bg-muted/50">
                       <TableCell className="font-medium">{op.titulo}</TableCell>
                       <TableCell>{op._conta_nome}</TableCell>
-                      <TableCell className="font-semibold">{formatCurrency(op._valor_num)}</TableCell>
+                      <TableCell className="text-right font-semibold">{formatCurrency(op._valor_num)}</TableCell>
                       <TableCell><Badge variant="outline">{etapa?.nome ?? op.estagio}</Badge></TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">

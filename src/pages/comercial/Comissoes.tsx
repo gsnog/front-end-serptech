@@ -126,10 +126,10 @@ export default function Comissoes() {
                   <TableHeader>
                     <TableRow className="bg-table-header">
                       <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-right">Previstas</TableHead>
-                      <TableHead className="text-right">Aprovadas</TableHead>
-                      <TableHead className="text-right">Pagas</TableHead>
-                      <TableHead className="text-right">Estornadas</TableHead>
+                      <TableHead >Previstas</TableHead>
+                      <TableHead >Aprovadas</TableHead>
+                      <TableHead >Pagas</TableHead>
+                      <TableHead >Estornadas</TableHead>
                       <TableHead className="text-right">Saldo</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -161,10 +161,10 @@ export default function Comissoes() {
                       <TableHead>Oportunidade</TableHead>
                       <TableHead>Conta</TableHead>
                       <TableHead className="text-right">Valor Venda</TableHead>
-                      <TableHead className="text-right">%</TableHead>
-                      <TableHead className="text-right">Comissão</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Data Base</TableHead>
+                      <TableHead >%</TableHead>
+                      <TableHead >Comissão</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center">Data Base</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -176,10 +176,10 @@ export default function Comissoes() {
                           <TableCell>{opInfo.titulo}</TableCell>
                           <TableCell>{opInfo.conta}</TableCell>
                           <TableCell className="text-right">{formatCurrency(opInfo.valor)}</TableCell>
-                          <TableCell className="text-right">{c.percentual}%</TableCell>
+                          <TableCell >{c.percentual}%</TableCell>
                           <TableCell className="text-right font-semibold">{formatCurrency(Number(c.valor))}</TableCell>
                           <TableCell><StatusBadge status={getStatusBadgeStatus(c.status)} /></TableCell>
-                          <TableCell className="text-muted-foreground">{new Date(c.data_base).toLocaleDateString('pt-BR')}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{new Date(c.data_base).toLocaleDateString('pt-BR')}</TableCell>
                         </TableRow>
                       );
                     })}
@@ -204,10 +204,10 @@ export default function Comissoes() {
                   <TableHeader>
                     <TableRow className="bg-table-header">
                       <TableHead>Descrição</TableHead>
-                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Tipo</TableHead>
                       <TableHead>Condição</TableHead>
                       <TableHead className="text-right">Percentual</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

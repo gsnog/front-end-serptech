@@ -63,9 +63,9 @@ const CentroCusto = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">ID Centro</TableHead>
-              <TableHead className="text-center font-semibold">Setor</TableHead>
-              <TableHead className="text-center font-semibold">Área</TableHead>
+              <TableHead className="font-semibold">ID Centro</TableHead>
+              <TableHead className="font-semibold">Setor</TableHead>
+              <TableHead className="font-semibold">Área</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
@@ -75,9 +75,9 @@ const CentroCusto = () => {
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum centro de custo encontrado.</TableCell></TableRow>
               ) : filtered.map((c) => (
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-medium">{c.centro_id || "—"}</TableCell>
-                  <TableCell className="text-center">{c.setor_nome || "—"}</TableCell>
-                  <TableCell className="text-center">{c.area_nome || "—"}</TableCell>
+                  <TableCell className="font-medium">{c.centro_id || "—"}</TableCell>
+                  <TableCell >{c.setor_nome || "—"}</TableCell>
+                  <TableCell >{c.area_nome || "—"}</TableCell>
                   <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
                 </TableRow>
               ))}

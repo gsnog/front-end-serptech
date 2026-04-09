@@ -153,7 +153,7 @@ export default function Campanhas() {
               <TableHead>Gasto</TableHead>
               <TableHead>Leads</TableHead>
               <TableHead>ROI</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="text-center">Status</TableHead>
               <TableHead>Responsável</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
@@ -179,7 +179,7 @@ export default function Campanhas() {
                   <TableCell>
                     <Badge variant="outline">{campanha.canal_principal || 'Multi'}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="text-center text-sm">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Calendar className="h-3 w-3" />
                       {campanha.data_inicio ? new Date(campanha.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'} -

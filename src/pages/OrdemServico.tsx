@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FilterSection } from "@/components/FilterSection";
 import { TableActions } from "@/components/TableActions";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -35,13 +35,14 @@ const MANAGE_ROLES = ["admin", "diretor", "gestor"];
 
 const OrdemServicoPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { currentUser } = usePermissions();
   const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase();
   const canManage = MANAGE_ROLES.includes(currentRole);
 
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") ?? "");
   const [filterTipo, setFilterTipo] = useState("");
   const [filterResponsavel, setFilterResponsavel] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -170,8 +171,8 @@ const OrdemServicoPage = () => {
                 <SortableHead label="Descrição" field="descricao" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableHead label="Solicitante" field="usuario_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-                <TableHead className="text-center font-semibold">Finalizado por</TableHead>
-                {canManage && <TableHead className="text-center font-semibold">Gestão</TableHead>}
+                <TableHead className="font-semibold">Finalizado por</TableHead>
+                {canManage && <TableHead className="font-semibold">Gestão</TableHead>}
                 <TableHead className="text-center font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -182,14 +183,14 @@ const OrdemServicoPage = () => {
                 <TableRow><TableCell colSpan={canManage ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhuma ordem de serviço encontrada.</TableCell></TableRow>
               ) : sorted.map(o => (
                 <TableRow key={o.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-mono">{o.numero}</TableCell>
-                  <TableCell className="text-center">{TIPO_LABEL[o.tipo_de_ordem || ""] || o.tipo_de_ordem}</TableCell>
-                  <TableCell className="text-center font-medium">{o.descricao}</TableCell>
-                  <TableCell className="text-center">{o.usuario_nome}</TableCell>
+                  <TableCell className="font-mono">{o.numero}</TableCell>
+                  <TableCell >{TIPO_LABEL[o.tipo_de_ordem || ""] || o.tipo_de_ordem}</TableCell>
+                  <TableCell className="font-medium">{o.descricao}</TableCell>
+                  <TableCell >{o.usuario_nome}</TableCell>
                   <TableCell className="text-center">
                     <StatusBadge status={statusLabel(o.status)} />
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell >
                     {o.finalizado_por_nome ? (
                       <span className="text-xs flex items-center justify-center gap-1">
                         <User className="w-3 h-3 text-muted-foreground" />
@@ -200,7 +201,7 @@ const OrdemServicoPage = () => {
                     )}
                   </TableCell>
                   {canManage && (
-                    <TableCell className="text-center">
+                    <TableCell >
                       {o.status === 'analise' ? (
                         <Button
                           variant="outline"

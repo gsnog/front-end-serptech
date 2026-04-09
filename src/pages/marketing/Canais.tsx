@@ -147,14 +147,14 @@ export default function Canais() {
               <TableHeader>
                 <TableRow className="bg-table-header">
                   <TableHead>Canal</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Orçamento</TableHead>
-                  <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">MQL</TableHead>
-                  <TableHead className="text-right">SQL</TableHead>
-                  <TableHead className="text-right">CPL</TableHead>
-                  <TableHead className="text-right">Conversão</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-center">Tipo</TableHead>
+                  <TableHead >Orçamento</TableHead>
+                  <TableHead >Leads</TableHead>
+                  <TableHead >MQL</TableHead>
+                  <TableHead >SQL</TableHead>
+                  <TableHead >CPL</TableHead>
+                  <TableHead >Conversão</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -167,13 +167,13 @@ export default function Canais() {
                     <TableCell className="text-right">
                       {canal.custo_estimado ? formatCurrency(parseFloat(canal.custo_estimado)) : '-'}
                     </TableCell>
-                    <TableCell className="text-right font-semibold">{canal.leads}</TableCell>
-                    <TableCell className="text-right">{canal.mql}</TableCell>
-                    <TableCell className="text-right">{canal.sql}</TableCell>
+                    <TableCell className="font-semibold">{canal.leads}</TableCell>
+                    <TableCell >{canal.mql}</TableCell>
+                    <TableCell >{canal.sql}</TableCell>
                     <TableCell className="text-right">
                       {canal.cpl > 0 ? formatCurrency(canal.cpl) : '-'}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell >
                       <div className="flex items-center justify-end gap-2">
                         <Progress value={canal.conversao} className="h-2 w-12" />
                         <span className="text-sm">{canal.conversao.toFixed(0)}%</span>

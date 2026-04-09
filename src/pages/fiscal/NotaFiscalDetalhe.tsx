@@ -132,10 +132,10 @@ export default function NotaFiscalDetalhe() {
                   <TableHeader><TableRow className="bg-table-header">
                     <TableHead className="font-semibold">Código</TableHead>
                     <TableHead className="font-semibold">Descrição</TableHead>
-                    <TableHead className="text-center font-semibold">NCM</TableHead>
-                    <TableHead className="text-center font-semibold">CST</TableHead>
-                    <TableHead className="text-center font-semibold">Qtd</TableHead>
-                    <TableHead className="text-right font-semibold">Vlr Unit.</TableHead>
+                    <TableHead className="font-semibold">NCM</TableHead>
+                    <TableHead className="font-semibold">CST</TableHead>
+                    <TableHead className="text-right font-semibold">Qtd</TableHead>
+                    <TableHead className="font-semibold">Vlr Unit.</TableHead>
                     <TableHead className="text-right font-semibold">Desconto</TableHead>
                     <TableHead className="text-right font-semibold">Total</TableHead>
                   </TableRow></TableHeader>
@@ -144,12 +144,12 @@ export default function NotaFiscalDetalhe() {
                       <TableRow key={item.id} className="hover:bg-table-hover">
                         <TableCell className="font-mono text-xs">{item.itemCadastro}</TableCell>
                         <TableCell className="font-medium">{item.descricao}</TableCell>
-                        <TableCell className="text-center text-xs">{item.ncm || "—"}</TableCell>
-                        <TableCell className="text-center text-xs">{item.cst || "—"}</TableCell>
-                        <TableCell className="text-center">{item.quantidade}</TableCell>
-                        <TableCell className="text-right">{fmt(item.valorUnitario)}</TableCell>
-                        <TableCell className="text-right">{fmt(item.desconto)}</TableCell>
-                        <TableCell className="text-right font-semibold">{fmt(item.total)}</TableCell>
+                        <TableCell className="text-xs">{item.ncm || "—"}</TableCell>
+                        <TableCell className="text-xs">{item.cst || "—"}</TableCell>
+                        <TableCell >{item.quantidade}</TableCell>
+                        <TableCell >{fmt(item.valorUnitario)}</TableCell>
+                        <TableCell >{fmt(item.desconto)}</TableCell>
+                        <TableCell className="font-semibold">{fmt(item.total)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -167,9 +167,9 @@ export default function NotaFiscalDetalhe() {
                 <Table>
                   <TableHeader><TableRow className="bg-table-header">
                     <TableHead className="font-semibold">Imposto</TableHead>
-                    <TableHead className="text-right font-semibold">Base Cálculo</TableHead>
-                    <TableHead className="text-center font-semibold">Alíquota</TableHead>
-                    <TableHead className="text-right font-semibold">Calculado</TableHead>
+                    <TableHead className="font-semibold">Base Cálculo</TableHead>
+                    <TableHead className="font-semibold">Alíquota</TableHead>
+                    <TableHead className="font-semibold">Calculado</TableHead>
                     <TableHead className="text-right font-semibold">Valor Final</TableHead>
                     <TableHead className="font-semibold">Ajustado por</TableHead>
                     <TableHead className="font-semibold">Justificativa</TableHead>
@@ -180,9 +180,9 @@ export default function NotaFiscalDetalhe() {
                       return (
                         <TableRow key={t.imposto} className="hover:bg-table-hover">
                           <TableCell className="font-semibold">{t.imposto}</TableCell>
-                          <TableCell className="text-right">{fmt(t.baseCalculo)}</TableCell>
-                          <TableCell className="text-center">{t.aliquota}%</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{fmt(t.valorCalculado)}</TableCell>
+                          <TableCell >{fmt(t.baseCalculo)}</TableCell>
+                          <TableCell >{t.aliquota}%</TableCell>
+                          <TableCell className="text-muted-foreground">{fmt(t.valorCalculado)}</TableCell>
                           <TableCell className={`text-right font-semibold ${wasAdjusted ? "text-yellow-600 dark:text-yellow-400" : ""}`}>
                             {fmt(t.valorFinal)}
                             {wasAdjusted && <span className="ml-1 text-[10px]">✎</span>}
@@ -204,10 +204,10 @@ export default function NotaFiscalDetalhe() {
                     <Table>
                       <TableHeader><TableRow className="bg-table-header">
                         <TableHead className="font-semibold">Campo</TableHead>
-                        <TableHead className="font-semibold">Valor Anterior</TableHead>
-                        <TableHead className="font-semibold">Valor Novo</TableHead>
+                        <TableHead className="text-right font-semibold">Valor Anterior</TableHead>
+                        <TableHead className="text-right font-semibold">Valor Novo</TableHead>
                         <TableHead className="font-semibold">Usuário</TableHead>
-                        <TableHead className="font-semibold">Data</TableHead>
+                        <TableHead className="text-center font-semibold">Data</TableHead>
                         <TableHead className="font-semibold">Justificativa</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
@@ -217,7 +217,7 @@ export default function NotaFiscalDetalhe() {
                             <TableCell className="text-sm text-destructive">{a.valorAnterior}</TableCell>
                             <TableCell className="text-sm text-primary">{a.valorNovo}</TableCell>
                             <TableCell className="text-sm">{a.usuario}</TableCell>
-                            <TableCell className="text-sm">{a.data}</TableCell>
+                            <TableCell className="text-center text-sm">{a.data}</TableCell>
                             <TableCell className="text-xs">{a.justificativa || "—"}</TableCell>
                           </TableRow>
                         ))}

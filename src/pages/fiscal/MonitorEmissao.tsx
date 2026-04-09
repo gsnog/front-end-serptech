@@ -194,14 +194,14 @@ const MonitorEmissao = () => {
       <div className="rounded border border-border overflow-hidden">
         <Table>
           <TableHeader><TableRow className="bg-table-header">
-            <TableHead className="text-center font-semibold">Nº</TableHead>
+            <TableHead className="font-semibold">Nº</TableHead>
             <TableHead className="text-center font-semibold">Tipo</TableHead>
             <TableHead className="font-semibold">Cliente</TableHead>
             <TableHead className="text-center font-semibold">Data</TableHead>
             <TableHead className="text-center font-semibold">Status</TableHead>
             <TableHead className="font-semibold">Última Mensagem</TableHead>
-            <TableHead className="text-center font-semibold">Tentativas</TableHead>
-            <TableHead className="text-center font-semibold">Última Atualização</TableHead>
+            <TableHead className="font-semibold">Tentativas</TableHead>
+            <TableHead className="font-semibold">Última Atualização</TableHead>
             <TableHead className="text-center font-semibold">Ações</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -216,7 +216,7 @@ const MonitorEmissao = () => {
             ) : (
               filtered.map(n => (
                 <TableRow key={n.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-mono font-bold">{n.numero}</TableCell>
+                  <TableCell className="font-mono font-bold">{n.numero}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.tipo} /></TableCell>
                   <TableCell className="font-medium">{n.cliente}</TableCell>
                   <TableCell className="text-center text-sm">{n.data}</TableCell>
@@ -224,11 +224,11 @@ const MonitorEmissao = () => {
                   <TableCell className="text-xs text-muted-foreground max-w-[250px]">
                     <span className="truncate block">{n.mensagem}</span>
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell >
                     <span className="font-mono text-sm">{n.tentativas}</span>
                   </TableCell>
-                  <TableCell className="text-center text-xs text-muted-foreground">{n.ultimaAtualizacao}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-xs text-muted-foreground">{n.ultimaAtualizacao}</TableCell>
+                  <TableCell >
                     <div className="flex items-center justify-center gap-1">
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(`/fiscal/notas/${n.id}`)} title="Abrir nota">
                         <Eye className="h-4 w-4" />

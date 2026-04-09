@@ -159,14 +159,14 @@ export default function EstoqueLocacoes() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-center w-[50px]"></TableHead>
-              <TableHead className="text-center">Unidade</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
+              <TableHead >Unidade</TableHead>
               <TableHead className="text-center">Data de Início</TableHead>
-              <TableHead className="text-center">Previsão de Finalização</TableHead>
+              <TableHead >Previsão de Finalização</TableHead>
               <TableHead className="text-center">Data Fim</TableHead>
-              <TableHead className="text-center">Locador</TableHead>
-              <TableHead className="text-center">Valor Total</TableHead>
-              <TableHead className="text-center">Itens</TableHead>
+              <TableHead >Locador</TableHead>
+              <TableHead className="text-right">Valor Total</TableHead>
+              <TableHead >Itens</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <TableHead className="text-center">Ações</TableHead>
             </TableRow>
@@ -178,18 +178,18 @@ export default function EstoqueLocacoes() {
               filtered.map((loc) => (
                 <>
                   <TableRow key={loc.id}>
-                    <TableCell className="text-center">
+                    <TableCell >
                       <Button variant="ghost" size="sm" onClick={() => toggleRow(loc.id)} className="h-7 w-7 p-0">
                         {expandedRows.has(loc.id) ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </Button>
                     </TableCell>
-                    <TableCell className="text-center">{loc.unidade}</TableCell>
-                    <TableCell className="text-center">{loc.dataInicio}</TableCell>
-                    <TableCell className="text-center">{loc.previsaoFinalizacao}</TableCell>
-                    <TableCell className="text-center">{loc.dataFim}</TableCell>
-                    <TableCell className="text-center">{loc.locador}</TableCell>
-                    <TableCell className="text-center font-semibold">{loc.valor}</TableCell>
-                    <TableCell className="text-center">{loc.itens.length}</TableCell>
+                    <TableCell >{loc.unidade}</TableCell>
+                    <TableCell >{loc.dataInicio}</TableCell>
+                    <TableCell >{loc.previsaoFinalizacao}</TableCell>
+                    <TableCell >{loc.dataFim}</TableCell>
+                    <TableCell >{loc.locador}</TableCell>
+                    <TableCell className="font-semibold">{loc.valor}</TableCell>
+                    <TableCell >{loc.itens.length}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={loc.status} /></TableCell>
                     <TableCell className="text-center">
                       <TableActions
@@ -207,8 +207,8 @@ export default function EstoqueLocacoes() {
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead className="text-center">Item</TableHead>
-                                <TableHead className="text-center">Quantidade</TableHead>
+                                <TableHead >Item</TableHead>
+                                <TableHead className="text-right">Quantidade</TableHead>
                                 <TableHead className="text-center">Data de Entrega</TableHead>
                               </TableRow>
                             </TableHeader>
@@ -217,9 +217,9 @@ export default function EstoqueLocacoes() {
                                 <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">Sem itens</TableCell></TableRow>
                               ) : loc.itens.map((item, idx) => (
                                 <TableRow key={idx}>
-                                  <TableCell className="text-center">{item.item}</TableCell>
-                                  <TableCell className="text-center">{item.quantidade}</TableCell>
-                                  <TableCell className="text-center">{item.dataEntrega}</TableCell>
+                                  <TableCell >{item.item}</TableCell>
+                                  <TableCell >{item.quantidade}</TableCell>
+                                  <TableCell >{item.dataEntrega}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>

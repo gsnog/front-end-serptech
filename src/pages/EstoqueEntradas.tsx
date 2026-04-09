@@ -418,15 +418,15 @@ export default function EstoqueEntradas() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="text-center w-12"></TableHead>
+                <TableHead className="w-12"></TableHead>
                 <TableHead className="text-center">Data</TableHead>
-                <TableHead className="text-center">Responsável</TableHead>
-                <TableHead className="text-center">Nota Fiscal</TableHead>
-                <TableHead className="text-center">Fornecedor</TableHead>
-                <TableHead className="text-center">Unidade</TableHead>
-                <TableHead className="text-center">Custo Total</TableHead>
+                <TableHead >Responsável</TableHead>
+                <TableHead >Nota Fiscal</TableHead>
+                <TableHead >Fornecedor</TableHead>
+                <TableHead >Unidade</TableHead>
+                <TableHead className="text-right">Custo Total</TableHead>
                 <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-center">Aprovação</TableHead>
+                <TableHead >Aprovação</TableHead>
                 <TableHead className="text-center">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -441,17 +441,17 @@ export default function EstoqueEntradas() {
                 paginatedItems.map((entrada) => (
                   <>
                     <TableRow key={entrada.id}>
-                      <TableCell className="text-center">
+                      <TableCell >
                         <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleRow(entrada.id)}>
                           {expandedRows.has(entrada.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </Button>
                       </TableCell>
                       <TableCell className="text-center">{entrada.data}</TableCell>
-                      <TableCell className="text-center">{entrada.responsavel}</TableCell>
-                      <TableCell className="text-center">{entrada.notaFiscal}</TableCell>
-                      <TableCell className="text-center">{entrada.fornecedor}</TableCell>
-                      <TableCell className="text-center">{entrada.unidade}</TableCell>
-                      <TableCell className="text-center">{entrada.custoTotal}</TableCell>
+                      <TableCell >{entrada.responsavel}</TableCell>
+                      <TableCell >{entrada.notaFiscal}</TableCell>
+                      <TableCell >{entrada.fornecedor}</TableCell>
+                      <TableCell >{entrada.unidade}</TableCell>
+                      <TableCell >{entrada.custoTotal}</TableCell>
                       <TableCell className="text-center"><StatusBadge status={entrada.status} /></TableCell>
                       <TableCell className="text-center">
                         {/* Approval column — ONLY rendered when canApprove=true.
@@ -505,17 +505,17 @@ export default function EstoqueEntradas() {
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
-                                      <TableHead className="text-center">Item</TableHead>
-                                      <TableHead className="text-center">Quantidade</TableHead>
-                                      <TableHead className="text-center">Custo Unitário</TableHead>
+                                      <TableHead >Item</TableHead>
+                                      <TableHead className="text-right">Quantidade</TableHead>
+                                      <TableHead className="text-right">Custo Unitário</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
                                     {entrada.itens.map(item => (
                                       <TableRow key={item.id}>
-                                        <TableCell className="text-center">{item.item}</TableCell>
-                                        <TableCell className="text-center">{item.quantidade}</TableCell>
-                                        <TableCell className="text-center">{item.custoUnitario}</TableCell>
+                                        <TableCell >{item.item}</TableCell>
+                                        <TableCell >{item.quantidade}</TableCell>
+                                        <TableCell >{item.custoUnitario}</TableCell>
                                       </TableRow>
                                     ))}
                                   </TableBody>
@@ -529,18 +529,18 @@ export default function EstoqueEntradas() {
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
-                                      <TableHead className="text-center">Nome</TableHead>
-                                      <TableHead className="text-center">Quantidade</TableHead>
-                                      <TableHead className="text-center">Custo Unitário</TableHead>
+                                      <TableHead >Nome</TableHead>
+                                      <TableHead className="text-right">Quantidade</TableHead>
+                                      <TableHead className="text-right">Custo Unitário</TableHead>
                                       <TableHead className="text-center">Status</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
                                     {(entrada as any).itens_precadastro.map((it: ItemPreCadastroNF) => (
                                       <TableRow key={it.id}>
-                                        <TableCell className="text-center">{it.nome_item}</TableCell>
-                                        <TableCell className="text-center">{it.quantidade}</TableCell>
-                                        <TableCell className="text-center">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</TableCell>
+                                        <TableCell >{it.nome_item}</TableCell>
+                                        <TableCell >{it.quantidade}</TableCell>
+                                        <TableCell >{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</TableCell>
                                         <TableCell className="text-center"><StatusBadge status="Pré-Cadastro" className="text-[10px]" /></TableCell>
                                       </TableRow>
                                     ))}
@@ -778,14 +778,14 @@ export default function EstoqueEntradas() {
                 <p className="text-sm font-semibold mb-2">Itens</p>
                 <Table>
                   <TableHeader><TableRow>
-                    <TableHead className="text-center">Item</TableHead><TableHead className="text-center">Qtd</TableHead><TableHead className="text-center">Custo</TableHead><TableHead className="text-center">Tipo</TableHead>
+                    <TableHead >Item</TableHead><TableHead className="text-right">Qtd</TableHead><TableHead className="text-right">Custo</TableHead><TableHead className="text-center">Tipo</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {viewItem.itens.map(it => (
                       <TableRow key={it.id}>
-                        <TableCell className="text-center">{it.item}</TableCell>
-                        <TableCell className="text-center">{it.quantidade}</TableCell>
-                        <TableCell className="text-center">{it.custoUnitario}</TableCell>
+                        <TableCell >{it.item}</TableCell>
+                        <TableCell >{it.quantidade}</TableCell>
+                        <TableCell >{it.custoUnitario}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={it.tipo === "novo" ? "Pré-Cadastro" : "Aprovada"} className="text-[10px]" /></TableCell>
                       </TableRow>
                     ))}

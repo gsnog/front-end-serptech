@@ -138,12 +138,55 @@ export const fetchSetoresOperacional = async (): Promise<Setor[] | PaginatedResp
     return res.data;
 };
 
-export interface FuncionarioSimple { id: number; nome: string; }
+export interface FuncionarioSimple { id: number; nome: string; django_user_id: number; }
 
 export const fetchFuncionarios = async (): Promise<FuncionarioSimple[]> => {
     const res = await api.get('/api/funcionarios/');
     return res.data?.results ?? res.data;
 };
+
+// ── Médicos ───────────────────────────────────────────────────────────────────
+export interface Especialidade { id: number; nome: string; descricao: string; }
+
+export interface Medico {
+    id: number;
+    nome: string;
+    email: string;
+    crm: string;
+    telefone: string;
+    valor_lamina_lida?: number | null;
+    especialidades: Especialidade[];
+    especialidade_ids?: number[];
+    user?: number;
+}
+
+export const fetchMedicos = async (page = 1, search = ''): Promise<PaginatedResponse<Medico>> => {
+    const params: Record<string, string | number> = { page };
+    if (search) params.search = search;
+    const res = await api.get('/api/medicos/', { params });
+    return res.data;
+};
+
+export const createMedico = async (data: Partial<Medico> & { user: number }): Promise<Medico> => {
+    const res = await api.post('/api/medicos/', data);
+    return res.data;
+};
+
+export const updateMedico = async (id: number, data: Partial<Medico>): Promise<Medico> => {
+    const res = await api.patch(`/api/medicos/${id}/`, data);
+    return res.data;
+};
+
+export const deleteMedico = async (id: number): Promise<void> => {
+    await api.delete(`/api/medicos/${id}/`);
+};
+
+export const fetchEspecialidades = async (): Promise<Especialidade[]> => {
+    const res = await api.get('/api/especialidades/');
+    return res.data?.results ?? res.data;
+};
+
+export const medicosQueryKey = ['medicos'] as const;
 
 export const createSetor = async (data: Partial<Setor>): Promise<Setor> => {
     const res = await api.post('/api/setores/', data);
@@ -194,6 +237,11 @@ export const createPessoa = async (data: any): Promise<Pessoa> => {
 export const updatePessoa = async (id: number, data: any): Promise<Pessoa> => {
     const res = await api.patch(`/api/pessoas/${id}/`, data);
     return res.data;
+};
+
+/** DELETE /api/pessoas/{id}/ — remove user permanently (requires admin/rh_admin) */
+export const deletePessoa = async (id: number): Promise<void> => {
+    await api.delete(`/api/pessoas/${id}/`);
 };
 
 /** PATCH /api/pessoas/{id}/ — update user with image */

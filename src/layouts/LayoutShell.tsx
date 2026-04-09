@@ -31,7 +31,7 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/cadastro/financeiro/centro-custo": { title: "Centro de Custo", description: "Cadastro de centros de custo" },
   "/cadastro/financeiro/centro-receita": { title: "Centro de Receita", description: "Cadastro de centros de receita" },
   "/cadastro/financeiro/categorias": { title: "Categorias", description: "Cadastro de categorias" },
-  "/cadastro/financeiro/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores financeiros" },
+  "/cadastro/financeiro/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores" },
   "/cadastro/financeiro/subcategorias": { title: "Subcategorias", description: "Cadastro de subcategorias" },
   "/cadastro/financeiro/plano-contas": { title: "Plano de Contas", description: "Cadastro do plano de contas" },
   "/cadastro/financeiro/conciliacao-bancaria": { title: "Conciliação Bancária", description: "Conciliação de contas bancárias" },
@@ -109,6 +109,8 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/gestao-pessoas/acessos": { title: "Acessos do Sistema", description: "Gerenciamento de permissões" },
   "/gestao-pessoas/dashboards": { title: "Dashboards", description: "Controle de visibilidade" },
   "/gestao-pessoas/auditoria": { title: "Auditoria", description: "Histórico de alterações" },
+  "/gestao-pessoas/medicos": { title: "Médicos", description: "Cadastro de médicos" },
+  "/gestao-pessoas/medicos/novo": { title: "Médicos", description: "Novo Médico" },
   
   // Módulos Globais - Header
   "/calendario": { title: "Calendário", description: "Calendário corporativo" },

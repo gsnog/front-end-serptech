@@ -170,10 +170,10 @@ const ContasPagar = () => {
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
-            <TableHead className="text-center text-xs h-8 w-10">Nº</TableHead>
+            <TableHead className="text-xs h-8 w-10">Nº</TableHead>
             <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
-            <TableHead className="text-center text-xs h-8">Valor</TableHead>
-            <TableHead className="text-center text-xs h-8">Pago</TableHead>
+            <TableHead className="text-right text-xs h-8">Valor</TableHead>
+            <TableHead className="text-xs h-8">Pago</TableHead>
             <TableHead className="text-center text-xs h-8">Status</TableHead>
             {conta.status !== 'Pago' && <TableHead className="w-16 h-8" />}
           </TableRow>
@@ -181,13 +181,13 @@ const ContasPagar = () => {
         <TableBody>
           {(conta.parcelas || []).map(p => (
             <TableRow key={p.id} className="text-xs hover:bg-muted/30">
-              <TableCell className="text-center py-2 font-medium">{p.numero}</TableCell>
+              <TableCell className="py-2 font-medium">{p.numero}</TableCell>
               <TableCell className="text-center py-2">{p.data_de_vencimento || "—"}</TableCell>
-              <TableCell className="text-center py-2">{formatBRL(p.valor)}</TableCell>
-              <TableCell className="text-center py-2">{p.valor_pago != null ? formatBRL(p.valor_pago) : "—"}</TableCell>
+              <TableCell className="py-2">{formatBRL(p.valor)}</TableCell>
+              <TableCell className="py-2">{p.valor_pago != null ? formatBRL(p.valor_pago) : "—"}</TableCell>
               <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
               {conta.status !== 'Pago' && (
-                <TableCell className="text-center py-2">
+                <TableCell className="py-2">
                   {p.status !== 'Pago' ? (
                     <button onClick={() => openPagamento(p, conta.id)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
                       <DollarSign className="w-3 h-3" />Pagar
@@ -265,7 +265,7 @@ const ContasPagar = () => {
                 paginatedItems.map((conta: Conta) => (
                   <React.Fragment key={conta.id}>
                     <TableRow className="hover:bg-table-hover transition-colors">
-                      <TableCell className="text-center p-0 pl-2">
+                      <TableCell className="p-0 pl-2">
                         <button onClick={() => toggleExpand(conta.id)} className="p-1 rounded hover:bg-muted transition-colors">
                           {expandedIds.has(conta.id)
                             ? <ChevronDown className="w-4 h-4 text-muted-foreground" />
@@ -274,14 +274,14 @@ const ContasPagar = () => {
                       </TableCell>
                       <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
                       <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
-                      <TableCell className="text-center">{conta.fornecedor_nome || "—"}</TableCell>
-                      <TableCell className="text-center">
+                      <TableCell >{conta.fornecedor_nome || "—"}</TableCell>
+                      <TableCell >
                         <span className="block truncate max-w-full" title={conta.numero_documento || ""}>
                           {conta.numero_documento || conta.documento || "—"}
                         </span>
                       </TableCell>
-                      <TableCell className="text-center">{formatBRL(conta.valor_do_titulo)}</TableCell>
-                      <TableCell className="text-center">{formatBRL(conta.valor_total)}</TableCell>
+                      <TableCell >{formatBRL(conta.valor_do_titulo)}</TableCell>
+                      <TableCell >{formatBRL(conta.valor_total)}</TableCell>
                       <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
                       <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
                       <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>

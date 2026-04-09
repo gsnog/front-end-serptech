@@ -148,19 +148,19 @@ const FluxoCaixa = () => {
               <SortableHead label="Beneficiário" field="beneficiario" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Valor" field="valorTotal" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <TableHead className="text-center font-semibold">Saldo</TableHead>
+              <TableHead className="text-right font-semibold">Saldo</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma transação encontrada.</TableCell></TableRow>) : (
                 paginatedItems.map((transacao) => (
                   <TableRow key={transacao.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center">{transacao.dataVencimento}</TableCell><TableCell className="text-center">{transacao.dataPagamento}</TableCell>
+                    <TableCell >{transacao.dataVencimento}</TableCell><TableCell >{transacao.dataPagamento}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={transacao.tipo} /></TableCell>
-                    <TableCell className="text-center">{transacao.beneficiario}</TableCell>
+                    <TableCell >{transacao.beneficiario}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={transacao.status} /></TableCell>
-                    <TableCell className="text-center"><span className={transacao.tipo === 'Entrada' ? 'text-primary font-semibold' : 'text-red-700 font-semibold'}>{transacao.valorTotal}</span></TableCell>
-                    <TableCell className="text-center font-semibold">{transacao.saldo}</TableCell>
+                    <TableCell ><span className={transacao.tipo === 'Entrada' ? 'text-primary font-semibold' : 'text-red-700 font-semibold'}>{transacao.valorTotal}</span></TableCell>
+                    <TableCell className="font-semibold">{transacao.saldo}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(transacao)} onEdit={() => openEdit(transacao)} onDelete={() => setDeleteId(transacao.id)} /></TableCell>
                   </TableRow>
                 ))

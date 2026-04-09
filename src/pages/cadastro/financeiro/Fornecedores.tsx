@@ -73,7 +73,7 @@ const FornecedoresFinanceiro = () => {
         { type: "text" as const, label: "CNPJ", placeholder: "Buscar por CNPJ...", value: searchCnpj, onChange: setSearchCnpj, width: "min-w-[180px]" }
       ]} resultsCount={totalCount} />
       <div className="rounded border border-border overflow-hidden"><Table><TableHeader><TableRow className="bg-table-header">
-        <TableHead className="text-center font-semibold">Fornecedor</TableHead><TableHead className="text-center font-semibold">CNPJ/CPF</TableHead><TableHead className="text-center font-semibold">Razão Social</TableHead><TableHead className="text-center font-semibold">Email</TableHead><TableHead className="text-center font-semibold">Telefone</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
+        <TableHead className="font-semibold">Fornecedor</TableHead><TableHead className="font-semibold">CNPJ/CPF</TableHead><TableHead className="font-semibold">Razão Social</TableHead><TableHead className="font-semibold">Email</TableHead><TableHead className="font-semibold">Telefone</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
       </TableRow></TableHeader><TableBody>
           {isLoading ? (
             <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
@@ -81,11 +81,11 @@ const FornecedoresFinanceiro = () => {
             <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum fornecedor encontrado.</TableCell></TableRow>
           ) : filtered.map(f => (
             <TableRow key={f.id} className="hover:bg-table-hover transition-colors">
-              <TableCell className="text-center font-medium">{f.nome || "—"}</TableCell>
-              <TableCell className="text-center">{f.cnpj || "—"}</TableCell>
-              <TableCell className="text-center">{f.razao_social || "—"}</TableCell>
-              <TableCell className="text-center">{f.email || "—"}</TableCell>
-              <TableCell className="text-center">{f.telefone || "—"}</TableCell>
+              <TableCell className="font-medium">{f.nome || "—"}</TableCell>
+              <TableCell >{f.cnpj || "—"}</TableCell>
+              <TableCell >{f.razao_social || "—"}</TableCell>
+              <TableCell >{f.email || "—"}</TableCell>
+              <TableCell >{f.telefone || "—"}</TableCell>
               <TableCell className="text-center"><TableActions onView={() => setViewItem(f)} onEdit={() => openEdit(f)} onDelete={() => setDeleteId(f.id)} /></TableCell>
             </TableRow>
           ))}

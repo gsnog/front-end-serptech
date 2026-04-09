@@ -97,9 +97,9 @@ const Unidades = () => {
           <Table>
             <TableHeader>
               <TableRow className="bg-table-header">
-                <TableHead className="text-center font-semibold">Unidade</TableHead>
-                <TableHead className="text-center font-semibold">Cidade</TableHead>
-                <TableHead className="text-center font-semibold">Responsável</TableHead>
+                <TableHead className="font-semibold">Unidade</TableHead>
+                <TableHead className="font-semibold">Cidade</TableHead>
+                <TableHead className="font-semibold">Responsável</TableHead>
                 <TableHead className="text-center font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -110,9 +110,9 @@ const Unidades = () => {
                 <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhuma unidade encontrada.</TableCell></TableRow>
               ) : filtered.map((u: Unidade) => (
                 <TableRow key={u.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-medium">{u.unidade || "—"}</TableCell>
-                  <TableCell className="text-center">{u.cidade || "—"}</TableCell>
-                  <TableCell className="text-center">{u.responsavel_nome || "—"}</TableCell>
+                  <TableCell className="font-medium">{u.unidade || "—"}</TableCell>
+                  <TableCell >{u.cidade || "—"}</TableCell>
+                  <TableCell >{u.responsavel_nome || "—"}</TableCell>
                   <TableCell className="text-center">
                     <TableActions
                       onView={() => setViewItem(u)}

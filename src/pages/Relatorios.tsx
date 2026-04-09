@@ -313,10 +313,10 @@ export default function Relatorios() {
                     <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
                       <TableHead className="text-foreground font-semibold">Código</TableHead>
                       <TableHead className="text-foreground font-semibold">Cliente</TableHead>
-                      <TableHead className="text-foreground font-semibold">Vencimento</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Vencimento</TableHead>
                       <TableHead className="text-foreground font-semibold">Categoria</TableHead>
-                      <TableHead className="text-foreground font-semibold text-right">Valor</TableHead>
-                      <TableHead className="text-foreground font-semibold text-center">Status</TableHead>
+                      <TableHead className="text-right text-foreground font-semibold">Valor</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -326,7 +326,7 @@ export default function Relatorios() {
                         <TableCell>{item.cliente}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
                         <TableCell>{item.categoria}</TableCell>
-                        <TableCell className="text-right font-semibold">{item.valor}</TableCell>
+                        <TableCell className="font-semibold">{item.valor}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                       </TableRow>
                     ))}
@@ -340,10 +340,10 @@ export default function Relatorios() {
                     <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
                       <TableHead className="text-foreground font-semibold">Código</TableHead>
                       <TableHead className="text-foreground font-semibold">Beneficiário</TableHead>
-                      <TableHead className="text-foreground font-semibold">Vencimento</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Vencimento</TableHead>
                       <TableHead className="text-foreground font-semibold">Categoria</TableHead>
-                      <TableHead className="text-foreground font-semibold text-right">Valor</TableHead>
-                      <TableHead className="text-foreground font-semibold text-center">Status</TableHead>
+                      <TableHead className="text-right text-foreground font-semibold">Valor</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -353,7 +353,7 @@ export default function Relatorios() {
                         <TableCell>{item.beneficiario}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
                         <TableCell>{item.categoria}</TableCell>
-                        <TableCell className="text-right font-semibold">{item.valor}</TableCell>
+                        <TableCell className="font-semibold">{item.valor}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                       </TableRow>
                     ))}
@@ -365,11 +365,11 @@ export default function Relatorios() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
-                      <TableHead className="text-foreground font-semibold">Data</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Data</TableHead>
                       <TableHead className="text-foreground font-semibold">Descrição</TableHead>
-                      <TableHead className="text-foreground font-semibold text-right">Entrada</TableHead>
-                      <TableHead className="text-foreground font-semibold text-right">Saída</TableHead>
-                      <TableHead className="text-foreground font-semibold text-right">Saldo</TableHead>
+                      <TableHead className="text-foreground font-semibold">Entrada</TableHead>
+                      <TableHead className="text-foreground font-semibold">Saída</TableHead>
+                      <TableHead className="text-right text-foreground font-semibold">Saldo</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -377,9 +377,9 @@ export default function Relatorios() {
                       <TableRow key={idx}>
                         <TableCell>{item.data}</TableCell>
                         <TableCell>{item.descricao}</TableCell>
-                        <TableCell className="text-right font-semibold text-lime-600">{item.entrada}</TableCell>
-                        <TableCell className="text-right font-semibold text-rose-500">{item.saida}</TableCell>
-                        <TableCell className="text-right font-bold">{item.saldo}</TableCell>
+                        <TableCell className="font-semibold text-lime-600">{item.entrada}</TableCell>
+                        <TableCell className="font-semibold text-rose-500">{item.saida}</TableCell>
+                        <TableCell className="font-bold">{item.saldo}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

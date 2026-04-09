@@ -67,22 +67,22 @@ const Itens = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">Código</TableHead>
+              <TableHead className="font-semibold">Código</TableHead>
               <TableHead className="text-center font-semibold">Data de Cadastro</TableHead>
-              <TableHead className="text-center font-semibold">Item</TableHead>
-              <TableHead className="text-center font-semibold">Forma de Apresentação</TableHead>
-              <TableHead className="text-center font-semibold">Setores</TableHead>
+              <TableHead className="font-semibold">Item</TableHead>
+              <TableHead className="font-semibold">Forma de Apresentação</TableHead>
+              <TableHead className="font-semibold">Setores</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 ? (<TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum item encontrado.</TableCell></TableRow>) : (
                 filtered.map((item) => (
                   <TableRow key={item.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center font-medium">{item.codigo}</TableCell>
-                    <TableCell className="text-center">{item.dataCadastro}</TableCell>
-                    <TableCell className="text-center font-medium">{item.item}</TableCell>
-                    <TableCell className="text-center">{item.formaApresentacao}</TableCell>
-                    <TableCell className="text-center">{item.setores}</TableCell>
+                    <TableCell className="font-medium">{item.codigo}</TableCell>
+                    <TableCell >{item.dataCadastro}</TableCell>
+                    <TableCell className="font-medium">{item.item}</TableCell>
+                    <TableCell >{item.formaApresentacao}</TableCell>
+                    <TableCell >{item.setores}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} onEdit={() => openEdit(item)} onDelete={() => setDeleteId(item.id)} /></TableCell>
                   </TableRow>
                 ))

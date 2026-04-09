@@ -40,12 +40,12 @@ const FormasApresentacao = () => {
         <FilterSection fields={filterFields} resultsCount={filtered.length} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Apresentação</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-table-header"><TableHead className="font-semibold">Apresentação</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 ? (<TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Nenhuma forma de apresentação encontrada.</TableCell></TableRow>) : (
                 filtered.map((ap) => (
                   <TableRow key={ap.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center font-medium">{ap.nome}</TableCell>
+                    <TableCell className="font-medium">{ap.nome}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(ap)} onEdit={() => { setEditItem(ap); setEditNome(ap.nome); }} onDelete={() => setDeleteId(ap.id)} /></TableCell>
                   </TableRow>
                 ))

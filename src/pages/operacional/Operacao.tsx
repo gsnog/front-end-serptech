@@ -73,13 +73,13 @@ const Operacao = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Data de Entrada</TableHead><TableHead className="text-center">Barco</TableHead><TableHead className="text-center">Custo Aproximado</TableHead><TableHead className="text-center">Valor Pago</TableHead><TableHead className="text-center">Previsão de Entrega</TableHead><TableHead className="text-center">Data de Entrega</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead className="text-center">Data de Entrada</TableHead><TableHead >Barco</TableHead><TableHead className="text-right">Custo Aproximado</TableHead><TableHead className="text-right">Valor Pago</TableHead><TableHead className="text-center">Previsão de Entrega</TableHead><TableHead className="text-center">Data de Entrega</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma operação encontrada.</TableCell></TableRow>) : (
                 filtered.map((op) => (
                   <TableRow key={op.id}>
-                    <TableCell className="text-center">{op.dataEntrada}</TableCell><TableCell className="text-center">{op.barco}</TableCell><TableCell className="text-center">{op.custoAproximado}</TableCell><TableCell className="text-center">{op.valorPago}</TableCell><TableCell className="text-center">{op.previsaoEntrega}</TableCell><TableCell className="text-center">{op.dataEntrega}</TableCell>
+                    <TableCell >{op.dataEntrada}</TableCell><TableCell >{op.barco}</TableCell><TableCell >{op.custoAproximado}</TableCell><TableCell >{op.valorPago}</TableCell><TableCell >{op.previsaoEntrega}</TableCell><TableCell >{op.dataEntrega}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(op)} onEdit={() => openEdit(op)} onDelete={() => setDeleteId(op.id)} /></TableCell>
                   </TableRow>
                 ))

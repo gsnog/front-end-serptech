@@ -95,7 +95,7 @@ export default function Contas() {
       <div className="rounded border border-border">
         <Table>
           <TableHeader><TableRow className="bg-table-header">
-            <TableHead>Empresa</TableHead><TableHead>CNPJ</TableHead><TableHead>Segmento</TableHead><TableHead>Porte</TableHead><TableHead>Cidade/UF</TableHead><TableHead>Status</TableHead><TableHead>Limite Crédito</TableHead><TableHead>Responsável</TableHead><TableHead className="w-[50px]"></TableHead>
+            <TableHead>Empresa</TableHead><TableHead>CNPJ</TableHead><TableHead>Segmento</TableHead><TableHead>Porte</TableHead><TableHead>Cidade/UF</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-right">Limite Crédito</TableHead><TableHead>Responsável</TableHead><TableHead className="w-[50px]"></TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {filteredContas.map((conta: any) => (
@@ -105,7 +105,7 @@ export default function Contas() {
                 <TableCell><Badge variant="outline">{conta.setor_atuacao || 'N/A'}</Badge></TableCell>
                 <TableCell>{conta.telefone || '-'}</TableCell>
                 <TableCell>{conta.email || '-'}</TableCell>
-                <TableCell className="whitespace-nowrap"><StatusBadge status="Em aberto" /></TableCell>
+                <TableCell className="text-center whitespace-nowrap"><StatusBadge status="Em aberto" /></TableCell>
                 <TableCell>-</TableCell>
                 <TableCell>-</TableCell>
                 <TableCell><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>

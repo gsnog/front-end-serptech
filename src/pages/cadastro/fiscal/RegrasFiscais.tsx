@@ -43,9 +43,9 @@ const RegrasFiscais = () => {
           <TableHeader><TableRow className="bg-table-header">
             <TableHead className="font-semibold">Item/Serviço</TableHead>
             <TableHead className="text-center font-semibold">Tipo</TableHead>
-            <TableHead className="text-center font-semibold">NCM</TableHead>
-            <TableHead className="text-center font-semibold">CST/CSOSN</TableHead>
-            <TableHead className="text-center font-semibold">Alíquotas</TableHead>
+            <TableHead className="font-semibold">NCM</TableHead>
+            <TableHead className="font-semibold">CST/CSOSN</TableHead>
+            <TableHead className="font-semibold">Alíquotas</TableHead>
             <TableHead className="text-center font-semibold">Ações</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -54,9 +54,9 @@ const RegrasFiscais = () => {
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
                   <TableCell className="font-medium">{c.item}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={c.tipo} /></TableCell>
-                  <TableCell className="text-center font-mono text-xs">{c.ncm || "—"}</TableCell>
-                  <TableCell className="text-center font-mono text-xs">{c.cstCsosn || "—"}</TableCell>
-                  <TableCell className="text-center text-xs">
+                  <TableCell className="font-mono text-xs">{c.ncm || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">{c.cstCsosn || "—"}</TableCell>
+                  <TableCell className="text-xs">
                     {c.tipo === "Produto" ? `ICMS ${c.icms}% | IPI ${c.ipi}%` : `ISS ${c.iss}%`}
                   </TableCell>
                   <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => navigate("/cadastro/fiscal/regras-fiscais/nova")} onDelete={() => setDeleteId(c.id)} /></TableCell>

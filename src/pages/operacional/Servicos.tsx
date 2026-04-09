@@ -62,13 +62,13 @@ const Servicos = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Nome do Serviço</TableHead><TableHead className="text-center">Descrição</TableHead><TableHead className="text-center">Custo</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead >Nome do Serviço</TableHead><TableHead >Descrição</TableHead><TableHead className="text-right">Custo</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum serviço encontrado.</TableCell></TableRow>) : (
                 filtered.map((servico) => (
                   <TableRow key={servico.id}>
-                    <TableCell className="text-center">{servico.nome}</TableCell><TableCell className="text-center">{servico.descricao}</TableCell><TableCell className="text-center">{servico.custo}</TableCell>
+                    <TableCell >{servico.nome}</TableCell><TableCell >{servico.descricao}</TableCell><TableCell >{servico.custo}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(servico)} onEdit={() => openEdit(servico)} onDelete={() => setDeleteId(servico.id)} /></TableCell>
                   </TableRow>
                 ))

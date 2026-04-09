@@ -104,7 +104,7 @@ export default function EstoqueInventario() {
               {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum item encontrado.</TableCell></TableRow>) : (
                 paginatedItems.map((item) => (
                   <TableRow key={item.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center">{item.item}</TableCell><TableCell className="text-center">{item.quantidade}</TableCell><TableCell className="text-center">{item.unidade}</TableCell>
+                    <TableCell >{item.item}</TableCell><TableCell >{item.quantidade}</TableCell><TableCell >{item.unidade}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} onEdit={() => openEdit(item)} onDelete={() => setDeleteId(item.id)} /></TableCell>
                   </TableRow>
                 ))

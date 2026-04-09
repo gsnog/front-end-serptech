@@ -301,9 +301,9 @@ export default function NovaNotaFiscal() {
                   <Table>
                     <TableHeader><TableRow className="bg-table-header">
                       <TableHead className="font-semibold">Descrição</TableHead>
-                      <TableHead className="text-center font-semibold w-24">Qtd</TableHead>
-                      <TableHead className="text-center font-semibold w-32">Vlr Unit.</TableHead>
-                      <TableHead className="text-center font-semibold w-28">Desconto</TableHead>
+                      <TableHead className="text-right font-semibold w-24">Qtd</TableHead>
+                      <TableHead className="font-semibold w-32">Vlr Unit.</TableHead>
+                      <TableHead className="text-right font-semibold w-28">Desconto</TableHead>
                       <TableHead className="text-right font-semibold w-32">Total</TableHead>
                       <TableHead className="w-12" />
                     </TableRow></TableHeader>
@@ -377,9 +377,9 @@ export default function NovaNotaFiscal() {
                   <Table>
                     <TableHeader><TableRow className="bg-table-header">
                       <TableHead className="font-semibold">Imposto</TableHead>
-                      <TableHead className="text-right font-semibold">Base Cálculo</TableHead>
-                      <TableHead className="text-center font-semibold">Alíquota %</TableHead>
-                      <TableHead className="text-right font-semibold">Calculado</TableHead>
+                      <TableHead className="font-semibold">Base Cálculo</TableHead>
+                      <TableHead className="font-semibold">Alíquota %</TableHead>
+                      <TableHead className="font-semibold">Calculado</TableHead>
                       <TableHead className="text-right font-semibold">Valor Final</TableHead>
                       <TableHead className="font-semibold">Justificativa</TableHead>
                     </TableRow></TableHeader>
@@ -388,7 +388,7 @@ export default function NovaNotaFiscal() {
                         <TableRow key={t.imposto} className="hover:bg-table-hover">
                           <TableCell className="font-semibold">{t.imposto}</TableCell>
                           <TableCell className="text-right">{formatCurrency(t.baseCalculo)}</TableCell>
-                          <TableCell className="text-center">{t.aliquota}%</TableCell>
+                          <TableCell >{t.aliquota}%</TableCell>
                           <TableCell className="text-right text-muted-foreground">{formatCurrency(t.valorCalculado)}</TableCell>
                           <TableCell>
                             <Input type="number" step={0.01} value={t.valorFinal} onChange={e => updateTributo(idx, "valorFinal", +e.target.value)} className="form-input h-8 text-right w-28" />

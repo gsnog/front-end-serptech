@@ -102,10 +102,10 @@ const Contabil = () => {
             <TableHeader>
               <TableRow className="bg-table-header">
                 <TableHead className="text-center font-semibold">Data</TableHead>
-                <TableHead className="text-center font-semibold">Descrição</TableHead>
-                <TableHead className="text-center font-semibold">Valor</TableHead>
+                <TableHead className="font-semibold">Descrição</TableHead>
+                <TableHead className="text-right font-semibold">Valor</TableHead>
                 <TableHead className="text-center font-semibold">Tipo</TableHead>
-                <TableHead className="text-center font-semibold">Plano de Contas</TableHead>
+                <TableHead className="font-semibold">Plano de Contas</TableHead>
                 <TableHead className="text-center font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -117,10 +117,10 @@ const Contabil = () => {
               ) : filtered.map(c => (
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
                   <TableCell className="text-center">{c.data}</TableCell>
-                  <TableCell className="text-center font-medium">{c.descricao}</TableCell>
-                  <TableCell className="text-center">R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell className="text-center capitalize">{c.tipo === 'debito' ? 'Débito' : 'Crédito'}</TableCell>
-                  <TableCell className="text-center">{c.plano_de_contas_nome || "—"}</TableCell>
+                  <TableCell className="font-medium">{c.descricao}</TableCell>
+                  <TableCell className="text-right">R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="capitalize">{c.tipo === 'debito' ? 'Débito' : 'Crédito'}</TableCell>
+                  <TableCell >{c.plano_de_contas_nome || "—"}</TableCell>
                   <TableCell className="text-center">
                     <TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} />
                   </TableCell>

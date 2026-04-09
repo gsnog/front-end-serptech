@@ -306,8 +306,8 @@ export default function NovaRequisicao() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Item</TableHead>
-                  <TableHead className="text-center">Quantidade Solicitada</TableHead>
+                  <TableHead >Item</TableHead>
+                  <TableHead className="text-right">Quantidade Solicitada</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -317,9 +317,9 @@ export default function NovaRequisicao() {
                 ) : (
                   itens.map((item) => (
                     <TableRow key={item._key}>
-                      <TableCell className="text-center">{item.itemNome}</TableCell>
-                      <TableCell className="text-center">{item.quantidade}</TableCell>
-                      <TableCell className="text-center">
+                      <TableCell >{item.itemNome}</TableCell>
+                      <TableCell >{item.quantidade}</TableCell>
+                      <TableCell >
                         <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item._key)} className="text-destructive hover:text-destructive">
                           <Trash2 size={16} />
                         </Button>

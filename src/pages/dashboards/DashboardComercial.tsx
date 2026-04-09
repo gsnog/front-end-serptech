@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { fetchOportunidades, fetchMetas, fetchAtividades, etapasFunil } from "@/services/comercial";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMeuTime } from "@/services/pessoas";
+import { useDashboardData } from "@/pages/Dashboard";
 
 import { motion } from "framer-motion";
 
@@ -41,33 +42,53 @@ const FadeIn = ({ children, delay = 0, className = "" }: { children: React.React
   </motion.div>
 );
 
+const PERDA_COLORS = [
+  'hsl(var(--destructive))',
+  'hsl(45 90% 55%)',
+  'hsl(var(--primary))',
+  'hsl(72 100% 50%)',
+  'hsl(var(--muted-foreground))',
+];
+
 export default function DashboardComercial() {
   const [periodo, setPeriodo] = useState("30d");
   const [vendedorFilter, setVendedorFilter] = useState("__all__");
 
+  const { dash } = useDashboardData();
   const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
   const { data: metas = [] } = useQuery({ queryKey: ['crm_metas'], queryFn: fetchMetas });
   const { data: atividades = [] } = useQuery({ queryKey: ['crm_atividades'], queryFn: fetchAtividades });
   const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
 
-  const pipelineTotal = oportunidades.filter(o => !['ganho', 'perdido'].includes(o.estagio)).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0);
-  const forecastMes = pipelineTotal * 0.7; // Simple weighted forecast
+  const pipelineTotal = oportunidades
+    .filter(o => !['ganho', 'perdido'].includes(o.estagio))
+    .reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0);
+
+  // Forecast ponderado por probabilidade de cada etapa
+  const forecastMes = oportunidades
+    .filter(o => !['ganho', 'perdido'].includes(o.estagio))
+    .reduce((sum, o) => {
+      const etapa = etapasFunil.find(e => e.id === o.estagio);
+      const prob = (etapa?.probabilidade ?? 50) / 100;
+      return sum + (Number(o.valor_estimado) || 0) * prob;
+    }, 0);
+
   const metaTotal = metas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_meta), 0);
   const realizadoTotal = metas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_realizado), 0);
   const atividadesVencidas = atividades.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
 
   const funilData = etapasFunil.filter(e => !['ganho', 'perdido'].includes(e.id)).map(etapa => ({
-    name: etapa.nome, value: oportunidades.filter(o => o.estagio === etapa.id).length,
-    amount: oportunidades.filter(o => o.estagio === etapa.id).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0)
+    name: etapa.nome,
+    value: oportunidades.filter(o => o.estagio === etapa.id).length,
+    amount: oportunidades.filter(o => o.estagio === etapa.id).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0),
   }));
 
-  const motivosPerdaData = [
-    { name: 'Preço', value: 35, color: 'hsl(var(--destructive))' },
-    { name: 'Concorrência', value: 25, color: 'hsl(45 90% 55%)' },
-    { name: 'Timing', value: 20, color: 'hsl(var(--primary))' },
-    { name: 'Outros', value: 20, color: 'hsl(var(--muted-foreground))' },
-  ];
-  const motivosTotal = motivosPerdaData.reduce((s, d) => s + d.value, 0);
+  // Motivos de perda vindos do backend
+  const perdas: { motivo: string; valor: number }[] = dash.comercialData?.perdas ?? [];
+  const motivosPerdaData = perdas.length > 0
+    ? perdas.map((p, i) => ({ name: p.motivo, value: p.valor, color: PERDA_COLORS[i % PERDA_COLORS.length] }))
+    : [{ name: 'Sem dados', value: 1, color: 'hsl(var(--muted-foreground))' }];
+  const motivosTotal = perdas.reduce((s, d) => s + d.valor, 0);
 
   return (
     <div className="space-y-6">
@@ -148,8 +169,8 @@ export default function DashboardComercial() {
                   <Pie data={motivosPerdaData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value" cornerRadius={6}>
                     {motivosPerdaData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" style={{ fontSize: 18, fontWeight: 700 }}>{motivosTotal}%</text>
-                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>Total</text>
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" style={{ fontSize: 18, fontWeight: 700 }}>{motivosTotal}</text>
+                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>perdas</text>
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                 </PieChart>
               </ResponsiveContainer>
@@ -158,7 +179,7 @@ export default function DashboardComercial() {
               {motivosPerdaData.map(m => (
                 <div key={m.name} className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: m.color }} />
-                  <span className="text-xs text-muted-foreground">{m.name} ({m.value}%)</span>
+                  <span className="text-xs text-muted-foreground">{m.name} ({m.value})</span>
                 </div>
               ))}
             </div>

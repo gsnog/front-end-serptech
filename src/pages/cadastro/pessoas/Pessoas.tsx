@@ -22,7 +22,8 @@ import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { fetchPessoas, fetchSetores, pessoasQueryKey, setoresQueryKey, type Pessoa } from "@/services/pessoas";
+import { fetchPessoas, fetchSetores, deletePessoa, pessoasQueryKey, setoresQueryKey, type Pessoa } from "@/services/pessoas";
+import { usePermissions } from "@/contexts/PermissionsContext";
 
 const TIPOS_VINCULO = [
   { value: "CLT", label: "CLT" },
@@ -35,6 +36,8 @@ const TIPOS_VINCULO = [
 export default function Pessoas() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canDelete = hasPermission('cadastro_pessoas', 'pessoas', 'delete');
 
   const [searchTerm, setSearchTerm] = useState("");
   const [setorFilter, setSetorFilter] = useState("all");
@@ -82,7 +85,21 @@ export default function Pessoas() {
     Gestor: p.supervisor_nome || "—", Role: p.role,
   }));
 
-  const deletePessoa = pessoas.find(p => p.id === deleteId);
+  const deletePessoaItem = pessoas.find(p => p.id === deleteId);
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deletePessoa(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: pessoasQueryKey });
+      toast({ title: "Pessoa excluída com sucesso." });
+      setDeleteId(null);
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.error || "Erro ao excluir pessoa.";
+      toast({ title: msg, variant: "destructive" });
+      setDeleteId(null);
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -133,7 +150,7 @@ export default function Pessoas() {
               <TableHead className="text-foreground font-semibold">Cargo</TableHead>
               <TableHead className="text-foreground font-semibold">Gestor Direto</TableHead>
               <TableHead className="text-foreground font-semibold">Role</TableHead>
-              <TableHead className="text-foreground font-semibold text-center">Ações</TableHead>
+              <TableHead className="text-center text-foreground font-semibold">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -201,7 +218,7 @@ export default function Pessoas() {
                     <TableActions
                       onView={() => setViewItem(pessoa)}
                       onEdit={() => navigate(`/gestao-pessoas/pessoas/${pessoa.id}`)}
-                      onDelete={() => setDeleteId(pessoa.id)}
+                      onDelete={canDelete ? () => setDeleteId(pessoa.id) : undefined}
                     />
                   </TableCell>
                 </TableRow>
@@ -266,19 +283,17 @@ export default function Pessoas() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja realmente excluir <strong>{deletePessoa?.nome}</strong>? Esta ação não pode ser desfeita.
+              Deseja realmente excluir <strong>{deletePessoaItem?.nome}</strong>? Esta ação não pode ser desfeita e remove o usuário permanentemente do sistema.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => {
-                toast({ title: "Funcionalidade em desenvolvimento", description: "A exclusão de usuários deve ser feita pelo Django Admin." });
-                setDeleteId(null);
-              }}
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
             >
-              Excluir
+              {deleteMutation.isPending ? "Excluindo..." : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -80,7 +80,7 @@ const Embarcacoes = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Nome</TableHead><TableHead className="text-center">Cliente</TableHead><TableHead className="text-center">Dimensão</TableHead><TableHead className="text-center">Setores</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead >Nome</TableHead><TableHead >Cliente</TableHead><TableHead >Dimensão</TableHead><TableHead >Setores</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
@@ -90,7 +90,7 @@ const Embarcacoes = () => {
               ) : (
                 filtered.map((emb: Emb) => (
                   <TableRow key={emb.id}>
-                    <TableCell className="text-center">{emb.nome}</TableCell><TableCell className="text-center">{emb.cliente || "—"}</TableCell><TableCell className="text-center">{emb.dimensoes || "—"}</TableCell><TableCell className="text-center">{emb.setores || "—"}</TableCell>
+                    <TableCell >{emb.nome}</TableCell><TableCell >{emb.cliente || "—"}</TableCell><TableCell >{emb.dimensoes || "—"}</TableCell><TableCell >{emb.setores || "—"}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(emb)} onEdit={() => openEdit(emb)} onDelete={() => setDeleteId(emb.id)} /></TableCell>
                   </TableRow>
                 ))

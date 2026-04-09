@@ -96,7 +96,7 @@ export default function Auditoria() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-table-header">
-                  <TableHead className="w-24 font-semibold">Tipo</TableHead>
+                  <TableHead className="text-center w-24 font-semibold">Tipo</TableHead>
                   <SortableHead label="Ação" field="acao" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableHead label="Pessoa" field="pessoa_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   <SortableHead label="Por" field="usuario_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -132,7 +132,7 @@ export default function Auditoria() {
                       <TableCell className="font-medium">{log.acao}</TableCell>
                       <TableCell>{log.pessoa_nome}</TableCell>
                       <TableCell className="text-muted-foreground">{log.usuario_nome}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{log.data_hora}</TableCell>
+                      <TableCell className="text-center text-sm text-muted-foreground">{log.data_hora}</TableCell>
                       <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{log.detalhes}</TableCell>
                     </TableRow>
                   );

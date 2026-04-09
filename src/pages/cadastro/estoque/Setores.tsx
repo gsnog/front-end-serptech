@@ -99,8 +99,8 @@ const SetoresCadastro = () => {
           <Table>
             <TableHeader>
               <TableRow className="bg-table-header">
-                <TableHead className="text-center font-semibold">Setor</TableHead>
-                <TableHead className="text-center font-semibold">Responsável</TableHead>
+                <TableHead className="font-semibold">Setor</TableHead>
+                <TableHead className="font-semibold">Responsável</TableHead>
                 <TableHead className="text-center font-semibold">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -111,8 +111,8 @@ const SetoresCadastro = () => {
                 <TableRow><TableCell colSpan={3} className="text-center py-8 text-muted-foreground">Nenhum setor encontrado.</TableCell></TableRow>
               ) : items.map((setor) => (
                 <TableRow key={setor.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center font-medium">{setor.nome}</TableCell>
-                  <TableCell className="text-center text-muted-foreground">{setor.responsavel_nome ?? "—"}</TableCell>
+                  <TableCell className="font-medium">{setor.nome}</TableCell>
+                  <TableCell className="text-muted-foreground">{setor.responsavel_nome ?? "—"}</TableCell>
                   <TableCell className="text-center">
                     <TableActions
                       onEdit={() => { setEditItem(setor); setEditNome(setor.nome); setEditResponsavelId(setor.responsavel_id ? String(setor.responsavel_id) : ""); }}

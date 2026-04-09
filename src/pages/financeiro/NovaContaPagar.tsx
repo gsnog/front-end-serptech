@@ -301,15 +301,15 @@ export default function NovaContaPagar() {
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-table-header">
-                        <TableHead className="text-center font-semibold w-16">Nº</TableHead>
+                        <TableHead className="font-semibold w-16">Nº</TableHead>
                         <TableHead className="text-center font-semibold">Vencimento</TableHead>
-                        <TableHead className="text-center font-semibold">Valor (R$)</TableHead>
+                        <TableHead className="text-right font-semibold">Valor (R$)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {parcelasData.map((p, i) => (
                         <TableRow key={p.numero} className="hover:bg-table-hover">
-                          <TableCell className="text-center text-muted-foreground font-medium">{p.numero}</TableCell>
+                          <TableCell className="text-muted-foreground font-medium">{p.numero}</TableCell>
                           <TableCell className="text-center">
                             <Input
                               type="date"
@@ -318,7 +318,7 @@ export default function NovaContaPagar() {
                               className="h-8 text-sm text-center"
                             />
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell >
                             <Input
                               type="number"
                               min="0"

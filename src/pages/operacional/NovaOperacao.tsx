@@ -172,11 +172,11 @@ const NovaOperacao = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-center">Serviço</TableHead>
-                    <TableHead className="text-center">Setor</TableHead>
+                    <TableHead >Serviço</TableHead>
+                    <TableHead >Setor</TableHead>
                     <TableHead className="text-center">Data de Início</TableHead>
-                    <TableHead className="text-center">Desconto</TableHead>
-                    <TableHead className="text-center">Valor Adicional</TableHead>
+                    <TableHead className="text-right">Desconto</TableHead>
+                    <TableHead className="text-right">Valor Adicional</TableHead>
                     <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -186,12 +186,12 @@ const NovaOperacao = () => {
                   ) : (
                     itens.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell className="text-center">{item.servico}</TableCell>
-                        <TableCell className="text-center">{item.setor}</TableCell>
-                        <TableCell className="text-center">{item.dataInicio}</TableCell>
-                        <TableCell className="text-center">{item.desconto}</TableCell>
-                        <TableCell className="text-center">{item.valorAdicional}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell >{item.servico}</TableCell>
+                        <TableCell >{item.setor}</TableCell>
+                        <TableCell >{item.dataInicio}</TableCell>
+                        <TableCell >{item.desconto}</TableCell>
+                        <TableCell >{item.valorAdicional}</TableCell>
+                        <TableCell >
                           <Button variant="ghost" size="sm" onClick={() => setItens(prev => prev.filter(i => i.id !== item.id))} className="text-destructive hover:text-destructive">
                             <Trash2 size={16} />
                           </Button>

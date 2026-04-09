@@ -73,13 +73,13 @@ const Categorias = () => {
         <FilterSection fields={filterFields} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow className="bg-table-header"><TableHead className="text-center font-semibold">Categoria</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-table-header"><TableHead className="font-semibold">Categoria</TableHead><TableHead className="text-center font-semibold">Ações</TableHead></TableRow></TableHeader>
             <TableBody>
               {isLoading ? (<TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>) :
                 filtered.length === 0 ? (<TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Nenhuma categoria encontrada.</TableCell></TableRow>) : (
                   filtered.map((c) => (
                     <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                      <TableCell className="text-center font-medium">{c.nome}</TableCell>
+                      <TableCell className="font-medium">{c.nome}</TableCell>
                       <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => { setEditItem(c); setEditNome(c.nome); }} onDelete={() => setDeleteId(c.id)} /></TableCell>
                     </TableRow>
                   ))

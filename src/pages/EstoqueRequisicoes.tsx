@@ -196,7 +196,7 @@ export default function EstoqueRequisicoes() {
               <SortableHead label="Setor" field="setor_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Unidade" field="unidade_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <TableHead className="text-center font-semibold">Aprovação</TableHead>
+              <TableHead className="font-semibold">Aprovação</TableHead>
               <TableHead className="text-center font-semibold">Entrega</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
@@ -210,24 +210,24 @@ export default function EstoqueRequisicoes() {
               ) : paginatedItems.map((req) => (
                 <>
                   <TableRow key={req.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center">
+                    <TableCell >
                       <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleRow(req.id)}>
                         {expandedRows.has(req.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                       </Button>
                     </TableCell>
                     <TableCell className="text-center">{req.data ? new Date(req.data).toLocaleDateString('pt-BR') : '—'}</TableCell>
-                    <TableCell className="text-center">{req.requisitante_nome || "—"}</TableCell>
-                    <TableCell className="text-center">{req.setor_nome || "—"}</TableCell>
-                    <TableCell className="text-center">{req.unidade_nome || "—"}</TableCell>
+                    <TableCell >{req.requisitante_nome || "—"}</TableCell>
+                    <TableCell >{req.setor_nome || "—"}</TableCell>
+                    <TableCell >{req.unidade_nome || "—"}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={req.status || ""} /></TableCell>
-                    <TableCell className="text-center">
+                    <TableCell >
                       {req.status === "Análise" ? (
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => openApproval(req)}>
                           <ClipboardCheck className="w-3.5 h-3.5" /> Analisar
                         </Button>
                       ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell >
                       {req.status === "Aprovado" && req.status_entrega !== "Efetuada" ? (
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setEntregarItem(req)}>
                           <PackageCheck className="w-3.5 h-3.5" /> Entregar
@@ -251,9 +251,9 @@ export default function EstoqueRequisicoes() {
                           <Table>
                             <TableHeader>
                               <TableRow className="bg-muted/50">
-                                <TableHead className="text-center text-xs h-8">Item</TableHead>
-                                <TableHead className="text-center text-xs h-8">Qtd Solicitada</TableHead>
-                                <TableHead className="text-center text-xs h-8">Qtd Aprovada</TableHead>
+                                <TableHead className="text-xs h-8">Item</TableHead>
+                                <TableHead className="text-right text-xs h-8">Qtd Solicitada</TableHead>
+                                <TableHead className="text-right text-xs h-8">Qtd Aprovada</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -261,9 +261,9 @@ export default function EstoqueRequisicoes() {
                                 <TableRow><TableCell colSpan={3} className="text-center text-sm py-2 text-muted-foreground">Sem itens</TableCell></TableRow>
                               ) : (req.itens ?? []).map((it, idx) => (
                                 <TableRow key={idx} className="border-0">
-                                  <TableCell className="text-center text-sm py-1">{it.item_nome || `Item #${it.item}`}</TableCell>
-                                  <TableCell className="text-center text-sm py-1">{it.quantidade}</TableCell>
-                                  <TableCell className="text-center text-sm py-1">
+                                  <TableCell className="text-sm py-1">{it.item_nome || `Item #${it.item}`}</TableCell>
+                                  <TableCell className="text-sm py-1">{it.quantidade}</TableCell>
+                                  <TableCell className="text-sm py-1">
                                     {it.quantidade_aprovada != null
                                       ? <span className="font-medium text-green-600">{it.quantidade_aprovada}</span>
                                       : <span className="text-muted-foreground">—</span>}

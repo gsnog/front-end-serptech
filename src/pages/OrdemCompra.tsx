@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FilterSection } from "@/components/FilterSection";
 import { SortableHead } from "@/components/SortableHead";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -38,9 +38,10 @@ interface ItemEntrada {
 
 const OrdemCompraPage = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") ?? "");
   const [filterFornecedor, setFilterFornecedor] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<OrdemCompra | null>(null);
@@ -311,19 +312,19 @@ const OrdemCompraPage = () => {
                   return (
                     <>
                       <TableRow key={o.id}>
-                        <TableCell className="text-center px-2">
+                        <TableCell className="px-2">
                           {itens.length > 0 && (
                             <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(o.id)}>
                               {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                             </Button>
                           )}
                         </TableCell>
-                        <TableCell className="text-center">{o.setor_nome}</TableCell>
-                        <TableCell className="text-center">{o.unidade_nome}</TableCell>
-                        <TableCell className="text-center font-medium">{o.descricao_material}</TableCell>
+                        <TableCell >{o.setor_nome}</TableCell>
+                        <TableCell >{o.unidade_nome}</TableCell>
+                        <TableCell className="font-medium">{o.descricao_material}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={o.status || ''} /></TableCell>
                         <TableCell className="text-center"><StatusBadge status={o.status_da_compra || 'Não efetuada'} /></TableCell>
-                        <TableCell className="text-center">
+                        <TableCell >
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="outline" size="sm" className="gap-1 border-border">
@@ -378,19 +379,19 @@ const OrdemCompraPage = () => {
                               <Table>
                                 <TableHeader>
                                   <TableRow className="bg-muted/50">
-                                    <TableHead className="text-center text-xs h-8">Item</TableHead>
-                                    <TableHead className="text-center text-xs h-8">Marca</TableHead>
-                                    <TableHead className="text-center text-xs h-8">Quantidade</TableHead>
-                                    <TableHead className="text-center text-xs h-8">Especificações</TableHead>
+                                    <TableHead className="text-xs h-8">Item</TableHead>
+                                    <TableHead className="text-xs h-8">Marca</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Quantidade</TableHead>
+                                    <TableHead className="text-xs h-8">Especificações</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {itens.map((item, idx) => (
                                     <TableRow key={idx} className="border-0">
-                                      <TableCell className="text-center text-sm py-1">{item.item}</TableCell>
-                                      <TableCell className="text-center text-sm py-1">{item.marca || "—"}</TableCell>
-                                      <TableCell className="text-center text-sm py-1">{item.quantidade}</TableCell>
-                                      <TableCell className="text-center text-sm py-1">{item.especificacoes || "—"}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.item}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.marca || "—"}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.quantidade}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.especificacoes || "—"}</TableCell>
                                     </TableRow>
                                   ))}
                                 </TableBody>
@@ -567,9 +568,9 @@ const OrdemCompraPage = () => {
                   <TableHeader>
                     <TableRow className="bg-table-header">
                       <TableHead>Item</TableHead>
-                      <TableHead className="text-center">Quantidade</TableHead>
-                      <TableHead className="text-center w-40">Custo Unit. (R$)</TableHead>
-                      <TableHead className="text-center">Total</TableHead>
+                      <TableHead className="text-right">Quantidade</TableHead>
+                      <TableHead className="text-right w-40">Custo Unit. (R$)</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -582,8 +583,8 @@ const OrdemCompraPage = () => {
                             <div className="text-sm">{item.itemNome}</div>
                             {!item.itemId && <span className="text-xs text-amber-600">Pré-cadastro (item novo)</span>}
                           </TableCell>
-                          <TableCell className="text-center text-sm">{item.quantidade}</TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-sm">{item.quantidade}</TableCell>
+                          <TableCell >
                             <Input
                               type="number"
                               step="0.01"
@@ -594,7 +595,7 @@ const OrdemCompraPage = () => {
                               placeholder="0,00"
                             />
                           </TableCell>
-                          <TableCell className="text-center text-sm">
+                          <TableCell className="text-right text-sm">
                             R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}
                           </TableCell>
                         </TableRow>

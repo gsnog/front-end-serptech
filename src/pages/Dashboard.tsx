@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -73,6 +74,22 @@ const ChartTooltip = ({ active, payload, label }: any) => {
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm font-bold text-foreground">
             {entry.name}: {typeof entry.value === 'number' && entry.value > 100 ? formatCurrency(entry.value) : entry.value}
+          </p>
+        ))}
+      </div>
+    )
+  }
+  return null
+}
+
+const CountTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-muted/70 dark:bg-muted/60 backdrop-blur-xl border border-border/50 rounded-xl p-4 shadow-2xl">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2 font-semibold">{label}</p>
+        {payload.map((entry: any, index: number) => (
+          <p key={index} className="text-sm font-bold text-foreground">
+            {entry.name}: {entry.value}
           </p>
         ))}
       </div>
@@ -305,7 +322,7 @@ const DashboardGeral = () => {
                       <TableRow key={item.codigo}>
                         <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                         <TableCell className="text-sm">{item.item}</TableCell>
-                        <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                        <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -386,7 +403,7 @@ const DashboardGeral = () => {
                         <TableRow key={item.codigo}>
                           <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                           <TableCell className="text-sm">{item.item}</TableCell>
-                          <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                          <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -600,14 +617,14 @@ const DashboardFinanceiro = () => {
             <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Contas a Receber</h3></div>
             <div className="px-6 pb-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Cliente</TableHead><TableHead>Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Cliente</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {contasReceberData.map((item) => (
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.cliente}</TableCell>
-                      <TableCell className="text-sm">{item.vencimento}</TableCell>
-                      <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                      <TableCell className="text-center text-sm">{item.vencimento}</TableCell>
+                      <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
                       <TableCell><StatusBadge status={item.status} /></TableCell>
                     </TableRow>
                   ))}
@@ -622,14 +639,14 @@ const DashboardFinanceiro = () => {
             <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Contas a Pagar</h3></div>
             <div className="px-6 pb-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Beneficiário</TableHead><TableHead>Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Beneficiário</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {contasPagarData.map((item) => (
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.beneficiario}</TableCell>
-                      <TableCell className="text-sm">{item.vencimento}</TableCell>
-                      <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                      <TableCell className="text-center text-sm">{item.vencimento}</TableCell>
+                      <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
                       <TableCell><StatusBadge status={item.status} /></TableCell>
                     </TableRow>
                   ))}
@@ -670,14 +687,14 @@ const DashboardFinanceiro = () => {
           <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Documentos Fiscais</h3></div>
           <div className="px-6 pb-6">
             <Table>
-              <TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Tipo</TableHead><TableHead>Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Número</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-center">Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {documentosFiscaisData.map((doc) => (
                   <TableRow key={doc.numero}>
                     <TableCell className="font-medium text-xs">{doc.numero}</TableCell>
                     <TableCell className="text-sm">{doc.tipo}</TableCell>
-                    <TableCell className="text-sm">{doc.emissao}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm">{doc.valor}</TableCell>
+                    <TableCell className="text-center text-sm">{doc.emissao}</TableCell>
+                    <TableCell className="font-semibold text-sm">{doc.valor}</TableCell>
                     <TableCell><StatusBadge status={doc.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -738,103 +755,96 @@ const DashboardEstoque = () => {
       </FilterBar>
 
       {/* Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <GradientCard title="Entradas no Período" value={formatCurrency(dash.evolutionData?.[dash.evolutionData.length - 1]?.entradas || 0)} icon={ArrowUpRight} variant="success" delay={1} />
-        <GradientCard title="Saídas no Período" value={formatCurrency(dash.evolutionData?.[dash.evolutionData.length - 1]?.saidas || 0)} icon={ArrowDownRight} variant="warning" delay={2} />
-        <GradientCard title="Valor Total em Estoque" value={formatCurrency(dash.inventarioData?.reduce((s: number, i: any) => s + (parseFloat(i.valor.replace(/[^\d,]/g, '').replace(',', '.')) || 0), 0) || 0)} icon={DollarSign} variant="success" delay={3} />
-      </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <GradientCard title="Itens em Estoque" value={dash.stats?.total_itens_estoque?.toString() || "0"} icon={Package} variant="info" delay={4} />
-        <GradientCard title="Ordens de Compra Pendentes" value={dash.stats?.oc_pendentes?.toString() || "0"} icon={Receipt} variant="warning" delay={5} />
-        <GradientCard title="Itens Críticos" value={dash.inventarioData?.filter((i: any) => i.status === "Crítico").length.toString() || "0"} icon={AlertTriangle} variant="danger" delay={6} />
+        <GradientCard title="Entradas no Período" value={formatCurrency(dash.stats?.estoque_entradas_periodo || 0)} icon={ArrowUpRight} variant="success" delay={1} />
+        <GradientCard title="Itens em Estoque" value={dash.stats?.total_itens_estoque?.toString() || "0"} icon={Package} variant="info" delay={2} />
+        <GradientCard title="Itens Críticos" value={dash.stats?.total_estoque_critico?.toString() || "0"} icon={AlertTriangle} variant="danger" delay={3} />
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Evolução de Estoque no Tempo" delay={7}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={estoqueEvolutionData}>
-              <defs>
-                <linearGradient id="estQtdGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={false} />
-              <Area type="monotone" dataKey="quantidade" name="Quantidade" stroke="hsl(var(--primary))" fill="url(#estQtdGrad)" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 3 }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
+      {/* OS / OC pendentes com link */}
+      <FadeIn delay={6}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Link
+            to="/estoque/ordem-servico?status=analise"
+            className="block group"
+          >
+            <div className="flex items-center justify-between p-5 rounded-2xl bg-amber-500/5 border border-amber-200/40 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-amber-300/60">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-amber-500/10">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wide">OS Pendentes de Análise</p>
+                  <p className="text-3xl font-bold text-amber-700 dark:text-amber-300 mt-0.5">{dash.stats?.os_pendentes ?? 0}</p>
+                </div>
+              </div>
+              <ArrowUpRight className="h-4 w-4 text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </Link>
 
-        <ChartCard title="Valor Financeiro do Estoque no Tempo" delay={8}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={estoqueEvolutionData}>
-              <defs>
-                <linearGradient id="colorValorEstoque" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(72 100% 50%)" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="hsl(72 100% 50%)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={false} />
-              <Area type="monotone" dataKey="valor" name="Valor (R$)" stroke="hsl(72 100% 50%)" fill="url(#colorValorEstoque)" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartCard>
+          <Link
+            to="/estoque/ordem-compra?status=Análise"
+            className="block group"
+          >
+            <div className="flex items-center justify-between p-5 rounded-2xl bg-blue-500/5 border border-blue-200/40 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md hover:border-blue-300/60">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-blue-500/10">
+                  <Receipt className="h-5 w-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">OC Pendentes de Análise</p>
+                  <p className="text-3xl font-bold text-blue-700 dark:text-blue-300 mt-0.5">{dash.stats?.oc_pendentes ?? 0}</p>
+                </div>
+              </div>
+              <ArrowUpRight className="h-4 w-4 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </Link>
+        </div>
+      </FadeIn>
 
-        <ChartCard title="Consumo por Setor" delay={9}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={consumoSetorData} layout="vertical" barSize={20}>
-              <defs>
-                <linearGradient id="estSetorGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
-                  <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
-                </linearGradient>
-              </defs>
-              <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="setor" tick={axisStyle} width={100} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={false} />
-              <Bar dataKey="valor" name="Consumo" fill="url(#estSetorGrad)" radius={[4, 4, 4, 4]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard title="Estoque por Unidade / Almoxarifado" delay={10}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={estoqueUnidadeData}>
-              <defs>
-                <linearGradient id="estUnidGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(72 100% 55%)" />
-                  <stop offset="100%" stopColor="hsl(72 100% 40%)" />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="unidade" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={false} />
-              <Bar dataKey="valor" name="Valor" fill="url(#estUnidGrad)" radius={[4, 4, 4, 4]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
+      {/* Consumo por Setor — largura total */}
+      <FadeIn delay={7}>
+        <div className="bg-card rounded-2xl p-6 shadow-sm shadow-black/[0.04] dark:shadow-black/20">
+          <h3 className="text-sm font-semibold text-foreground mb-5">Consumo por Setor</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={consumoSetorData} layout="vertical" barSize={22}>
+                <defs>
+                  <linearGradient id="estSetorGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                  </linearGradient>
+                </defs>
+                <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="setor" tick={axisStyle} width={120} axisLine={false} tickLine={false} />
+                <Tooltip content={<ChartTooltip />} cursor={false} />
+                <Bar dataKey="valor" name="Consumo" fill="url(#estSetorGrad)" radius={[0, 6, 6, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </FadeIn>
 
       {/* Tables */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FadeIn delay={11}>
+        <FadeIn delay={9}>
           <div className="bg-card rounded-2xl shadow-sm shadow-black/[0.04] dark:shadow-black/20 overflow-hidden">
             <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Top 10 Itens em Estoque</h3></div>
             <div className="px-6 pb-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Qtd</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Quantidade Total</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {topItensEstoqueData.map((item) => (
-                    <TableRow key={item.codigo}>
-                      <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
+                  {(dash.topItensEstoqueData ?? []).length === 0 ? (
+                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-6">Sem dados.</TableCell></TableRow>
+                  ) : (dash.topItensEstoqueData ?? []).map((item: any, i: number) => (
+                    <TableRow key={i}>
                       <TableCell className="text-sm">{item.item}</TableCell>
-                      <TableCell className="text-center text-sm">{item.quantidade}</TableCell>
-                      <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                      <TableCell className="text-right font-semibold text-sm">{item.quantidade}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -843,19 +853,24 @@ const DashboardEstoque = () => {
           </div>
         </FadeIn>
 
-        <FadeIn delay={12}>
+        <FadeIn delay={10}>
           <div className="bg-card rounded-2xl shadow-sm shadow-black/[0.04] dark:shadow-black/20 overflow-hidden">
             <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Top 10 Itens Mais Consumidos</h3></div>
             <div className="px-6 pb-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Consumo</TableHead><TableHead>Setor</TableHead></TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item</TableHead>
+                    <TableHead className="text-right">Qtd Consumida</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
-                  {topItensConsumidosData.map((item) => (
-                    <TableRow key={item.codigo}>
-                      <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
+                  {(dash.topItensConsumidosData ?? []).length === 0 ? (
+                    <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-6">Sem dados.</TableCell></TableRow>
+                  ) : (dash.topItensConsumidosData ?? []).map((item: any, i: number) => (
+                    <TableRow key={i}>
                       <TableCell className="text-sm">{item.item}</TableCell>
-                      <TableCell className="text-center text-sm">{item.consumo}</TableCell>
-                      <TableCell className="text-sm">{item.setor}</TableCell>
+                      <TableCell className="text-right font-semibold text-sm">{item.quantidade}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -870,14 +885,14 @@ const DashboardEstoque = () => {
           <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Visão Geral do Inventário</h3></div>
           <div className="px-6 pb-6">
             <Table>
-              <TableHeader><TableRow><TableHead>Item</TableHead><TableHead className="text-center">Quantidade</TableHead><TableHead>Unidade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Item</TableHead><TableHead className="text-right">Quantidade</TableHead><TableHead>Unidade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {inventarioData.map((item, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium text-sm">{item.item}</TableCell>
-                    <TableCell className="text-center text-sm">{item.quantidade}</TableCell>
+                    <TableCell className="text-sm">{item.quantidade}</TableCell>
                     <TableCell className="text-sm">{item.unidade}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                    <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
                     <TableCell><StatusBadge status={item.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -892,14 +907,14 @@ const DashboardEstoque = () => {
           <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Histórico Consolidado de Movimentações</h3></div>
           <div className="px-6 pb-6">
             <Table>
-              <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Tipo</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Quantidade</TableHead><TableHead>Requisitante</TableHead><TableHead>Setor</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="text-center">Data</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead>Item</TableHead><TableHead className="text-right">Quantidade</TableHead><TableHead>Requisitante</TableHead><TableHead>Setor</TableHead></TableRow></TableHeader>
               <TableBody>
                 {historicoMovimentacoesEstoque.map((mov, index) => (
                   <TableRow key={index}>
-                    <TableCell className="text-sm">{mov.data}</TableCell>
+                    <TableCell className="text-center text-sm">{mov.data}</TableCell>
                     <TableCell><StatusBadge status={mov.tipo} /></TableCell>
                     <TableCell className="font-medium text-sm">{mov.item}</TableCell>
-                    <TableCell className="text-center text-sm">{mov.quantidade}</TableCell>
+                    <TableCell className="text-sm">{mov.quantidade}</TableCell>
                     <TableCell className="text-sm">{mov.requisitante}</TableCell>
                     <TableCell className="text-sm">{mov.setor}</TableCell>
                   </TableRow>
@@ -1077,14 +1092,14 @@ const DashboardPatrimonio = () => {
           <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Visão Geral do Patrimônio</h3></div>
           <div className="px-6 pb-6">
             <Table>
-              <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Valor Unitário</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-right">Valor Unitário</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
               <TableBody>
                 {visaoGeralPatrimonioData.map((item) => (
                   <TableRow key={item.codigo}>
                     <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                     <TableCell className="text-sm">{item.item}</TableCell>
                     <TableCell className="text-sm">{item.tipo}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm">{item.valorUnit}</TableCell>
+                    <TableCell className="font-semibold text-sm">{item.valorUnit}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -1099,15 +1114,15 @@ const DashboardPatrimonio = () => {
           <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Histórico de Aquisições</h3></div>
           <div className="px-6 pb-6">
             <Table>
-              <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead>Tipo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead className="text-center">Data</TableHead><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
               <TableBody>
                 {historicoPatrimonio.map((item, index) => (
                   <TableRow key={index}>
-                    <TableCell className="text-sm">{item.data}</TableCell>
+                    <TableCell className="text-center text-sm">{item.data}</TableCell>
                     <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                     <TableCell className="text-sm">{item.item}</TableCell>
                     <TableCell className="text-sm">{item.tipo}</TableCell>
-                    <TableCell className="text-right font-semibold text-sm">{item.valor}</TableCell>
+                    <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1283,74 +1298,101 @@ const DashboardMeuPerfil = () => {
 // ===== DASHBOARD OPERACIONAL =====
 const DashboardOperacional = () => {
   const { dash } = useDashboardData();
-  const { data: projetos, isLoading: isLoadingProjetos } = useQuery({
-    queryKey: ['projetos'],
-    queryFn: fetchProjetos
-  });
 
-  const { data: tarefas, isLoading: isLoadingTarefas } = useQuery({
-    queryKey: ['tarefas'],
-    queryFn: fetchTarefas
-  });
-
-  const operacoesAtivas = projetos ? projetos.filter((p: any) => p.status === 'Em Andamento').length : 0;
-  const servicosAndamento = tarefas ? tarefas.filter((t: any) => t.status === 'Em Andamento').length : 0;
+  const mapasPorMedico: { medico: string; total: number; pendentes: number }[] =
+    dash.mapasPorMedicoData ?? [];
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GradientCard title="Operações Ativas" value={isLoadingProjetos ? "..." : operacoesAtivas.toString()} icon={BarChart3} variant="info" delay={1} />
-        <GradientCard title="Embarcações Ativas" value={dash.stats?.embarcacoes_ativas?.toString() || "0"} icon={Package} variant="success" delay={2} />
-        <GradientCard title="Serviços em Andamento" value={isLoadingTarefas ? "..." : servicosAndamento.toString()} icon={TrendingUp} variant="warning" delay={3} />
-        <GradientCard title="OS Pendentes de Análise" value={dash.stats?.os_pendentes?.toString() || "0"} icon={Building2} variant="neutral" delay={4} />
+      {/* Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <GradientCard title="Mapas (total)" value={dash.stats?.total_mapas_filhos?.toString() ?? "0"} icon={Receipt} variant="success" delay={1} />
+        <GradientCard title="Mapas Pendentes" value={dash.stats?.total_mapas_pendentes?.toString() ?? "0"} icon={AlertTriangle} variant="danger" delay={2} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ChartCard title="Embarcações por Setor" delay={5}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dash.operacionalCharts?.setorData || []}>
-              <XAxis dataKey="name" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tick={axisStyle} axisLine={false} tickLine={false} />
-              <Tooltip content={<ChartTooltip />} cursor={false} />
-              <Bar dataKey="value" name="Embarcações" fill="hsl(var(--primary))" radius={[4, 4, 4, 4]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
+      {/* Mapas por médico */}
+      <FadeIn delay={5}>
+        <div className="bg-card rounded-2xl p-6 shadow-sm shadow-black/[0.04] dark:shadow-black/20">
+          <h3 className="text-sm font-semibold text-foreground mb-5">Mapas por Médico</h3>
+          {mapasPorMedico.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-10">Nenhum dado disponível.</p>
+          ) : (
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={mapasPorMedico} layout="vertical" barSize={20} barGap={4}>
+                  <defs>
+                    <linearGradient id="mapaTotalGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
+                    </linearGradient>
+                    <linearGradient id="mapaPendenteGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor="hsl(45 90% 55%)" stopOpacity={0.6} />
+                      <stop offset="100%" stopColor="hsl(45 90% 55%)" stopOpacity={1} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis type="number" allowDecimals={false} tick={axisStyle} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="medico"
+                    width={130}
+                    tick={{ ...axisStyle, fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip content={<CountTooltip />} cursor={false} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="total" name="Total" fill="url(#mapaTotalGrad)" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="pendentes" name="Pendentes" fill="url(#mapaPendenteGrad)" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </FadeIn>
 
-        <ChartCard title="Embarcações por Status" delay={6}>
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={dash.operacionalCharts?.statusData || []} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={4} dataKey="value" cornerRadius={6}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false}>
-                {(dash.operacionalCharts?.statusData || []).map((entry: any, index: number) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-              </Pie>
-              <Tooltip content={<ChartTooltip />} cursor={false} />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-      </div>
-
-      <FadeIn delay={7}>
+      {/* Tabela detalhada por médico */}
+      <FadeIn delay={6}>
         <div className="bg-card rounded-2xl shadow-sm shadow-black/[0.04] dark:shadow-black/20 overflow-hidden">
-          <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Últimas Operações</h3></div>
+          <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Detalhe por Médico</h3></div>
           <div className="px-6 pb-6">
             <Table>
-              <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Operação</TableHead><TableHead>Embarcação</TableHead><TableHead>Setor</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Médico</TableHead>
+                  <TableHead className="text-center">Total de Mapas</TableHead>
+                  <TableHead className="text-center">Pendentes</TableHead>
+                  <TableHead className="text-center">Concluídos</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
-                {(dash.operacionalData?.recentOperations || []).map((item: any, idx: number) => (
-                  <TableRow key={idx}>
-                    <TableCell className="text-sm">{item.data}</TableCell>
-                    <TableCell className="font-medium text-sm">{item.operacao}</TableCell>
-                    <TableCell className="text-sm">{item.embarcacao}</TableCell>
-                    <TableCell className="text-sm">{item.setor}</TableCell>
-                    <TableCell><StatusBadge status={item.status} /></TableCell>
+                {mapasPorMedico.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                      Nenhum dado disponível.
+                    </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  mapasPorMedico.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium text-sm">{row.medico}</TableCell>
+                      <TableCell className="text-center text-sm">{row.total}</TableCell>
+                      <TableCell className="text-center">
+                        {row.pendentes > 0
+                          ? <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">{row.pendentes}</span>
+                          : <span className="text-muted-foreground text-xs">—</span>}
+                      </TableCell>
+                      <TableCell className="text-center text-sm text-green-600 font-medium">
+                        {row.total - row.pendentes}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </div>
       </FadeIn>
+
     </div>
   )
 }
