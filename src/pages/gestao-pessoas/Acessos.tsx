@@ -12,45 +12,94 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Search, Shield, Users, Edit, Lock, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Search, Shield, Users, Lock, ChevronDown, ChevronRight, Save, Loader2, Trash2 } from "lucide-react";
 import { systemRoles } from "@/contexts/PermissionsContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchPessoas, setGrupoPessoa, pessoasQueryKey, type Pessoa } from "@/services/pessoas";
+import { fetchRoles, setRolePermissions, createRole, deleteRole, rolesQueryKey, type RoleAPI } from "@/services/roles";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import type { Permission } from "@/contexts/PermissionsContext";
 
-// Módulos com features granulares
-const modulosSistema = [
+// ── Módulos com sub-grupos de features ───────────────────────────────────────
+
+type Feature      = { id: string; nome: string; acoes: string[] };
+// module: permission module ID for this group (may differ from parent mod.id for cadastro groups)
+type FeatureGroup = { label: string; module: string; features: Feature[] };
+type Modulo       = { id: string; nome: string; groups: FeatureGroup[] };
+
+const modulosSistema: Modulo[] = [
   {
-    id: 'dashboard', nome: 'Dashboard', features: [
-      { id: 'dashboard_geral', nome: 'Dashboard Geral', acoes: ['view'] },
-      { id: 'dashboard_financeiro', nome: 'Dashboard Financeiro', acoes: ['view'] },
-      { id: 'dashboard_estoque', nome: 'Dashboard Estoque', acoes: ['view'] },
-      { id: 'dashboard_comercial', nome: 'Dashboard Comercial', acoes: ['view'] },
+    id: 'dashboard', nome: 'Dashboard', groups: [
+      { label: 'Dashboards', module: 'dashboard', features: [
+        { id: 'dashboard_geral',      nome: 'Dashboard Geral',      acoes: ['view'] },
+        { id: 'dashboard_financeiro', nome: 'Dashboard Financeiro', acoes: ['view'] },
+        { id: 'dashboard_estoque',    nome: 'Dashboard Estoque',    acoes: ['view'] },
+        { id: 'dashboard_comercial',  nome: 'Dashboard Comercial',  acoes: ['view'] },
+      ]},
     ]
   },
   {
-    id: 'estoque', nome: 'Estoque', features: [
-      { id: 'est_entradas', nome: 'Entradas', acoes: ['view', 'create', 'edit', 'delete'] },
-      { id: 'est_inventario', nome: 'Inventário', acoes: ['view', 'create', 'edit', 'delete'] },
-      { id: 'est_saidas', nome: 'Saídas', acoes: ['view', 'create', 'edit', 'delete'] },
-      { id: 'est_requisicoes', nome: 'Requisições', acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+    id: 'estoque', nome: 'Estoque', groups: [
+      { label: 'Cadastro', module: 'cadastro_estoque', features: [
+        { id: 'cad_est_fornecedores', nome: 'Fornecedores', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_est_itens',        nome: 'Itens',        acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_est_setores',      nome: 'Setores',      acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_est_unidades',     nome: 'Unidades',     acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_est_softwares',    nome: 'Softwares',    acoes: ['view', 'create', 'edit', 'delete'] },
+      ]},
+      { label: 'Operacional', module: 'estoque', features: [
+        { id: 'est_entradas',         nome: 'Entradas',         acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'est_inventario',       nome: 'Inventário',       acoes: ['view'] },
+        { id: 'est_saidas',           nome: 'Saídas',           acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'est_pedidos_internos', nome: 'Pedidos Internos', acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+        { id: 'est_ordens_compra',    nome: 'Ordem de Compra',  acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+        { id: 'est_ordens_servico',   nome: 'Ordem de Serviço', acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+      ]},
     ]
   },
   {
-    id: 'financeiro', nome: 'Financeiro', features: [
-      { id: 'fin_contas_receber', nome: 'Contas a Receber', acoes: ['view', 'create', 'edit', 'delete', 'export'] },
-      { id: 'fin_contas_pagar', nome: 'Contas a Pagar', acoes: ['view', 'create', 'edit', 'delete', 'export'] },
-      { id: 'fin_fluxo_caixa', nome: 'Fluxo de Caixa', acoes: ['view', 'export'] },
+    id: 'financeiro', nome: 'Financeiro', groups: [
+      { label: 'Cadastro', module: 'cadastro_financeiro', features: [
+        { id: 'cad_fin_conta_bancaria', nome: 'Conta Bancária',       acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_conciliacao',    nome: 'Conciliação Bancária', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_transferencias', nome: 'Transferências',       acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_clientes',       nome: 'Clientes',             acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_centro_custo',   nome: 'Centro de Custo',      acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_centro_receita', nome: 'Centro de Receita',    acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_categorias',     nome: 'Categorias',           acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_subcategorias',  nome: 'Subcategorias',        acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_plano_contas',   nome: 'Plano de Contas',      acoes: ['view', 'create', 'edit', 'delete'] },
+      ]},
+      { label: 'Operacional', module: 'financeiro', features: [
+        { id: 'fin_contas_receber', nome: 'Contas a Receber', acoes: ['view', 'create', 'edit', 'delete', 'export'] },
+        { id: 'fin_contas_pagar',   nome: 'Contas a Pagar',   acoes: ['view', 'create', 'edit', 'delete', 'export'] },
+        { id: 'fin_fluxo_caixa',    nome: 'Fluxo de Caixa',   acoes: ['view', 'export'] },
+      ]},
     ]
   },
   {
-    id: 'gestao_pessoas', nome: 'Gestão de Pessoas', features: [
-      { id: 'gp_pessoas', nome: 'Pessoas (360º)', acoes: ['view', 'create', 'edit', 'delete'] },
-      { id: 'gp_hierarquia', nome: 'Hierarquia', acoes: ['view'] },
-      { id: 'gp_permissoes', nome: 'Permissões', acoes: ['view', 'create', 'edit', 'delete'] },
+    id: 'operacional', nome: 'Operacional', groups: [
+      { label: 'Operacional', module: 'operacional', features: [
+        { id: 'op_mapas',  nome: 'Mapas',  acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'op_exames', nome: 'Exames', acoes: ['view', 'create', 'edit', 'delete'] },
+      ]},
+    ]
+  },
+  {
+    id: 'gestao_pessoas', nome: 'Gestão de Pessoas', groups: [
+      { label: 'Cadastro', module: 'cadastro_pessoas', features: [
+        { id: 'cad_pess_pessoas', nome: 'Pessoas', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_pess_cargos',  nome: 'Cargos',  acoes: ['view', 'create', 'edit', 'delete'] },
+      ]},
+      { label: 'Gestão', module: 'gestao_pessoas', features: [
+        { id: 'gp_pessoas',    nome: 'Pessoas (360º)', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'gp_hierarquia', nome: 'Hierarquia',     acoes: ['view'] },
+        { id: 'gp_permissoes', nome: 'Permissões',     acoes: ['view', 'create', 'edit', 'delete'] },
+      ]},
     ]
   },
 ];
@@ -58,42 +107,134 @@ const modulosSistema = [
 const acoesLabels: Record<string, string> = {
   view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', export: 'Exportar',
 };
-
 const allAcoes = Object.keys(acoesLabels);
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 type PermissionsMap = Record<string, Set<string>>;
+
+/** Converts backend Permission[] → local PermissionsMap keyed by feature id */
+function permissionsToMap(permissions: Permission[]): PermissionsMap {
+  const map: PermissionsMap = {};
+  for (const p of permissions) {
+    // feature id format: module_page  (e.g. "est_entradas" or "dashboard_geral")
+    const key = p.page === 'all' ? p.module : `${p.module}_${p.page}`.replace(/^.*\//, '');
+    // Also accept the key as-is (page field already is the feature id)
+    const featureKey = p.page !== 'all' ? p.page : p.module;
+    map[featureKey] = new Set(p.actions);
+  }
+  return map;
+}
+
+/** Converts local PermissionsMap → backend Permission[] */
+function mapToPermissions(map: PermissionsMap): Permission[] {
+  const result: Permission[] = [];
+  for (const [featureId, actions] of Object.entries(map)) {
+    if (actions.size === 0) continue;
+    // Use group.module (not mod.id) so cadastro features get the right module ID
+    let module = 'all';
+    outer: for (const mod of modulosSistema) {
+      for (const group of mod.groups) {
+        if (group.features.find(f => f.id === featureId)) {
+          module = group.module;
+          break outer;
+        }
+      }
+    }
+    result.push({
+      module,
+      page: featureId,
+      actions: Array.from(actions),
+      scope: 'all',
+    });
+  }
+  return result;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Acessos() {
   const { hasPermission } = usePermissions();
   const isAdmin = hasPermission('all', 'all', 'delete');
 
-  const [activeTab, setActiveTab] = useState("perfis");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [activeTab, setActiveTab]         = useState("perfis");
+  const [searchTerm, setSearchTerm]       = useState("");
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
   const [newProfileDialog, setNewProfileDialog] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileDesc, setNewProfileDesc] = useState("");
-  const [customRoles, setCustomRoles] = useState<Array<{ id: string; name: string; description: string }>>([]);
 
-  const [rolePermissions, setRolePermissions] = useState<Record<string, PermissionsMap>>(() => {
-    const map: Record<string, PermissionsMap> = {};
-    const adminPerms: PermissionsMap = {};
-    modulosSistema.forEach(mod => mod.features.forEach(feat => { adminPerms[feat.id] = new Set(feat.acoes); }));
-    map['admin'] = adminPerms;
-    systemRoles.filter(r => r.id !== 'admin').forEach(r => { map[r.id] = {}; });
-    return map;
-  });
+  // Local edits: roleId → PermissionsMap (only for unsaved changes)
+  const [localEdits, setLocalEdits] = useState<Record<number, PermissionsMap>>({});
+  const [dirtyRoles, setDirtyRoles] = useState<Set<number>>(new Set());
 
   const queryClient = useQueryClient();
 
-  const { data: pessoasResponse, isLoading } = useQuery({
+  // ── Queries ──────────────────────────────────────────────────────────────────
+
+  const { data: roles = [], isLoading: rolesLoading } = useQuery({
+    queryKey: rolesQueryKey,
+    queryFn: fetchRoles,
+  });
+
+  const { data: pessoasResponse, isLoading: pessoasLoading } = useQuery({
     queryKey: pessoasQueryKey,
     queryFn: () => fetchPessoas(1, '', 200),
   });
   const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
 
-  const [userRoles, setUserRoles] = useState<Record<number, string>>({});
-  const [savingId, setSavingId] = useState<number | null>(null);
+  // ── Mutations ─────────────────────────────────────────────────────────────────
+
+  const savePermsMutation = useMutation({
+    mutationFn: ({ id, permissions }: { id: number; permissions: Permission[] }) =>
+      setRolePermissions(id, permissions),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: rolesQueryKey });
+      setDirtyRoles(prev => { const n = new Set(prev); n.delete(updated.id); return n; });
+      setLocalEdits(prev => { const n = { ...prev }; delete n[updated.id]; return n; });
+      toast({ title: "Permissões salvas", description: `Perfil "${updated.name}" atualizado.` });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || "Erro ao salvar permissões.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
+  });
+
+  const [userRoles, setUserRoles]     = useState<Record<number, string>>({});
+  const [savingId, setSavingId]       = useState<number | null>(null);
+  const [deleteDialogId, setDeleteDialogId] = useState<number | null>(null);
+
+  const createRoleMutation = useMutation({
+    mutationFn: (name: string) => createRole(name),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: rolesQueryKey });
+      setNewProfileName('');
+      setNewProfileDesc('');
+      setNewProfileDialog(false);
+      setSelectedRoleId(created.id);
+      toast({ title: 'Perfil criado', description: `Perfil "${created.name}" criado com sucesso.` });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || 'Erro ao criar perfil.';
+      toast({ title: 'Erro', description: msg, variant: 'destructive' });
+    },
+  });
+
+  const deleteRoleMutation = useMutation({
+    mutationFn: (id: number) => deleteRole(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: rolesQueryKey });
+      if (selectedRoleId === deleteDialogId) setSelectedRoleId(null);
+      setDeleteDialogId(null);
+      toast({ title: 'Perfil excluído' });
+    },
+    onError: (err: any) => {
+      const msg = err?.response?.data?.detail || 'Erro ao excluir perfil.';
+      toast({ title: 'Erro', description: msg, variant: 'destructive' });
+      setDeleteDialogId(null);
+    },
+  });
 
   const grupoMutation = useMutation({
     mutationFn: ({ id, grupo }: { id: number; grupo: string }) => setGrupoPessoa(id, grupo),
@@ -110,6 +251,42 @@ export default function Acessos() {
     },
   });
 
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+
+  const selectedRole: RoleAPI | undefined = roles.find(r => r.id === selectedRoleId);
+
+  /** Returns the permissions map for the selected role (local edits or from server) */
+  const getPermsMap = (roleId: number): PermissionsMap => {
+    if (localEdits[roleId]) return localEdits[roleId];
+    const role = roles.find(r => r.id === roleId);
+    return role ? permissionsToMap(role.permissions) : {};
+  };
+
+  const isAdminRole = (role?: RoleAPI) => role?.name?.toLowerCase() === 'admin';
+
+  const isChecked = (featureId: string, acao: string): boolean => {
+    if (!selectedRoleId) return false;
+    if (isAdminRole(selectedRole)) return true;
+    return getPermsMap(selectedRoleId)[featureId]?.has(acao) ?? false;
+  };
+
+  const togglePermission = (featureId: string, acao: string) => {
+    if (!selectedRoleId || isAdminRole(selectedRole) || !isAdmin) return;
+    setLocalEdits(prev => {
+      const base = getPermsMap(selectedRoleId);
+      const current = new Set(base[featureId] ?? []);
+      current.has(acao) ? current.delete(acao) : current.add(acao);
+      return { ...prev, [selectedRoleId]: { ...base, [featureId]: current } };
+    });
+    setDirtyRoles(prev => new Set(prev).add(selectedRoleId));
+  };
+
+  const handleSavePermissions = () => {
+    if (!selectedRoleId || !dirtyRoles.has(selectedRoleId)) return;
+    const map = getPermsMap(selectedRoleId);
+    savePermsMutation.mutate({ id: selectedRoleId, permissions: mapToPermissions(map) });
+  };
+
   const handleApplyRole = (pessoa: Pessoa) => {
     const grupo = userRoles[pessoa.id];
     if (!grupo) return;
@@ -117,44 +294,21 @@ export default function Acessos() {
     grupoMutation.mutate({ id: pessoa.id, grupo });
   };
 
+  const toggleModuleExpand = (modId: string) =>
+    setExpandedModules(prev => { const n = new Set(prev); n.has(modId) ? n.delete(modId) : n.add(modId); return n; });
+
   const filteredPessoas = useMemo(() =>
     pessoas.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase())),
-    [pessoas, searchTerm]
+    [pessoas, searchTerm],
   );
 
-  const allRoles = [...systemRoles, ...customRoles];
+  // Display list: server roles + system role names for any missing
+  const allRolesDisplay = useMemo(() => {
+    if (roles.length) return roles;
+    return systemRoles.map((r, i) => ({ id: i + 1, name: r.id, permissions: [] } as RoleAPI));
+  }, [roles]);
 
-  const toggleModuleExpand = (modId: string) => {
-    setExpandedModules(prev => { const n = new Set(prev); n.has(modId) ? n.delete(modId) : n.add(modId); return n; });
-  };
-
-  const togglePermission = (featureId: string, acao: string) => {
-    if (!selectedRole || selectedRole === 'admin' || !isAdmin) return;
-    setRolePermissions(prev => {
-      const roleCopy = { ...prev };
-      const perms = { ...roleCopy[selectedRole] };
-      const current = perms[featureId] ? new Set(perms[featureId]) : new Set<string>();
-      current.has(acao) ? current.delete(acao) : current.add(acao);
-      perms[featureId] = current;
-      roleCopy[selectedRole] = perms;
-      return roleCopy;
-    });
-  };
-
-  const isChecked = (featureId: string, acao: string): boolean => {
-    if (!selectedRole) return false;
-    if (selectedRole === 'admin') return true;
-    return rolePermissions[selectedRole]?.[featureId]?.has(acao) ?? false;
-  };
-
-  const handleCreateProfile = () => {
-    if (!newProfileName.trim()) return;
-    const id = newProfileName.toLowerCase().replace(/\s+/g, '_');
-    setCustomRoles(prev => [...prev, { id, name: newProfileName.trim(), description: newProfileDesc.trim() }]);
-    setRolePermissions(prev => ({ ...prev, [id]: {} }));
-    setNewProfileName(""); setNewProfileDesc(""); setNewProfileDialog(false);
-    toast({ title: "Perfil criado", description: `Perfil "${newProfileName}" criado.` });
-  };
+  // ── Guard ─────────────────────────────────────────────────────────────────────
 
   if (!isAdmin) {
     return (
@@ -166,16 +320,21 @@ export default function Acessos() {
     );
   }
 
+  const isSaving = savePermsMutation.isPending;
+
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="perfis" className="gap-2"><Shield className="h-4 w-4" />Perfis de Acesso</TabsTrigger>
-          <TabsTrigger value="usuarios" className="gap-2"><Users className="h-4 w-4" />Usuários e Atribuições</TabsTrigger>
+          <TabsTrigger value="perfis"   className="gap-2"><Shield className="h-4 w-4" />Perfis de Acesso</TabsTrigger>
+          <TabsTrigger value="usuarios" className="gap-2"><Users  className="h-4 w-4" />Usuários e Atribuições</TabsTrigger>
         </TabsList>
 
+        {/* ── Perfis ── */}
         <TabsContent value="perfis" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* Lista de perfis */}
             <Card className="border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -185,75 +344,143 @@ export default function Acessos() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {allRoles.map((role) => (
-                  <button
-                    key={role.id}
-                    onClick={() => { setSelectedRole(role.id); setExpandedModules(new Set()); }}
-                    className={cn(
-                      "w-full p-3 rounded border text-left transition-colors",
-                      selectedRole === role.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50"
-                    )}
-                  >
-                    <div className="font-medium text-foreground">{role.name}</div>
-                    <div className="text-sm text-muted-foreground">{role.description}</div>
-                  </button>
-                ))}
+              <CardContent className="p-0">
+                <div className="overflow-y-auto max-h-[480px] px-6 py-4 space-y-2">
+                {rolesLoading
+                  ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded" />)
+                  : allRolesDisplay.map((role) => {
+                    const isProtected = ['admin','diretor','gestor','usuario','assistente','rh_admin','rh_leitura'].includes(role.name.toLowerCase());
+                    return (
+                      <div key={role.id} className="relative group">
+                        <button
+                          onClick={() => { setSelectedRoleId(role.id); setExpandedModules(new Set()); }}
+                          className={cn(
+                            "w-full p-3 pr-9 rounded border text-left transition-colors",
+                            selectedRoleId === role.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium text-foreground capitalize">{role.name}</div>
+                            {dirtyRoles.has(role.id) && (
+                              <span className="text-xs text-amber-500 font-medium">não salvo</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {systemRoles.find(r => r.id === role.name)?.description || 'Perfil personalizado'}
+                          </div>
+                        </button>
+                        {!isProtected && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setDeleteDialogId(role.id); }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                }
+                </div>
               </CardContent>
             </Card>
 
+            {/* Permissões do perfil selecionado */}
             <Card className="border-border lg:col-span-2">
               <CardHeader>
-                <CardTitle className="text-lg">
-                  Permissões: {allRoles.find(r => r.id === selectedRole)?.name || "Selecione um perfil"}
-                  {selectedRole === 'admin' && <span className="ml-2 text-xs font-normal text-muted-foreground">(acesso total - não editável)</span>}
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg">
+                    Permissões: {selectedRole?.name || "Selecione um perfil"}
+                    {isAdminRole(selectedRole) && (
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">(acesso total — não editável)</span>
+                    )}
+                  </CardTitle>
+                  {selectedRoleId && !isAdminRole(selectedRole) && dirtyRoles.has(selectedRoleId) && (
+                    <Button size="sm" onClick={handleSavePermissions} disabled={isSaving} className="gap-1">
+                      {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                      Salvar
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                {selectedRole ? (
+                {selectedRoleId ? (
                   <div className="space-y-1">
-                    {modulosSistema.map(modulo => (
-                      <div key={modulo.id} className="border border-border rounded overflow-hidden">
-                        <button onClick={() => toggleModuleExpand(modulo.id)} className="w-full flex items-center gap-2 p-3 hover:bg-muted/50 transition-colors">
-                          {expandedModules.has(modulo.id) ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                          <span className="font-medium text-foreground text-sm">{modulo.nome}</span>
-                          <span className="text-xs text-muted-foreground ml-auto">{modulo.features.length} features</span>
-                        </button>
-                        {expandedModules.has(modulo.id) && (
-                          <div className="border-t border-border">
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="text-xs">Feature</TableHead>
-                                  {allAcoes.map(a => <TableHead key={a} className="text-center w-16 text-xs">{acoesLabels[a]}</TableHead>)}
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {modulo.features.map(feat => (
-                                  <TableRow key={feat.id}>
-                                    <TableCell className="text-sm">{feat.nome}</TableCell>
-                                    {allAcoes.map(acao => (
-                                      <TableCell key={acao} className="text-center">
-                                        {feat.acoes.includes(acao) ? (
-                                          <Checkbox checked={isChecked(feat.id, acao)} onCheckedChange={() => togglePermission(feat.id, acao)} disabled={selectedRole === 'admin'} />
-                                        ) : <span className="text-muted-foreground/30">—</span>}
-                                      </TableCell>
+                    {modulosSistema.map(modulo => {
+                      const totalFeatures = modulo.groups.reduce((acc, g) => acc + g.features.length, 0);
+                      return (
+                        <div key={modulo.id} className="border border-border rounded overflow-hidden">
+                          <button
+                            onClick={() => toggleModuleExpand(modulo.id)}
+                            className="w-full flex items-center gap-2 p-3 hover:bg-muted/50 transition-colors"
+                          >
+                            {expandedModules.has(modulo.id)
+                              ? <ChevronDown  className="h-4 w-4 text-muted-foreground" />
+                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            <span className="font-medium text-foreground text-sm">{modulo.nome}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">{totalFeatures} features</span>
+                          </button>
+                          {expandedModules.has(modulo.id) && (
+                            <div className="border-t border-border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="text-xs">Feature</TableHead>
+                                    {allAcoes.map(a => (
+                                      <TableHead key={a} className="text-center w-16 text-xs">{acoesLabels[a]}</TableHead>
                                     ))}
                                   </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                                </TableHeader>
+                                <TableBody>
+                                  {modulo.groups.map((group, gi) => (
+                                    <>
+                                      {modulo.groups.length > 1 && (
+                                        <TableRow key={`label-${gi}`} className="bg-muted/40 hover:bg-muted/40">
+                                          <TableCell
+                                            colSpan={allAcoes.length + 1}
+                                            className="py-1 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+                                          >
+                                            {group.label}
+                                          </TableCell>
+                                        </TableRow>
+                                      )}
+                                      {group.features.map(feat => (
+                                        <TableRow key={feat.id}>
+                                          <TableCell className="text-sm">{feat.nome}</TableCell>
+                                          {allAcoes.map(acao => (
+                                            <TableCell key={acao} className="text-center">
+                                              {feat.acoes.includes(acao) ? (
+                                                <Checkbox
+                                                  checked={isChecked(feat.id, acao)}
+                                                  onCheckedChange={() => togglePermission(feat.id, acao)}
+                                                  disabled={isAdminRole(selectedRole) || !isAdmin}
+                                                />
+                                              ) : (
+                                                <span className="text-muted-foreground/30">—</span>
+                                              )}
+                                            </TableCell>
+                                          ))}
+                                        </TableRow>
+                                      ))}
+                                    </>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : <div className="text-center py-12 text-muted-foreground">Selecione um perfil</div>}
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">Selecione um perfil</div>
+                )}
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
+        {/* ── Usuários ── */}
         <TabsContent value="usuarios" className="mt-6">
           <Card className="border-border">
             <CardHeader>
@@ -261,7 +488,12 @@ export default function Acessos() {
                 <CardTitle className="text-lg">Atribuição de Perfis</CardTitle>
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar pessoa..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                  <Input
+                    placeholder="Buscar pessoa..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
               </div>
             </CardHeader>
@@ -278,51 +510,58 @@ export default function Acessos() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {isLoading ? (
-                      Array.from({ length: 5 }).map((_, i) => (
+                    {pessoasLoading
+                      ? Array.from({ length: 5 }).map((_, i) => (
                         <TableRow key={i}>
-                          {Array.from({ length: 5 }).map((_, j) => <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>)}
+                          {Array.from({ length: 5 }).map((_, j) => (
+                            <TableCell key={j}><Skeleton className="h-4 w-20" /></TableCell>
+                          ))}
                         </TableRow>
                       ))
-                    ) : filteredPessoas.map((pessoa) => (
-                      <TableRow key={pessoa.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">{pessoa.iniciais}</div>
-                            <span className="font-medium">{pessoa.nome}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>{pessoa.setor || "—"}</TableCell>
-                        <TableCell>{pessoa.cargo || "—"}</TableCell>
-                        <TableCell className="text-muted-foreground">{pessoa.role}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Select
-                              value={userRoles[pessoa.id] || ''}
-                              onValueChange={(v) => setUserRoles(prev => ({ ...prev, [pessoa.id]: v }))}
-                            >
-                              <SelectTrigger className="w-36">
-                                <SelectValue placeholder={pessoa.role} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allRoles.map((role) => (
-                                  <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {userRoles[pessoa.id] && userRoles[pessoa.id] !== pessoa.role && (
-                              <Button
-                                size="sm"
-                                onClick={() => handleApplyRole(pessoa)}
-                                disabled={savingId === pessoa.id}
+                      : filteredPessoas.map((pessoa) => (
+                        <TableRow key={pessoa.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
+                                {pessoa.iniciais}
+                              </div>
+                              <span className="font-medium">{pessoa.nome}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>{pessoa.setor || "—"}</TableCell>
+                          <TableCell>{pessoa.cargo || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground capitalize">{pessoa.role}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={userRoles[pessoa.id] || ''}
+                                onValueChange={(v) => setUserRoles(prev => ({ ...prev, [pessoa.id]: v }))}
                               >
-                                {savingId === pessoa.id ? "..." : "Aplicar"}
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                                <SelectTrigger className="w-36">
+                                  <SelectValue placeholder={pessoa.role} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {allRolesDisplay.map((role) => (
+                                    <SelectItem key={role.id} value={role.name}>
+                                      {role.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {userRoles[pessoa.id] && userRoles[pessoa.id] !== pessoa.role && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleApplyRole(pessoa)}
+                                  disabled={savingId === pessoa.id}
+                                >
+                                  {savingId === pessoa.id ? "..." : "Aplicar"}
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    }
                   </TableBody>
                 </Table>
               </div>
@@ -331,23 +570,66 @@ export default function Acessos() {
         </TabsContent>
       </Tabs>
 
+      {/* Dialog — Novo Perfil */}
       <Dialog open={newProfileDialog} onOpenChange={setNewProfileDialog}>
         <DialogContent>
           <DialogHeader><DialogTitle>Novo Perfil de Acesso</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>Nome do Perfil <span className="text-destructive">*</span></Label>
-              <Input value={newProfileName} onChange={(e) => setNewProfileName(e.target.value)} placeholder="Ex: Supervisor de Estoque" />
+            <div className="space-y-2">
+              <Label>Nome do Perfil <span className="text-destructive">*</span></Label>
+              <Input
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                placeholder="Ex: Supervisor de Estoque"
+                onKeyDown={(e) => e.key === 'Enter' && newProfileName.trim() && createRoleMutation.mutate(newProfileName.trim())}
+              />
             </div>
-            <div className="space-y-2"><Label>Descrição</Label>
-              <Input value={newProfileDesc} onChange={(e) => setNewProfileDesc(e.target.value)} placeholder="Descreva as responsabilidades" />
+            <div className="space-y-2">
+              <Label>Descrição <span className="text-xs text-muted-foreground">(opcional)</span></Label>
+              <Input
+                value={newProfileDesc}
+                onChange={(e) => setNewProfileDesc(e.target.value)}
+                placeholder="Descreva as responsabilidades"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewProfileDialog(false)}>Cancelar</Button>
-            <Button onClick={handleCreateProfile}>Criar Perfil</Button>
+            <Button variant="outline" onClick={() => { setNewProfileDialog(false); setNewProfileName(''); setNewProfileDesc(''); }}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => createRoleMutation.mutate(newProfileName.trim())}
+              disabled={!newProfileName.trim() || createRoleMutation.isPending}
+            >
+              {createRoleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Criar Perfil
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog — Confirmar exclusão */}
+      <AlertDialog open={deleteDialogId !== null} onOpenChange={(open) => { if (!open) setDeleteDialogId(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir perfil</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o perfil <strong>{allRolesDisplay.find(r => r.id === deleteDialogId)?.name}</strong>?
+              Usuários com este perfil ficarão sem grupo atribuído. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteDialogId !== null && deleteRoleMutation.mutate(deleteDialogId)}
+            >
+              {deleteRoleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

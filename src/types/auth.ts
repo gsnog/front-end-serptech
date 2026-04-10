@@ -1,9 +1,12 @@
+import type { UserPermissions } from '@/contexts/PermissionsContext';
+
 export interface User {
     id: number;
     username: string;
     email: string;
     first_name: string;
     last_name: string;
+    nome: string;
     role: string;
 }
 
@@ -13,6 +16,7 @@ export interface AuthTokens {
 }
 
 export interface LoginResponse extends AuthTokens {
-    // Se backend customizar a resposta do TokenObtainPairView para retornar dados do usuário
     user?: User;
+    /** Permissões completas retornadas pelo backend no login */
+    permissions?: UserPermissions;
 }

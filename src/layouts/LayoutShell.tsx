@@ -1,9 +1,26 @@
 import { useState } from "react"
-import { Outlet, useLocation } from "react-router-dom"
+import { Outlet, useLocation, Navigate } from "react-router-dom"
 import { AppSidebar } from "@/components/AppSidebar"
 import { Topbar } from "@/components/Topbar"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { cn } from "@/lib/utils"
+import { usePermissions } from "@/contexts/PermissionsContext"
+
+// Maps path prefixes to the module required for access.
+// Checked in order — first match wins.
+const ROUTE_PERMISSIONS: Array<{ prefix: string; module: string }> = [
+  { prefix: '/gestao-pessoas',       module: 'gestao_pessoas'     },
+  { prefix: '/cadastro/estoque',     module: 'cadastro_estoque'   },
+  { prefix: '/cadastro/financeiro',  module: 'cadastro_financeiro'},
+  { prefix: '/cadastro/pessoas',     module: 'cadastro_pessoas'   },
+  { prefix: '/estoque',              module: 'estoque'            },
+  { prefix: '/financeiro',           module: 'financeiro'         },
+  { prefix: '/comercial',            module: 'comercial'          },
+  { prefix: '/operacional',          module: 'operacional'        },
+  { prefix: '/calendario',           module: 'calendario'         },
+  { prefix: '/kanban',               module: 'kanban'             },
+  { prefix: '/chat',                 module: 'chat'               },
+]
 
 const pageTitles: Record<string, { title: string; description?: string }> = {
   "/": { title: "Dashboard", description: "Visão geral do sistema" },
@@ -143,7 +160,20 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
 function LayoutContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
+  const { currentUser, hasPermission } = usePermissions()
   const pageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
+
+  // ── Auth guard: redirect to login if no token or userId ──────────────────
+  const token = localStorage.getItem('accessToken')
+  if (!token || !currentUser.userId) {
+    return <Navigate to="/login" replace />
+  }
+
+  // ── Permission guard: check route against module map ─────────────────────
+  const matched = ROUTE_PERMISSIONS.find(r => location.pathname.startsWith(r.prefix))
+  if (matched && !hasPermission(matched.module, 'all', 'view')) {
+    return <Navigate to="/acesso-negado" replace />
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-background">

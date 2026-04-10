@@ -89,6 +89,7 @@ import Exames from "./pages/operacional/Exames";
 // Usuário
 import VisualizarPerfil from "./pages/usuario/VisualizarPerfil";
 import Login from "./pages/Login";
+import AcessoNegado from "./pages/AcessoNegado";
 import Notificacoes from "./pages/Notificacoes";
 
 // Cadastro - Pessoas
@@ -142,6 +143,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/acesso-negado" element={<AcessoNegado />} />
                 <Route element={<LayoutShell />}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/financeiro/fluxo-caixa" element={<FluxoCaixa />} />

@@ -24,7 +24,9 @@ import logoSerpLight from "@/assets/logo-serp-light.png"
 import logoSerpDark from "@/assets/logo-serp-dark.png"
 import logoIcone from "@/assets/Logo_Serp_27.png"
 
+// ── Menu structure ─────────────────────────────────────────────────────────
 
+// module: if set, the item is only shown when hasPermission(module, 'all', 'view') === true
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutGrid, help: "Visão geral com indicadores e métricas do sistema." },
   {
@@ -34,7 +36,7 @@ const menuItems = [
     help: "Cadastro de dados mestres: itens, fornecedores, clientes, setores e contas.",
     subItems: [
       {
-        title: "Estoque", help: "Cadastros relacionados ao controle de estoque.", subItems: [
+        title: "Estoque", module: "cadastro_estoque", help: "Cadastros relacionados ao controle de estoque.", subItems: [
           { title: "Fornecedores", url: "/cadastro/estoque/fornecedores" },
           { title: "Itens", url: "/cadastro/estoque/itens" },
           { title: "Setores", url: "/cadastro/estoque/setores" },
@@ -43,7 +45,7 @@ const menuItems = [
         ]
       },
       {
-        title: "Financeiro", help: "Cadastros financeiros: contas, centros de custo e planos de contas.", subItems: [
+        title: "Financeiro", module: "cadastro_financeiro", help: "Cadastros financeiros: contas, centros de custo e planos de contas.", subItems: [
           { title: "Conta Bancária", url: "/cadastro/financeiro/conta-bancaria" },
           { title: "Conciliação Bancária", url: "/cadastro/financeiro/conciliacao-bancaria" },
           { title: "Transferências", url: "/cadastro/financeiro/transferencias" },
@@ -57,7 +59,7 @@ const menuItems = [
         ]
       },
       {
-        title: "Pessoas", help: "Cadastro de pessoas e cargos.", subItems: [
+        title: "Pessoas", module: "cadastro_pessoas", help: "Cadastro de pessoas e cargos.", subItems: [
           { title: "Pessoas", url: "/cadastro/pessoas/pessoas" },
           { title: "Cargos", url: "/cadastro/pessoas/cargos" },
         ]
@@ -68,6 +70,7 @@ const menuItems = [
     title: "Comercial",
     icon: TrendingUp,
     basePath: "/comercial",
+    module: "comercial",
     badge: "BETA",
     help: "Gestão comercial: leads, oportunidades e propostas.",
     subItems: [
@@ -83,6 +86,7 @@ const menuItems = [
     title: "Estoque",
     icon: Package,
     basePath: "/estoque",
+    module: "estoque",
     help: "Controle de estoque: entradas, saídas, inventário, requisições e patrimônio.",
     subItems: [
       { title: "Entradas", url: "/estoque/entradas" },
@@ -100,6 +104,7 @@ const menuItems = [
     title: "Financeiro",
     icon: DollarSign,
     basePath: "/financeiro",
+    module: "financeiro",
     help: "Módulo financeiro: contas a pagar/receber, fluxo de caixa e XML.",
     subItems: [
       { title: "Contas a Receber", url: "/financeiro/contas-receber" },
@@ -112,17 +117,18 @@ const menuItems = [
     title: "Operacional",
     icon: BarChart3,
     basePath: "/operacional",
+    module: "operacional",
     help: "Laboratório: mapas e exames.",
     subItems: [
       { title: "Mapas", url: "/operacional/mapas" },
       { title: "Exames", url: "/operacional/exames" },
     ]
   },
-
   {
     title: "Gestão de Pessoas",
     icon: UserRoundPlus,
     basePath: "/gestao-pessoas",
+    module: "gestao_pessoas",
     badge: "BETA",
     help: "RH e gestão de pessoas: visão 360º, hierarquia, permissões e auditoria.",
     subItems: [
@@ -147,19 +153,34 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<string[]>([])
   const [activeItem, setActiveItem] = useState<string>("Dashboard")
   const { theme, toggleTheme } = useTheme()
-  const { logout, currentUser } = usePermissions()
+  const { logout, currentUser, hasPermission } = usePermissions()
   const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase()
+
+  // ── Permission helpers ───────────────────────────────────────────────────
+  const canView = (module?: string) =>
+    !module || hasPermission(module, 'all', 'view')
+
+  // Filter top-level items
+  const visibleMenuItems = menuItems.filter(item => {
+    // Items with a direct module field
+    if ('module' in item && item.module) return canView(item.module)
+
+    // "Cadastro" is visible if at least one sub-group is accessible
+    if (item.title === 'Cadastro' && item.subItems) {
+      return item.subItems.some(sub => canView((sub as any).module))
+    }
+
+    return true
+  })
 
   const toggleMenu = (label: string, isSubMenu = false) => {
     setOpenMenus((prev) => {
       if (prev.includes(label)) {
         return prev.filter((item) => item !== label)
       }
-
       if (isSubMenu) {
         return [...prev, label]
       }
-
       const mainMenuTitles = menuItems.filter(item => item.subItems).map(item => item.title)
       const filteredMenus = prev.filter(item => !mainMenuTitles.includes(item))
       return [...filteredMenus, label]
@@ -226,7 +247,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 sidebar-nav-scroll px-3 py-4">
         <ul className="space-y-1">
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <li key={item.title}>
               {item.subItems ? (
                 <>
@@ -259,67 +280,68 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
                   {!collapsed && openMenus.includes(item.title) && (
                     <ul className="mt-1 space-y-1 pl-4">
-                      {item.subItems.map((subItem) => (
-                        'subItems' in subItem && subItem.subItems ? (
-                          <li key={subItem.title}>
-                            <button
-                              onClick={() => toggleMenu(`${item.title}-${subItem.title}`, true)}
-                              className="sidebar-item w-full text-sm"
-                            >
-                              <span className="flex-1 text-left text-[hsl(var(--sidebar-muted))]">
-                                {subItem.title}
-                              </span>
+                      {item.subItems
+                        .filter(subItem => canView((subItem as any).module))
+                        .map((subItem) => (
+                          'subItems' in subItem && subItem.subItems ? (
+                            <li key={subItem.title}>
+                              <button
+                                onClick={() => toggleMenu(`${item.title}-${subItem.title}`, true)}
+                                className="sidebar-item w-full text-sm"
+                              >
+                                <span className="flex-1 text-left text-[hsl(var(--sidebar-muted))]">
+                                  {subItem.title}
+                                </span>
+                                {openMenus.includes(`${item.title}-${subItem.title}`) ? (
+                                  <ChevronDown className="h-3 w-3 text-foreground dark:text-primary" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3 text-foreground dark:text-primary" />
+                                )}
+                              </button>
 
-                              {openMenus.includes(`${item.title}-${subItem.title}`) ? (
-                                <ChevronDown className="h-3 w-3 text-foreground dark:text-primary" />
-                              ) : (
-                                <ChevronRight className="h-3 w-3 text-foreground dark:text-primary" />
+                              {openMenus.includes(`${item.title}-${subItem.title}`) && (
+                                <ul className="mt-1 space-y-1 pl-4">
+                                  {subItem.subItems.filter((nestedItem) =>
+                                    !('roles' in nestedItem && nestedItem.roles) ||
+                                    (nestedItem as any).roles.includes(currentRole)
+                                  ).map((nestedItem) => (
+                                    <li key={nestedItem.title}>
+                                      <NavLink
+                                        to={nestedItem.url}
+                                        className={({ isActive }) =>
+                                          cn(
+                                            "sidebar-item text-xs",
+                                            isActive
+                                              ? "sidebar-nav-active"
+                                              : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
+                                          )
+                                        }
+                                      >
+                                        {nestedItem.title}
+                                      </NavLink>
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
-                            </button>
-
-                            {openMenus.includes(`${item.title}-${subItem.title}`) && (
-                              <ul className="mt-1 space-y-1 pl-4">
-                                {subItem.subItems.filter((nestedItem) =>
-                                  !('roles' in nestedItem && nestedItem.roles) ||
-                                  (nestedItem as any).roles.includes(currentRole)
-                                ).map((nestedItem) => (
-                                  <li key={nestedItem.title}>
-                                    <NavLink
-                                      to={nestedItem.url}
-                                      className={({ isActive }) =>
-                                        cn(
-                                          "sidebar-item text-xs",
-                                          isActive
-                                            ? "sidebar-nav-active"
-                                            : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
-                                        )
-                                      }
-                                    >
-                                      {nestedItem.title}
-                                    </NavLink>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        ) : (
-                          <li key={subItem.title}>
-                            <NavLink
-                              to={'url' in subItem ? subItem.url : '#'}
-                              className={({ isActive }) =>
-                                cn(
-                                  "sidebar-item text-sm",
-                                  isActive
-                                    ? "sidebar-nav-active"
-                                    : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
-                                )
-                              }
-                            >
-                              {subItem.title}
-                            </NavLink>
-                          </li>
-                        )
-                      ))}
+                            </li>
+                          ) : (
+                            <li key={subItem.title}>
+                              <NavLink
+                                to={'url' in subItem ? subItem.url : '#'}
+                                className={({ isActive }) =>
+                                  cn(
+                                    "sidebar-item text-sm",
+                                    isActive
+                                      ? "sidebar-nav-active"
+                                      : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
+                                  )
+                                }
+                              >
+                                {subItem.title}
+                              </NavLink>
+                            </li>
+                          )
+                        ))}
                     </ul>
                   )}
                 </>
@@ -332,12 +354,9 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                 >
                   <item.icon className="h-5 w-5 shrink-0 text-[hsl(var(--sidebar-foreground))]" />
                   {!collapsed && (
-                    <>
-                      <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
-                        {item.title}
-                      </span>
-
-                    </>
+                    <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
+                      {item.title}
+                    </span>
                   )}
                 </NavLink>
               )}
@@ -348,39 +367,22 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Footer */}
       <div className="border-t border-[hsl(var(--sidebar-border))] p-3 space-y-1">
-
-        {/* Theme toggle */}
-        <button
-          onClick={toggleTheme}
-          className="sidebar-item w-full"
-        >
+        <button onClick={toggleTheme} className="sidebar-item w-full">
           {theme === "dark" ? (
             <Sun className="h-5 w-5 shrink-0 text-[hsl(var(--sidebar-foreground))]" />
           ) : (
             <Moon className="h-5 w-5 shrink-0 text-[hsl(var(--sidebar-foreground))]" />
           )}
           {!collapsed && (
-            <>
-              <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
-                {theme === "dark" ? "Modo Diurno" : "Modo Noturno"}
-              </span>
-
-            </>
+            <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
+              {theme === "dark" ? "Modo Diurno" : "Modo Noturno"}
+            </span>
           )}
         </button>
 
-        {/* Logout */}
-        <button
-          className="sidebar-item w-full text-red-500 hover:bg-red-500/20"
-          onClick={logout}
-        >
+        <button className="sidebar-item w-full text-red-500 hover:bg-red-500/20" onClick={logout}>
           <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="text-sm">Sair</span>
-
-            </>
-          )}
+          {!collapsed && <span className="text-sm">Sair</span>}
         </button>
       </div>
     </aside>

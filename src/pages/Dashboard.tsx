@@ -1,11 +1,10 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { PortfolioChart } from "@/components/PortfolioChart"
 import { SummaryCards } from "@/components/financeiro/SummaryCards"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -22,6 +21,7 @@ import {
 import VisaoGeralComercial from "@/pages/comercial/VisaoGeral"
 import VisaoGeralRH from "@/pages/gestao-pessoas/VisaoGeralRH"
 
+import { usePermissions } from "@/contexts/PermissionsContext"
 import { useQuery } from "@tanstack/react-query"
 import { fetchEstatisticasFinanceiras, fetchDashboardFull } from "@/services/financeiro"
 import { fetchProjetos, fetchTarefas } from "@/services/operacional"
@@ -63,6 +63,28 @@ const defaultVisaoGeralPatrimonioData: any[] = []
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+}
+
+// Formata qualquer valor monetário — aceita number ou string (com ou sem "R$")
+const parseCurrency = (value: any): string => {
+  if (value === null || value === undefined || value === '') return 'R$ 0,00'
+  if (typeof value === 'number') return formatCurrency(value)
+  if (typeof value === 'string') {
+    if (value.trimStart().startsWith('R$')) return value
+    const cleaned = value.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    const num = parseFloat(cleaned)
+    if (!isNaN(num)) return formatCurrency(num)
+  }
+  return String(value)
+}
+
+// Formata datas em DD/MM/AAAA — aceita ISO (YYYY-MM-DD) ou já formatada
+const formatDate = (value: string | undefined | null): string => {
+  if (!value) return '—'
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value
+  const d = new Date(value)
+  if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR')
+  return value
 }
 
 // ===== PREMIUM SHARED COMPONENTS =====
@@ -251,8 +273,6 @@ const DashboardGeral = () => {
             </div>
           </FadeIn>
 
-          <FadeIn delay={2}><PortfolioChart /></FadeIn>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ChartCard title="Evolução Financeira no Tempo" delay={3}>
               <ResponsiveContainer width="100%" height="100%">
@@ -322,7 +342,7 @@ const DashboardGeral = () => {
                       <TableRow key={item.codigo}>
                         <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                         <TableCell className="text-sm">{item.item}</TableCell>
-                        <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
+                        <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -403,7 +423,7 @@ const DashboardGeral = () => {
                         <TableRow key={item.codigo}>
                           <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                           <TableCell className="text-sm">{item.item}</TableCell>
-                          <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
+                          <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -430,8 +450,8 @@ const DashboardGeral = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-lime-600 dark:text-lime-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{mov.valor}</p>
-                  <p className="text-xs text-muted-foreground">{mov.data}</p>
+                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-lime-600 dark:text-lime-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{parseCurrency(mov.valor)}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(mov.data)}</p>
                 </div>
               </div>
             ))}
@@ -623,8 +643,8 @@ const DashboardFinanceiro = () => {
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.cliente}</TableCell>
-                      <TableCell className="text-center text-sm">{item.vencimento}</TableCell>
-                      <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
+                      <TableCell className="text-center text-sm">{formatDate(item.vencimento)}</TableCell>
+                      <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                       <TableCell><StatusBadge status={item.status} /></TableCell>
                     </TableRow>
                   ))}
@@ -645,8 +665,8 @@ const DashboardFinanceiro = () => {
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.beneficiario}</TableCell>
-                      <TableCell className="text-center text-sm">{item.vencimento}</TableCell>
-                      <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
+                      <TableCell className="text-center text-sm">{formatDate(item.vencimento)}</TableCell>
+                      <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                       <TableCell><StatusBadge status={item.status} /></TableCell>
                     </TableRow>
                   ))}
@@ -672,8 +692,8 @@ const DashboardFinanceiro = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-lime-600 dark:text-lime-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{mov.valor}</p>
-                  <p className="text-xs text-muted-foreground">{mov.data}</p>
+                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-lime-600 dark:text-lime-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{parseCurrency(mov.valor)}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(mov.data)}</p>
                 </div>
               </div>
             ))}
@@ -693,8 +713,8 @@ const DashboardFinanceiro = () => {
                   <TableRow key={doc.numero}>
                     <TableCell className="font-medium text-xs">{doc.numero}</TableCell>
                     <TableCell className="text-sm">{doc.tipo}</TableCell>
-                    <TableCell className="text-center text-sm">{doc.emissao}</TableCell>
-                    <TableCell className="font-semibold text-sm">{doc.valor}</TableCell>
+                    <TableCell className="text-center text-sm">{formatDate(doc.emissao)}</TableCell>
+                    <TableCell className="font-semibold text-sm">{parseCurrency(doc.valor)}</TableCell>
                     <TableCell><StatusBadge status={doc.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -892,7 +912,7 @@ const DashboardEstoque = () => {
                     <TableCell className="font-medium text-sm">{item.item}</TableCell>
                     <TableCell className="text-sm">{item.quantidade}</TableCell>
                     <TableCell className="text-sm">{item.unidade}</TableCell>
-                    <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
+                    <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                     <TableCell><StatusBadge status={item.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -1099,7 +1119,7 @@ const DashboardPatrimonio = () => {
                     <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                     <TableCell className="text-sm">{item.item}</TableCell>
                     <TableCell className="text-sm">{item.tipo}</TableCell>
-                    <TableCell className="font-semibold text-sm">{item.valorUnit}</TableCell>
+                    <TableCell className="font-semibold text-sm">{parseCurrency(item.valorUnit)}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                   </TableRow>
                 ))}
@@ -1118,11 +1138,11 @@ const DashboardPatrimonio = () => {
               <TableBody>
                 {historicoPatrimonio.map((item, index) => (
                   <TableRow key={index}>
-                    <TableCell className="text-center text-sm">{item.data}</TableCell>
+                    <TableCell className="text-center text-sm">{formatDate(item.data)}</TableCell>
                     <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                     <TableCell className="text-sm">{item.item}</TableCell>
                     <TableCell className="text-sm">{item.tipo}</TableCell>
-                    <TableCell className="font-semibold text-sm">{item.valor}</TableCell>
+                    <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1195,7 +1215,7 @@ const DashboardMeuPerfil = () => {
               <div className="mt-4 w-full space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Setor</span><span className="font-medium">{me?.setor || "—"}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Supervisor</span><span className="font-medium">{me?.supervisor_nome || "—"}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Admissão</span><span className="font-medium">{me?.data_admissao || "—"}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Admissão</span><span className="font-medium">{formatDate(me?.data_admissao)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Status</span><span className="font-medium text-lime-600">Ativo</span></div>
               </div>
             </div>
@@ -1211,9 +1231,9 @@ const DashboardMeuPerfil = () => {
                   <button
                     key={card.label}
                     onClick={() => openPopup(card.label, card.content)}
-                    className="text-center p-3 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer"
+                    className="text-center p-3 rounded-xl bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer flex flex-col items-center justify-center gap-1 min-h-[72px]"
                   >
-                    <p className="text-2xl font-bold text-primary">{card.value}</p>
+                    <p className={`font-bold text-primary leading-tight break-words w-full ${card.value.length > 8 ? 'text-sm' : 'text-2xl'}`}>{card.value}</p>
                     <p className="text-xs text-muted-foreground">{card.label}</p>
                   </button>
                 ))}
@@ -1269,7 +1289,7 @@ const DashboardMeuPerfil = () => {
                   <p className="font-medium text-sm">{item.acao}</p>
                   <p className="text-xs text-muted-foreground">{item.modulo}</p>
                 </div>
-                <span className="text-xs text-muted-foreground">{item.data}</span>
+                <span className="text-xs text-muted-foreground">{formatDate(item.data)}</span>
               </div>
             ))}
             {(!me?.recentActivity || me?.recentActivity.length === 0) && (
@@ -1399,18 +1419,28 @@ const DashboardOperacional = () => {
 
 // ===== MAIN DASHBOARD =====
 const Dashboard = () => {
+  const { hasPermission } = usePermissions()
   const [activeDashboard, setActiveDashboard] = useState<DashboardType>("meu-perfil")
 
-  const tabs: { key: DashboardType; label: string; icon: typeof LayoutGrid }[] = [
-    { key: "meu-perfil", label: "Meu Perfil", icon: UserCircle },
-    { key: "geral", label: "Geral", icon: LayoutGrid },
-    { key: "financeiro", label: "Financeiro", icon: DollarSign },
-    { key: "estoque", label: "Estoque", icon: Package },
-    { key: "patrimonio", label: "Patrimônio", icon: Building2 },
-    { key: "operacional", label: "Operacional", icon: BarChart3 },
-    { key: "comercial", label: "Comercial", icon: TrendingUp },
-    { key: "rh", label: "Gestão de Pessoas", icon: UserRoundPlus },
+  const allTabs: { key: DashboardType; label: string; icon: typeof LayoutGrid; module?: string }[] = [
+    { key: "meu-perfil",  label: "Meu Perfil",        icon: UserCircle                         },
+    { key: "geral",       label: "Geral",              icon: LayoutGrid                         },
+    { key: "financeiro",  label: "Financeiro",         icon: DollarSign,  module: "financeiro"  },
+    { key: "estoque",     label: "Estoque",            icon: Package,     module: "estoque"     },
+    { key: "patrimonio",  label: "Patrimônio",         icon: Building2,   module: "estoque"     },
+    { key: "operacional", label: "Operacional",        icon: BarChart3,   module: "operacional" },
+    { key: "comercial",   label: "Comercial",          icon: TrendingUp,  module: "comercial"   },
+    { key: "rh",          label: "Gestão de Pessoas",  icon: UserRoundPlus, module: "gestao_pessoas" },
   ]
+
+  const tabs = allTabs.filter(t => !t.module || hasPermission(t.module, 'all', 'view'))
+
+  // If current active tab was filtered out, fall back to first available
+  useEffect(() => {
+    if (!tabs.find(t => t.key === activeDashboard)) {
+      setActiveDashboard(tabs[0]?.key ?? "meu-perfil")
+    }
+  }, [tabs.map(t => t.key).join(',')])
 
   return (
     <div className="flex flex-col h-full">

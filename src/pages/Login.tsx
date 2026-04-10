@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import logo from "@/assets/logo-serp.png";
 import api from "@/lib/api";
 import { LoginResponse } from "@/types/auth";
-import { usePermissions, availableDashboards } from "@/contexts/PermissionsContext";
+import { usePermissions, availableDashboards, type UserPermissions } from "@/contexts/PermissionsContext";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -36,21 +36,24 @@ const Login = () => {
         password: password,
       });
 
-      const { access, refresh, user } = response.data;
+      const { access, refresh, user, permissions } = response.data;
 
       if (user) {
+        // Usa as permissões vindas do backend; caso a API ainda não as retorne
+        // (ex: usuário sem grupo), monta um fallback mínimo.
         const normalizedRole = user.role?.toLowerCase() || 'usuario';
-        login(access, refresh, {
+        const resolvedPermissions: UserPermissions = permissions ?? {
           userId: String(user.id),
           roles: [normalizedRole],
+          permissions: [],
           dashboardAccess: availableDashboards.map(d => ({
             dashboardId: d.id,
-            canView: true,
-            canViewSensitive: normalizedRole === 'admin'
+            canView: normalizedRole === 'admin',
+            canViewSensitive: normalizedRole === 'admin',
           })),
-          exceptions: []
-        });
-        // Store full user info so components can access name, etc.
+          exceptions: [],
+        };
+        login(access, refresh, resolvedPermissions);
         localStorage.setItem('currentUser', JSON.stringify(user));
       }
 
