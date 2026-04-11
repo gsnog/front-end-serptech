@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -179,7 +180,7 @@ export default function Comissoes() {
                           <TableCell >{c.percentual}%</TableCell>
                           <TableCell className="text-right font-semibold">{formatCurrency(Number(c.valor))}</TableCell>
                           <TableCell><StatusBadge status={getStatusBadgeStatus(c.status)} /></TableCell>
-                          <TableCell className="text-center text-muted-foreground">{new Date(c.data_base).toLocaleDateString('pt-BR')}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{fmtDate(c.data_base)}</TableCell>
                         </TableRow>
                       );
                     })}

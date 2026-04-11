@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,7 +117,7 @@ const Contabil = () => {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum registro encontrado.</TableCell></TableRow>
               ) : filtered.map(c => (
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                  <TableCell className="text-center">{c.data}</TableCell>
+                  <TableCell className="text-center">{fmtDate(c.data)}</TableCell>
                   <TableCell className="font-medium">{c.descricao}</TableCell>
                   <TableCell className="text-right">R$ {Number(c.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className="capitalize">{c.tipo === 'debito' ? 'Débito' : 'Crédito'}</TableCell>

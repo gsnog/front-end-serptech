@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { fmtDate } from "@/lib/utils"
 import { Link } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -78,14 +79,7 @@ const parseCurrency = (value: any): string => {
   return String(value)
 }
 
-// Formata datas em DD/MM/AAAA — aceita ISO (YYYY-MM-DD) ou já formatada
-const formatDate = (value: string | undefined | null): string => {
-  if (!value) return '—'
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value
-  const d = new Date(value)
-  if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR')
-  return value
-}
+const formatDate = fmtDate
 
 // ===== PREMIUM SHARED COMPONENTS =====
 const ChartTooltip = ({ active, payload, label }: any) => {
@@ -95,7 +89,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
         <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2 font-semibold">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} className="text-sm font-bold text-foreground">
-            {entry.name}: {typeof entry.value === 'number' && entry.value > 100 ? formatCurrency(entry.value) : entry.value}
+            {entry.name}: {typeof entry.value === 'number' ? formatCurrency(entry.value) : entry.value}
           </p>
         ))}
       </div>
@@ -292,7 +286,7 @@ const DashboardGeral = () => {
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Area type="monotone" dataKey="entradas" name="Entradas" stroke="hsl(72 100% 50%)" fill="url(#gradEntradas)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: "hsl(72 100% 50%)", stroke: "hsl(var(--background))", strokeWidth: 2 }} />
@@ -316,7 +310,7 @@ const DashboardGeral = () => {
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-                  <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
                   <Bar dataKey="entradas" name="Entradas" fill="url(#barGradEntradas)" radius={[4, 4, 4, 4]} />
@@ -375,7 +369,7 @@ const DashboardGeral = () => {
                     <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
                   </linearGradient>
                 </defs>
-                <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+                <XAxis type="number" tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="setor" tick={axisStyle} width={100} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} cursor={false} />
                 <Bar dataKey="valor" name="Consumo" fill="url(#barHorizGrad)" radius={[4, 4, 4, 4]} />
@@ -549,7 +543,7 @@ const DashboardFinanceiro = () => {
                 </linearGradient>
               </defs>
               <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Area type="monotone" dataKey="saldo" name="Saldo" stroke="hsl(var(--primary))" fill="url(#colorSaldoFin)" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 3 }} />
             </AreaChart>
@@ -570,7 +564,7 @@ const DashboardFinanceiro = () => {
                 </linearGradient>
               </defs>
               <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar dataKey="entradas" name="Entradas" fill="url(#finBarEntradas)" radius={[4, 4, 4, 4]} />
@@ -592,7 +586,7 @@ const DashboardFinanceiro = () => {
                 </linearGradient>
               </defs>
               <XAxis dataKey="status" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Bar dataKey="receber" name="A Receber" fill="url(#recStatusGrad)" radius={[4, 4, 4, 4]} />
             </BarChart>
@@ -609,7 +603,7 @@ const DashboardFinanceiro = () => {
                 </linearGradient>
               </defs>
               <XAxis dataKey="status" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Bar dataKey="pagar" name="A Pagar" fill="url(#pagStatusGrad)" radius={[4, 4, 4, 4]} />
             </BarChart>
@@ -835,7 +829,7 @@ const DashboardEstoque = () => {
                     <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
                   </linearGradient>
                 </defs>
-                <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+                <XAxis type="number" tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="setor" tick={axisStyle} width={120} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip />} cursor={false} />
                 <Bar dataKey="valor" name="Consumo" fill="url(#estSetorGrad)" radius={[0, 6, 6, 0]} />
@@ -931,7 +925,7 @@ const DashboardEstoque = () => {
               <TableBody>
                 {historicoMovimentacoesEstoque.map((mov, index) => (
                   <TableRow key={index}>
-                    <TableCell className="text-center text-sm">{mov.data}</TableCell>
+                    <TableCell className="text-center text-sm">{fmtDate(mov.data)}</TableCell>
                     <TableCell><StatusBadge status={mov.tipo} /></TableCell>
                     <TableCell className="font-medium text-sm">{mov.item}</TableCell>
                     <TableCell className="text-sm">{mov.quantidade}</TableCell>
@@ -1028,7 +1022,7 @@ const DashboardPatrimonio = () => {
                 </linearGradient>
               </defs>
               <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Area type="monotone" dataKey="valor" name="Valor Patrimonial" stroke="hsl(var(--primary))" fill="url(#patrimonioGradient)" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 3 }} />
             </AreaChart>
@@ -1073,7 +1067,7 @@ const DashboardPatrimonio = () => {
                   <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={1} />
                 </linearGradient>
               </defs>
-              <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <XAxis type="number" tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="item" tick={{ ...axisStyle, fontSize: 9 }} width={100} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Bar dataKey="valorNum" name="Valor" fill="url(#patTopGrad)" radius={[4, 4, 4, 4]} />
@@ -1096,7 +1090,7 @@ const DashboardPatrimonio = () => {
               </defs>
               <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
               <YAxis yAxisId="left" tick={axisStyle} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
+              <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Bar yAxisId="left" dataKey="aquisicoes" name="Qtd. Aquisições" fill="url(#patAqGrad1)" radius={[4, 4, 4, 4]} />

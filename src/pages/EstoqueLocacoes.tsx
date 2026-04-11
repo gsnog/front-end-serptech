@@ -1,3 +1,4 @@
+import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
@@ -184,9 +185,9 @@ export default function EstoqueLocacoes() {
                       </Button>
                     </TableCell>
                     <TableCell >{loc.unidade}</TableCell>
-                    <TableCell >{loc.dataInicio}</TableCell>
-                    <TableCell >{loc.previsaoFinalizacao}</TableCell>
-                    <TableCell >{loc.dataFim}</TableCell>
+                    <TableCell >{fmtDate(loc.dataInicio)}</TableCell>
+                    <TableCell >{fmtDate(loc.previsaoFinalizacao)}</TableCell>
+                    <TableCell >{fmtDate(loc.dataFim)}</TableCell>
                     <TableCell >{loc.locador}</TableCell>
                     <TableCell className="font-semibold">{loc.valor}</TableCell>
                     <TableCell >{loc.itens.length}</TableCell>

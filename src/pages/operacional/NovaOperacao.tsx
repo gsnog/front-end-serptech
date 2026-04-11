@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,7 +189,7 @@ const NovaOperacao = () => {
                       <TableRow key={item.id}>
                         <TableCell >{item.servico}</TableCell>
                         <TableCell >{item.setor}</TableCell>
-                        <TableCell >{item.dataInicio}</TableCell>
+                        <TableCell >{fmtDate(item.dataInicio)}</TableCell>
                         <TableCell >{item.desconto}</TableCell>
                         <TableCell >{item.valorAdicional}</TableCell>
                         <TableCell >

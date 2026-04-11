@@ -1,3 +1,4 @@
+import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { FileText, Plus, FileUp, Download } from "lucide-react"
@@ -89,7 +90,7 @@ const NFe = () => {
               ) : (
                 filteredNfes.map((nfe) => (
                   <TableRow key={nfe.id}>
-                    <TableCell className="text-center">{nfe.data_emissao ? new Date(nfe.data_emissao).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-center">{fmtDate(nfe.data_emissao)}</TableCell>
                     <TableCell className="font-medium">{nfe.numero}</TableCell>
                     <TableCell className="text-right font-semibold">R$ {nfe.valor_total?.toFixed(2)}</TableCell>
                     <TableCell >

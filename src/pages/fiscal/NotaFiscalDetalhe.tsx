@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { fmtDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -217,7 +218,7 @@ export default function NotaFiscalDetalhe() {
                             <TableCell className="text-sm text-destructive">{a.valorAnterior}</TableCell>
                             <TableCell className="text-sm text-primary">{a.valorNovo}</TableCell>
                             <TableCell className="text-sm">{a.usuario}</TableCell>
-                            <TableCell className="text-center text-sm">{a.data}</TableCell>
+                            <TableCell className="text-center text-sm">{fmtDate(a.data)}</TableCell>
                             <TableCell className="text-xs">{a.justificativa || "—"}</TableCell>
                           </TableRow>
                         ))}
@@ -247,7 +248,7 @@ export default function NotaFiscalDetalhe() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold">{ev.tipo}</span>
                           <StatusBadge status={ev.status} className="text-[10px] min-w-0 px-2 py-0.5" />
-                          <span className="text-xs text-muted-foreground ml-auto">{ev.data}</span>
+                          <span className="text-xs text-muted-foreground ml-auto">{fmtDate(ev.data)}</span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">{ev.mensagem}</p>
                         {ev.protocolo && <p className="text-xs text-muted-foreground mt-0.5">Protocolo: <span className="font-mono">{ev.protocolo}</span></p>}

@@ -1,3 +1,4 @@
+import { fmtDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -287,7 +288,7 @@ export default function VisaoGeralComercial() {
                     </div>
                     <div>
                       <p className="text-sm font-medium">{a.titulo}</p>
-                      <p className="text-xs text-muted-foreground">{a.data} {a.hora && `às ${a.hora}`}</p>
+                      <p className="text-xs text-muted-foreground">{fmtDate(a.data)} {a.hora && `às ${a.hora}`}</p>
                     </div>
                   </div>
                   <StatusBadge

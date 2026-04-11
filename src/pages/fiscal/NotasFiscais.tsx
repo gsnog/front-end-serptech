@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useNavigate } from "react-router-dom";
@@ -86,7 +87,7 @@ const NotasFiscais = () => {
                   <TableCell className="font-mono font-bold">{n.numero}</TableCell>
                   <TableCell >{n.serie}</TableCell>
                   <TableCell className="font-medium">{n.cliente}</TableCell>
-                  <TableCell className="text-center text-sm">{n.data}</TableCell>
+                  <TableCell className="text-center text-sm">{fmtDate(n.data)}</TableCell>
                   <TableCell className="font-semibold">{n.valor}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.tipo} /></TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.status} /></TableCell>

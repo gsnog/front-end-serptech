@@ -1,3 +1,4 @@
+import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
@@ -215,7 +216,7 @@ export default function EstoqueRequisicoes() {
                         {expandedRows.has(req.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                       </Button>
                     </TableCell>
-                    <TableCell className="text-center">{req.data ? new Date(req.data).toLocaleDateString('pt-BR') : '—'}</TableCell>
+                    <TableCell className="text-center">{fmtDate(req.data)}</TableCell>
                     <TableCell >{req.requisitante_nome || "—"}</TableCell>
                     <TableCell >{req.setor_nome || "—"}</TableCell>
                     <TableCell >{req.unidade_nome || "—"}</TableCell>

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { fmtDate } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -298,7 +299,7 @@ export default function Oportunidades() {
                           <span className="text-sm">{op.probabilidade}%</span>
                         </div>
                       </TableCell>
-                      <TableCell>{op.data_fechamento_esperada ? new Date(op.data_fechamento_esperada).toLocaleDateString("pt-BR") : "-"}</TableCell>
+                      <TableCell>{fmtDate(op.data_fechamento_esperada)}</TableCell>
                       <TableCell><TableActions onView={() => setViewItem(op)} onEdit={() => openEdit(op)} onDelete={() => setDeleteId(op.id)} /></TableCell>
                     </TableRow>
                   );

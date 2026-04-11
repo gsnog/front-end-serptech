@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react"
+import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, ChevronDown, ChevronRight } from "lucide-react"
@@ -126,7 +127,7 @@ export default function EstoqueTransferencias() {
                             : <ChevronRight className="w-4 h-4" />}
                         </Button>
                       </TableCell>
-                      <TableCell className="text-center">{t.data}</TableCell>
+                      <TableCell className="text-center">{fmtDate(t.data)}</TableCell>
                       <TableCell >{t.origem}</TableCell>
                       <TableCell >{t.destino}</TableCell>
                       <TableCell >{t.itens.length} item(s)</TableCell>
@@ -193,7 +194,7 @@ export default function EstoqueTransferencias() {
             <div className="space-y-2 py-2">
               <div className="flex justify-between py-1 border-b border-border">
                 <span className="text-sm text-muted-foreground">Data</span>
-                <span className="text-sm font-medium">{viewItem.data}</span>
+                <span className="text-sm font-medium">{fmtDate(viewItem.data)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-border">
                 <span className="text-sm text-muted-foreground">Origem</span>

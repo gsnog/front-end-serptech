@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { fmtDate } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -219,7 +220,7 @@ const MonitorEmissao = () => {
                   <TableCell className="font-mono font-bold">{n.numero}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.tipo} /></TableCell>
                   <TableCell className="font-medium">{n.cliente}</TableCell>
-                  <TableCell className="text-center text-sm">{n.data}</TableCell>
+                  <TableCell className="text-center text-sm">{fmtDate(n.data)}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={n.status} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[250px]">
                     <span className="truncate block">{n.mensagem}</span>

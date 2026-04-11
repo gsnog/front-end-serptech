@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { GradientCard } from "@/components/financeiro/GradientCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -203,7 +204,7 @@ export default function VisaoGeralRH() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-foreground">{alt.data}</p>
+                  <p className="text-sm text-foreground">{fmtDate(alt.data)}</p>
                   <p className="text-xs text-muted-foreground">por {alt.usuario}</p>
                 </div>
               </div>

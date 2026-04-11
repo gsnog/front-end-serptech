@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react"
+import { fmtDate } from "@/lib/utils"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -263,7 +264,7 @@ const Patrimonio = () => {
                     <TableCell >{asset.item_nome}</TableCell>
                     <TableCell >{asset.unidade_nome || "—"}</TableCell>
                     <TableCell className="text-center">
-                      {asset.data_de_aquisicao ? new Date(asset.data_de_aquisicao + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}
+                      {fmtDate(asset.data_de_aquisicao)}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       {asset.valor != null ? `R$ ${Number(asset.valor).toFixed(2)}` : '—'}

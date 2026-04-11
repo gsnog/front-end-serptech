@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { fmtDate } from "@/lib/utils"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -375,7 +376,7 @@ export default function Relatorios() {
                   <TableBody>
                     {mockFluxoCaixa.map((item, idx) => (
                       <TableRow key={idx}>
-                        <TableCell>{item.data}</TableCell>
+                        <TableCell>{fmtDate(item.data)}</TableCell>
                         <TableCell>{item.descricao}</TableCell>
                         <TableCell className="font-semibold text-lime-600">{item.entrada}</TableCell>
                         <TableCell className="font-semibold text-rose-500">{item.saida}</TableCell>

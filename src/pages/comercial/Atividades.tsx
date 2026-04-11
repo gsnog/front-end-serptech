@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -216,7 +217,7 @@ export default function Atividades() {
                     <div className="flex items-center gap-2">
                       {getStatusIcon(atividade.status, atividade.data)}
                       <Badge variant="outline" className={isOverdue ? 'border-destructive text-destructive' : ''}>
-                        {atividade.data} {atividade.hora && `às ${atividade.hora}`}
+                        {fmtDate(atividade.data)} {atividade.hora && `às ${atividade.hora}`}
                       </Badge>
                     </div>
                   </div>

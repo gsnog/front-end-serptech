@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { cn } from "@/lib/utils"
+import { cn, fmtDate } from "@/lib/utils"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
@@ -299,8 +299,15 @@ export default function EstoqueEntradas() {
         nome_item: it.nome_item,
         quantidade: it.quantidade,
         custo_unitario: Number(it.custo_unitario ?? 0),
-      }))
-    } as EntradaNF & { _rawStatus?: string; _rawId?: number; _criado_por_nome?: string; _aprovado_por_nome?: string; _aprovado_em?: string | null }));
+      })),
+      _tipo: (e?.tipo ?? 'compra') as string,
+      _insumos: (e?.insumos || []).map((ins: any) => ({
+        id: ins.id,
+        item_nome: ins.item_nome || `Item #${ins.item}`,
+        quantidade: ins.quantidade,
+        estoque_origem_nome: ins.estoque_origem_nome || '—',
+      })),
+    } as EntradaNF & { _rawStatus?: string; _rawId?: number; _criado_por_nome?: string; _aprovado_por_nome?: string; _aprovado_em?: string | null; _tipo?: string; _insumos?: any[] }));
 
     return baseList.filter(entrada => {
 
@@ -446,10 +453,17 @@ export default function EstoqueEntradas() {
                           {expandedRows.has(entrada.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </Button>
                       </TableCell>
-                      <TableCell className="text-center">{entrada.data}</TableCell>
+                      <TableCell className="text-center">{fmtDate(entrada.data)}</TableCell>
                       <TableCell >{entrada.responsavel}</TableCell>
-                      <TableCell >{entrada.notaFiscal}</TableCell>
-                      <TableCell >{entrada.fornecedor}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{(entrada as any)._tipo === 'producao_local' ? '—' : entrada.notaFiscal}</span>
+                          {(entrada as any)._tipo === 'producao_local' && (
+                            <Badge variant="outline" className="text-[10px] border-emerald-400 text-emerald-700">Produção Local</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{(entrada as any)._tipo === 'producao_local' ? '—' : entrada.fornecedor}</TableCell>
                       <TableCell >{entrada.unidade}</TableCell>
                       <TableCell >{entrada.custoTotal}</TableCell>
                       <TableCell className="text-center"><StatusBadge status={entrada.status} /></TableCell>
@@ -480,7 +494,7 @@ export default function EstoqueEntradas() {
                               {(entrada as any)._aprovado_em && (
                                 <div className="flex items-center justify-center gap-1">
                                   <CalendarCheck className="h-3 w-3" />
-                                  {new Date((entrada as any)._aprovado_em).toLocaleDateString('pt-BR')}
+                                  {fmtDate((entrada as any)._aprovado_em)}
                                 </div>
                               )}
                               {!(entrada as any)._aprovado_por_nome && <span>—</span>}
@@ -548,7 +562,31 @@ export default function EstoqueEntradas() {
                                 </Table>
                               </div>
                             )}
-                            {entrada.itens.length === 0 && !(entrada as any).itens_precadastro?.length && (
+                            {/* Insumos de produção local */}
+                            {(entrada as any)._tipo === 'producao_local' && (entrada as any)._insumos?.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Insumos Utilizados</p>
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Insumo</TableHead>
+                                      <TableHead>Estoque de Origem</TableHead>
+                                      <TableHead className="text-right">Qtd Consumida</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {(entrada as any)._insumos.map((ins: any) => (
+                                      <TableRow key={ins.id}>
+                                        <TableCell>{ins.item_nome}</TableCell>
+                                        <TableCell>{ins.estoque_origem_nome}</TableCell>
+                                        <TableCell className="text-right">{ins.quantidade}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            )}
+                            {entrada.itens.length === 0 && !(entrada as any).itens_precadastro?.length && !(entrada as any)._insumos?.length && (
                               <p className="text-xs text-muted-foreground text-center py-2">Nenhum item registrado nesta entrada.</p>
                             )}
                           </div>
@@ -767,7 +805,7 @@ export default function EstoqueEntradas() {
           {viewItem && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Data:</span><p className="font-medium">{viewItem.data}</p></div>
+                <div><span className="text-muted-foreground">Data:</span><p className="font-medium">{fmtDate(viewItem.data)}</p></div>
                 <div><span className="text-muted-foreground">Responsável:</span><p className="font-medium">{viewItem.responsavel}</p></div>
                 <div><span className="text-muted-foreground">Fornecedor:</span><p className="font-medium">{viewItem.fornecedor}</p></div>
                 <div><span className="text-muted-foreground">Unidade:</span><p className="font-medium">{viewItem.unidade}</p></div>

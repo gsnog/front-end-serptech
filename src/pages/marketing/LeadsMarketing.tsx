@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { fmtDate } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -240,7 +241,7 @@ export default function LeadsMarketing() {
                   </div>
                 </TableCell>
                 <TableCell className="text-center text-muted-foreground">
-                  {lead.criado_em ? new Date(lead.criado_em).toLocaleDateString('pt-BR') : '-'}
+                  {fmtDate(lead.criado_em)}
                 </TableCell>
                 <TableCell>
                   <TableActions

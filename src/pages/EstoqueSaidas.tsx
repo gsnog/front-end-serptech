@@ -1,3 +1,4 @@
+import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, ChevronDown, ChevronRight } from "lucide-react"
@@ -121,7 +122,7 @@ export default function EstoqueSaidas() {
                             : <ChevronRight className="w-4 h-4" />}
                         </Button>
                       </TableCell>
-                      <TableCell className="text-center">{saida.data}</TableCell>
+                      <TableCell className="text-center">{fmtDate(saida.data)}</TableCell>
                       <TableCell >{saida.setor_destino_nome || "—"}</TableCell>
                       <TableCell >{saida.estoque_origem_nome || "—"}</TableCell>
                       <TableCell >{saida.itens?.length ?? 0} item(s)</TableCell>
@@ -192,7 +193,7 @@ export default function EstoqueSaidas() {
             <div className="space-y-2 py-2">
               <div className="flex justify-between py-1 border-b border-border">
                 <span className="text-sm text-muted-foreground">Data</span>
-                <span className="text-sm font-medium">{viewItem.data}</span>
+                <span className="text-sm font-medium">{fmtDate(viewItem.data)}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-border">
                 <span className="text-sm text-muted-foreground">Setor Destino</span>

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { fmtDate } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -430,9 +431,7 @@ export default function Mapas() {
                   <TableCell className="font-medium">{mapa.nome ?? "—"}</TableCell>
                   <TableCell>{mapa.medico_nome ?? "—"}</TableCell>
                   <TableCell>
-                    {mapa.data_de_recebimento
-                      ? new Date(mapa.data_de_recebimento + 'T00:00:00').toLocaleDateString("pt-BR")
-                      : "—"}
+                    {fmtDate(mapa.data_de_recebimento)}
                   </TableCell>
                   <TableCell className="text-center">
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">

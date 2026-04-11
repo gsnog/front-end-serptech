@@ -40,11 +40,23 @@ export interface Entradas {
     obs?: string | null;
     // Approval workflow (server-controlled — read-only on frontend)
     status?: 'pendente' | 'aprovado' | 'recusado';
+    tipo?: 'compra' | 'producao_local';
     criado_por?: number | null;
     criado_por_nome?: string | null;
     aprovado_por?: number | null;
     aprovado_por_nome?: string | null;
     aprovado_em?: string | null;
+    insumos?: InsumoProducao[];
+}
+
+export interface InsumoProducao {
+    id: number;
+    entrada_estoque: number;
+    item: number;
+    item_nome?: string;
+    quantidade: number;
+    estoque_origem?: number | null;
+    estoque_origem_nome?: string | null;
 }
 
 export interface ItemEntradaEstoque {

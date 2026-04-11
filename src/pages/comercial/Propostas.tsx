@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -110,7 +111,7 @@ export default function Propostas() {
                   <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">{getOpTitulo(proposta.oportunidade)}</TableCell>
                   <TableCell className="text-right font-semibold">{formatCurrency(Number(proposta.valor))}</TableCell>
                   <TableCell><StatusBadge status={isExpired ? 'Crítico' : getStatusBadgeStatus(proposta.status)} /></TableCell>
-                  <TableCell className={isExpired ? 'text-destructive' : ''}>{proposta.validade ? new Date(proposta.validade).toLocaleDateString('pt-BR') : '-'}</TableCell>
+                  <TableCell className={isExpired ? 'text-destructive' : ''}>{fmtDate(proposta.validade)}</TableCell>
                   <TableCell><Badge variant="outline">v{proposta.versao}</Badge></TableCell>
                   <TableCell>{proposta.responsavel}</TableCell>
                   <TableCell><TableActions onView={() => setViewItem(proposta)} onEdit={() => openEdit(proposta)} onDelete={() => setDeleteId(proposta.id)} /></TableCell>

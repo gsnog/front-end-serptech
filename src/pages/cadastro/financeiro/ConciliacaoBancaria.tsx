@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -62,7 +63,7 @@ const ConciliacaoBancaria = () => {
               ) : (
                 filteredConciliacoes.map((c) => (
                   <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center">{c.data}</TableCell>
+                    <TableCell className="text-center">{fmtDate(c.data)}</TableCell>
                     <TableCell className="font-medium">{c.numero_conta}</TableCell>
                     <TableCell >{c.descricao}</TableCell>
                     <TableCell className="text-right font-semibold">R$ {c.valor_total?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
