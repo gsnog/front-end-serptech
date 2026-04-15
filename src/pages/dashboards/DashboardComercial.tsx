@@ -2,7 +2,7 @@ import { GradientCard } from "@/components/financeiro/GradientCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Target, DollarSign, TrendingUp, Users, AlertTriangle, Filter } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { fetchOportunidades, fetchMetas, fetchAtividades, etapasFunil } from "@/services/comercial";
@@ -60,12 +60,34 @@ export default function DashboardComercial() {
   const { data: atividades = [] } = useQuery({ queryKey: ['crm_atividades'], queryFn: fetchAtividades });
   const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
 
-  const pipelineTotal = oportunidades
+  const cutoff = useMemo(() => {
+    const now = new Date()
+    const days = periodo === "7d" ? 7 : periodo === "30d" ? 30 : 90
+    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  }, [periodo])
+
+  const filteredOportunidades = useMemo(() => oportunidades.filter(o => {
+    const matchPeriodo = o.criado_em ? new Date(o.criado_em) >= cutoff : true
+    const matchVendedor = vendedorFilter === "__all__" || String(o.responsavel) === vendedorFilter
+    return matchPeriodo && matchVendedor
+  }), [oportunidades, cutoff, vendedorFilter])
+
+  const filteredAtividades = useMemo(() => atividades.filter(a => {
+    const matchPeriodo = a.data ? new Date(a.data) >= cutoff : true
+    const matchVendedor = vendedorFilter === "__all__" || String(a.responsavel) === vendedorFilter
+    return matchPeriodo && matchVendedor
+  }), [atividades, cutoff, vendedorFilter])
+
+  const filteredMetas = useMemo(() => metas.filter(m =>
+    vendedorFilter === "__all__" || String(m.responsavel) === vendedorFilter
+  ), [metas, vendedorFilter])
+
+  const pipelineTotal = filteredOportunidades
     .filter(o => !['ganho', 'perdido'].includes(o.estagio))
     .reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0);
 
   // Forecast ponderado por probabilidade de cada etapa
-  const forecastMes = oportunidades
+  const forecastMes = filteredOportunidades
     .filter(o => !['ganho', 'perdido'].includes(o.estagio))
     .reduce((sum, o) => {
       const etapa = etapasFunil.find(e => e.id === o.estagio);
@@ -73,14 +95,14 @@ export default function DashboardComercial() {
       return sum + (Number(o.valor_estimado) || 0) * prob;
     }, 0);
 
-  const metaTotal = metas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_meta), 0);
-  const realizadoTotal = metas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_realizado), 0);
-  const atividadesVencidas = atividades.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
+  const metaTotal = filteredMetas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_meta), 0);
+  const realizadoTotal = filteredMetas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_realizado), 0);
+  const atividadesVencidas = filteredAtividades.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
 
   const funilData = etapasFunil.filter(e => !['ganho', 'perdido'].includes(e.id)).map(etapa => ({
     name: etapa.nome,
-    value: oportunidades.filter(o => o.estagio === etapa.id).length,
-    amount: oportunidades.filter(o => o.estagio === etapa.id).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0),
+    value: filteredOportunidades.filter(o => o.estagio === etapa.id).length,
+    amount: filteredOportunidades.filter(o => o.estagio === etapa.id).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0),
   }));
 
   // Motivos de perda vindos do backend

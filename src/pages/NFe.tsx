@@ -1,7 +1,7 @@
 import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { FileText, Plus, FileUp, Download } from "lucide-react"
+import { FileText, Plus, FileUp, Download, Eye, X } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo } from "react"
 import { FilterSection } from "@/components/FilterSection"
@@ -24,6 +24,7 @@ const NFe = () => {
   const [filterData, setFilterData] = useState("")
   const [viewItem, setViewItem] = useState<Nfe | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [viewPdf, setViewPdf] = useState<string | null>(null)
 
   const { data: response, isLoading, isError } = useQuery({
     queryKey: [...notasFiscaisQueryKey, currentPage],
@@ -93,17 +94,31 @@ const NFe = () => {
                     <TableCell className="text-center">{fmtDate(nfe.data_emissao)}</TableCell>
                     <TableCell className="font-medium">{nfe.numero}</TableCell>
                     <TableCell className="text-right font-semibold">R$ {nfe.valor_total?.toFixed(2)}</TableCell>
-                    <TableCell >
-                      <div className="flex justify-center gap-2">
+                    <TableCell>
+                      <div className="flex justify-center gap-1">
                         {nfe.xml_arquivo && (
                           <a href={nfe.xml_arquivo} target="_blank" rel="noopener noreferrer" title="Baixar XML">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><FileText className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                              <FileText className="h-4 w-4" />
+                            </Button>
                           </a>
                         )}
                         {nfe.pdf_arquivo && (
-                          <a href={nfe.pdf_arquivo} target="_blank" rel="noopener noreferrer" title="Baixar PDF">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive"><Download className="h-4 w-4" /></Button>
-                          </a>
+                          <>
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-8 w-8 p-0 text-primary hover:text-primary/80"
+                              title="Visualizar PDF"
+                              onClick={() => setViewPdf(nfe.pdf_arquivo!)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <a href={nfe.pdf_arquivo} download title="Baixar PDF">
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground">
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </a>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -138,8 +153,50 @@ const NFe = () => {
               <InfoRow label="Número" value={viewItem.numero} />
               <InfoRow label="Data Emissão" value={viewItem.data_emissao || ""} />
               <InfoRow label="Valor Total" value={`R$ ${viewItem.valor_total?.toFixed(2)}`} />
+              {viewItem.pdf_arquivo && (
+                <div className="pt-2 flex gap-2">
+                  <Button size="sm" className="gap-2" onClick={() => { setViewItem(null); setViewPdf(viewItem.pdf_arquivo!) }}>
+                    <Eye className="h-4 w-4" />Visualizar PDF
+                  </Button>
+                  <a href={viewItem.pdf_arquivo} download>
+                    <Button size="sm" variant="outline" className="gap-2">
+                      <Download className="h-4 w-4" />Baixar PDF
+                    </Button>
+                  </a>
+                </div>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* PDF Viewer Modal */}
+      <Dialog open={!!viewPdf} onOpenChange={() => setViewPdf(null)}>
+        <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col gap-0 p-0">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+            <DialogTitle className="text-sm font-semibold">Visualizar NF-e</DialogTitle>
+            <div className="flex items-center gap-2">
+              {viewPdf && (
+                <a href={viewPdf} download>
+                  <Button variant="outline" size="sm" className="gap-2 h-8">
+                    <Download className="h-3.5 w-3.5" />Baixar
+                  </Button>
+                </a>
+              )}
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setViewPdf(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            {viewPdf && (
+              <iframe
+                src={viewPdf}
+                className="w-full h-full border-0"
+                title="Nota Fiscal"
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

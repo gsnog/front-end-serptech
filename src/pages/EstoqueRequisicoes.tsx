@@ -21,11 +21,15 @@ import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { fetchRequisicoes, updateRequisicao, deleteRequisicao, aprovarRequisicao, negarRequisicao, entregarRequisicao, type RequisicaoSetor as Requisicao, requisicoesQueryKey } from "@/services/estoque"
 import { fetchSetores, setoresQueryKey } from "@/services/pessoas"
+import { usePermissions } from "@/contexts/PermissionsContext"
 import api from "@/lib/api"
 
 export default function EstoqueRequisicoes() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { currentUser, getScope, hasPermission } = usePermissions()
+  const scope = getScope('estoque', 'est_pedidos_internos')
+  const currentUserId = currentUser?.userId ? Number(currentUser.userId) : null
   const [filterItem, setFilterItem] = useState("")
   const [filterSetor, setFilterSetor] = useState("")
   const [filterStatus, setFilterStatus] = useState("")
@@ -136,8 +140,9 @@ export default function EstoqueRequisicoes() {
     const matchStatus = filterStatus && filterStatus !== "todos" ? req.status === filterStatus : true
     const matchDataInicio = filterDataInicio ? (req.data || "") >= filterDataInicio : true
     const matchDataFim = filterDataFim ? (req.data || "") <= filterDataFim : true
-    return matchItem && matchSetor && matchStatus && matchDataInicio && matchDataFim
-  }), [items, filterItem, filterSetor, filterStatus, filterDataInicio, filterDataFim])
+    const matchScope = scope === 'self' && currentUserId != null ? req.user_create === currentUserId : true
+    return matchItem && matchSetor && matchStatus && matchDataInicio && matchDataFim && matchScope
+  }), [items, filterItem, filterSetor, filterStatus, filterDataInicio, filterDataFim, scope, currentUserId])
 
   const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
   const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted)
@@ -222,14 +227,14 @@ export default function EstoqueRequisicoes() {
                     <TableCell >{req.unidade_nome || "—"}</TableCell>
                     <TableCell className="text-center"><StatusBadge status={req.status || ""} /></TableCell>
                     <TableCell >
-                      {req.status === "Análise" ? (
+                      {req.status === "Análise" && hasPermission('estoque', 'est_pedidos_internos', 'approve') ? (
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => openApproval(req)}>
                           <ClipboardCheck className="w-3.5 h-3.5" /> Analisar
                         </Button>
                       ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell >
-                      {req.status === "Aprovado" && req.status_entrega !== "Efetuada" ? (
+                      {req.status === "Aprovado" && req.status_entrega !== "Efetuada" && hasPermission('estoque', 'est_pedidos_internos', 'deliver') ? (
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setEntregarItem(req)}>
                           <PackageCheck className="w-3.5 h-3.5" /> Entregar
                         </Button>

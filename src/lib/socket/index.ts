@@ -137,8 +137,13 @@ class SocketManager {
     }
 }
 
+// Deriva a URL base do WebSocket a partir de VITE_API_URL
+// http://... → ws://...   |   https://... → wss://...
+const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const WS_BASE = apiUrl.replace(/^http/, 'ws');
+
 // Global instances exposed
-export const chatSocket = new SocketManager('ws://127.0.0.1:8000/ws/chat/');
-export const rtcSocket = new SocketManager('ws://127.0.0.1:8000/ws/signaling/');
+export const chatSocket = new SocketManager(`${WS_BASE}/ws/chat/`);
+export const rtcSocket = new SocketManager(`${WS_BASE}/ws/signaling/`);
 /** General-purpose data updates channel — broadcasts model create/update/delete events. */
-export const updatesSocket = new SocketManager('ws://127.0.0.1:8000/ws/updates/');
+export const updatesSocket = new SocketManager(`${WS_BASE}/ws/updates/`);

@@ -37,9 +37,11 @@ const OrdemServicoPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { currentUser } = usePermissions();
+  const { currentUser, getScope } = usePermissions();
   const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase();
   const canManage = MANAGE_ROLES.includes(currentRole);
+  const scope = getScope('estoque', 'est_ordens_servico');
+  const currentUserId = currentUser?.userId ? Number(currentUser.userId) : null;
 
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") ?? "");
@@ -105,8 +107,9 @@ const OrdemServicoPage = () => {
     const matchStatus = filterStatus && filterStatus !== "todos" ? o.status === filterStatus : true;
     const matchTipo = filterTipo && filterTipo !== "todos" ? o.tipo_de_ordem === filterTipo : true;
     const matchResponsavel = filterResponsavel && filterResponsavel !== "todos" ? o.usuario_nome === filterResponsavel : true;
-    return matchSearch && matchStatus && matchTipo && matchResponsavel;
-  }), [allItems, search, filterStatus, filterTipo, filterResponsavel]);
+    const matchScope = scope === 'self' && currentUserId != null ? o.user === currentUserId : true;
+    return matchSearch && matchStatus && matchTipo && matchResponsavel && matchScope;
+  }), [allItems, search, filterStatus, filterTipo, filterResponsavel, scope, currentUserId]);
 
   const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered);
   const total = serverTotal;

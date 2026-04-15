@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useNavigate } from "react-router-dom"
 import { FilterSection } from "@/components/FilterSection"
 import { SortableHead } from "@/components/SortableHead"
-import { Plus, FileText, CreditCard, Receipt, Wallet, ChevronDown, ChevronRight, DollarSign } from "lucide-react"
+import { Plus, FileText, CreditCard, Receipt, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink, AlertTriangle, ClipboardEdit } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -18,11 +18,13 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
-  fetchContasPagar, updateContaPagar, deleteContaPagar,
+  fetchContasPagar, updateContaPagar, deleteContaPagar, patchContaPagar,
+  fetchContasPagarPendentes, fetchCentrosCusto, fetchPlanoContas,
   type ContaPagar as Conta, type ParcelaReceber,
   fetchContasPagarEstatisticas, contasPagarQueryKey,
   fetchContasBancarias, contasBancariasQueryKey,
-  updateParcelaReceber,
+  updateParcelaReceber, uploadComprovante,
+  centrosCustoQueryKey, planoContasQueryKey,
 } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
@@ -48,6 +50,11 @@ const ContasPagar = () => {
 
   const [pagamentoModal, setPagamentoModal] = useState<{ parcela: ParcelaReceber; contaId: number } | null>(null)
   const [pagamentoForm, setPagamentoForm] = useState({ valor_pago: "", data_de_pagamento: "", forma_de_pagamento: "", conta_bancaria: "" })
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
+
+  const [pendentesExpanded, setPendentesExpanded] = useState(true)
+  const [classificarItem, setClassificarItem] = useState<Conta | null>(null)
+  const [classificarForm, setClassificarForm] = useState({ centro_de_custo: "", plano_de_contas: "", data_de_faturamento: "", data_de_vencimento: "" })
 
   useRealtimeUpdates([[...contasPagarQueryKey]]);
 
@@ -65,6 +72,55 @@ const ContasPagar = () => {
     queryKey: [...contasBancariasQueryKey],
     queryFn: fetchContasBancarias,
   });
+
+  const { data: pendentesResponse } = useQuery({
+    queryKey: [...contasPagarQueryKey, 'pendentes'],
+    queryFn: fetchContasPagarPendentes,
+  });
+  const pendentes: Conta[] = pendentesResponse?.results ?? (Array.isArray(pendentesResponse) ? pendentesResponse as Conta[] : []);
+  const pendentesCount = pendentesResponse?.count ?? pendentes.length;
+
+  const { data: centrosCustoRaw } = useQuery({ queryKey: centrosCustoQueryKey, queryFn: fetchCentrosCusto });
+  const centrosCusto = Array.isArray(centrosCustoRaw) ? centrosCustoRaw : (centrosCustoRaw as any)?.results ?? [];
+
+  const { data: planoContasRaw } = useQuery({ queryKey: planoContasQueryKey, queryFn: fetchPlanoContas });
+  const planoContas = Array.isArray(planoContasRaw) ? planoContasRaw : (planoContasRaw as any)?.results ?? [];
+
+  const classificarMutation = useMutation({
+    mutationFn: (data: { id: number; payload: Partial<Conta> }) => patchContaPagar(data.id, data.payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      setClassificarItem(null);
+      toast({ title: "Classificado", description: "Conta classificada com sucesso." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao classificar.", variant: "destructive" }),
+  });
+
+  const openClassificar = (c: Conta) => {
+    setClassificarItem(c);
+    setClassificarForm({
+      centro_de_custo: c.centro_de_custo ? String(c.centro_de_custo) : "",
+      plano_de_contas: c.plano_de_contas ? String(c.plano_de_contas) : "",
+      data_de_faturamento: c.data_de_faturamento || "",
+      data_de_vencimento: c.data_de_vencimento ? c.data_de_vencimento.slice(0, 10) : "",
+    });
+  };
+
+  const handleClassificar = () => {
+    if (!classificarItem) return;
+    if (!classificarForm.centro_de_custo || !classificarForm.plano_de_contas) {
+      toast({ title: "Atenção", description: "Centro de custo e plano de contas são obrigatórios.", variant: "destructive" }); return;
+    }
+    classificarMutation.mutate({
+      id: classificarItem.id,
+      payload: {
+        centro_de_custo: parseInt(classificarForm.centro_de_custo),
+        plano_de_contas: parseInt(classificarForm.plano_de_contas),
+        ...(classificarForm.data_de_faturamento && { data_de_faturamento: classificarForm.data_de_faturamento }),
+        ...(classificarForm.data_de_vencimento && { data_de_vencimento: classificarForm.data_de_vencimento }),
+      },
+    });
+  };
 
   const updateMutation = useMutation({
     mutationFn: (data: { id: number; payload: Partial<Conta> }) => updateContaPagar(data.id, data.payload),
@@ -87,12 +143,16 @@ const ContasPagar = () => {
   });
 
   const pagamentoMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<ParcelaReceber> }) => updateParcelaReceber(id, data),
+    mutationFn: async ({ id, data, file }: { id: number; data: Partial<ParcelaReceber>; file: File | null }) => {
+      await updateParcelaReceber(id, data);
+      if (file) await uploadComprovante(id, file);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
       queryClient.invalidateQueries({ queryKey: ["financeiro_estatisticas"] });
       queryClient.invalidateQueries({ queryKey: contasBancariasQueryKey });
       setPagamentoModal(null);
+      setComprovanteFile(null);
       toast({ title: "Pago", description: "Parcela marcada como paga." });
     },
     onError: () => toast({ title: "Erro", description: "Falha ao registrar pagamento.", variant: "destructive" }),
@@ -132,6 +192,7 @@ const ContasPagar = () => {
       forma_de_pagamento: "",
       conta_bancaria: "",
     });
+    setComprovanteFile(null);
   };
 
   const handlePagamento = () => {
@@ -151,6 +212,7 @@ const ContasPagar = () => {
         forma_de_pagamento: pagamentoForm.forma_de_pagamento,
         conta_bancaria: parseInt(pagamentoForm.conta_bancaria),
       },
+      file: comprovanteFile,
     });
   };
 
@@ -175,6 +237,7 @@ const ContasPagar = () => {
             <TableHead className="text-right text-xs h-8">Valor</TableHead>
             <TableHead className="text-xs h-8">Pago</TableHead>
             <TableHead className="text-center text-xs h-8">Status</TableHead>
+            <TableHead className="text-center text-xs h-8">Comprovante</TableHead>
             {conta.status !== 'Pago' && <TableHead className="w-16 h-8" />}
           </TableRow>
         </TableHeader>
@@ -186,6 +249,15 @@ const ContasPagar = () => {
               <TableCell className="py-2">{formatBRL(p.valor)}</TableCell>
               <TableCell className="py-2">{p.valor_pago != null ? formatBRL(p.valor_pago) : "—"}</TableCell>
               <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
+              <TableCell className="text-center py-2">
+                {p.comprovante ? (
+                  <a href={p.comprovante} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <ExternalLink className="w-3 h-3" />Ver
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
               {conta.status !== 'Pago' && (
                 <TableCell className="py-2">
                   {p.status !== 'Pago' ? (
@@ -198,7 +270,7 @@ const ContasPagar = () => {
             </TableRow>
           ))}
           {(conta.parcelas || []).length === 0 && (
-            <TableRow><TableCell colSpan={6} className="text-center text-xs py-3 text-muted-foreground">Nenhuma parcela.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={7} className="text-center text-xs py-3 text-muted-foreground">Nenhuma parcela.</TableCell></TableRow>
           )}
         </TableBody>
       </Table>
@@ -213,6 +285,75 @@ const ContasPagar = () => {
           <GradientCard title="Total a Pagar" value={formatBRL(stats?.total_a_pagar)} icon={Receipt} variant="warning" />
           <GradientCard title="Total a Pagar Projetado" value={formatBRL(stats?.total_projetado)} icon={Wallet} variant="orange" />
         </div>
+
+        {pendentesCount > 0 && (
+          <div className="rounded-lg border border-warning/50 bg-warning/5">
+            <button
+              className="flex items-center justify-between w-full px-4 py-3 text-left"
+              onClick={() => setPendentesExpanded(v => !v)}
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-warning shrink-0" />
+                <span className="text-sm font-semibold text-warning">
+                  {pendentesCount} {pendentesCount === 1 ? 'conta pendente' : 'contas pendentes'} de classificação
+                </span>
+                <span className="text-xs text-muted-foreground">— centro de custo ou plano de contas não preenchidos</span>
+              </div>
+              {pendentesExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+            </button>
+            {pendentesExpanded && (
+              <div className="px-4 pb-4">
+                <div className="rounded border border-border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="text-xs h-8">Beneficiário</TableHead>
+                        <TableHead className="text-xs h-8">Documento</TableHead>
+                        <TableHead className="text-xs h-8">Lançamento</TableHead>
+                        <TableHead className="text-right text-xs h-8">Valor Total</TableHead>
+                        <TableHead className="text-center text-xs h-8">Centro Custo</TableHead>
+                        <TableHead className="text-center text-xs h-8">Plano Contas</TableHead>
+                        <TableHead className="w-24 h-8" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendentes.map((c: Conta) => (
+                        <TableRow key={c.id} className="text-xs hover:bg-muted/30">
+                          <TableCell className="py-2 font-medium">{c.fornecedor_nome || "—"}</TableCell>
+                          <TableCell className="py-2">{c.numero_documento || c.documento || "—"}</TableCell>
+                          <TableCell className="py-2">{c.data_de_lancamento || "—"}</TableCell>
+                          <TableCell className="py-2 text-right">{formatBRL(c.valor_total)}</TableCell>
+                          <TableCell className="py-2 text-center">
+                            {c.centro_de_custo_detalhe ? (
+                              <span className="text-xs">{c.centro_de_custo_detalhe.centro_id}</span>
+                            ) : (
+                              <span className="text-destructive text-xs">Faltando</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            {c.plano_de_contas_detalhe ? (
+                              <span className="text-xs">{c.plano_de_contas_detalhe.id_plano}</span>
+                            ) : (
+                              <span className="text-destructive text-xs">Faltando</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 text-center">
+                            <button
+                              onClick={() => openClassificar(c)}
+                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-warning/10 text-warning hover:bg-warning/20 border border-warning/30 transition-colors"
+                            >
+                              <ClipboardEdit className="w-3 h-3" />Classificar
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/financeiro/contas-pagar/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Conta</Button>
@@ -354,6 +495,34 @@ const ContasPagar = () => {
                   </div>
                 </div>
 
+                {(viewItem.centro_de_custo_detalhe || viewItem.plano_de_contas_detalhe) && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Classificação</p>
+                      {viewItem.centro_de_custo_detalhe && (
+                        <div className="flex justify-between items-baseline py-1.5 border-b border-border/50">
+                          <span className="text-xs text-muted-foreground">Centro de Custo</span>
+                          <span className="text-xs font-medium text-right">
+                            {viewItem.centro_de_custo_detalhe.centro_id}
+                            {viewItem.centro_de_custo_detalhe.setor_nome ? ` — ${viewItem.centro_de_custo_detalhe.setor_nome}` : ""}
+                          </span>
+                        </div>
+                      )}
+                      {viewItem.plano_de_contas_detalhe && (
+                        <div className="flex justify-between items-baseline py-1.5">
+                          <span className="text-xs text-muted-foreground">Plano de Contas</span>
+                          <span className="text-xs font-medium text-right">
+                            {viewItem.plano_de_contas_detalhe.id_plano}
+                            {viewItem.plano_de_contas_detalhe.classificacao_nome ? ` — ${viewItem.plano_de_contas_detalhe.classificacao_nome}` : ""}
+                            {viewItem.plano_de_contas_detalhe.categoria_nome ? ` / ${viewItem.plano_de_contas_detalhe.categoria_nome}` : ""}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 {(viewItem.parcelas ?? []).length > 0 && (
                   <>
                     <Separator />
@@ -384,6 +553,67 @@ const ContasPagar = () => {
             <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
           </div>
           <DialogFooter><Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Classificar Modal */}
+      <Dialog open={!!classificarItem} onOpenChange={() => setClassificarItem(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardEdit className="w-4 h-4" />Classificar Conta
+            </DialogTitle>
+          </DialogHeader>
+          {classificarItem && (
+            <div className="space-y-1 mb-4 p-3 rounded bg-muted/40 border border-border">
+              <p className="text-sm font-medium">{classificarItem.fornecedor_nome || "—"}</p>
+              <p className="text-xs text-muted-foreground">Doc: {classificarItem.numero_documento || classificarItem.documento || "—"} · {formatBRL(classificarItem.valor_total)}</p>
+            </div>
+          )}
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Centro de Custo <span className="text-destructive">*</span></Label>
+              <Select value={classificarForm.centro_de_custo} onValueChange={v => setClassificarForm(f => ({ ...f, centro_de_custo: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                <SelectContent>
+                  {centrosCusto.map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.centro_id}{c.setor_nome ? ` — ${c.setor_nome}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Plano de Contas <span className="text-destructive">*</span></Label>
+              <Select value={classificarForm.plano_de_contas} onValueChange={v => setClassificarForm(f => ({ ...f, plano_de_contas: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                <SelectContent>
+                  {planoContas.map((p: any) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.id_plano}{p.classificacao_nome ? ` — ${p.classificacao_nome}` : ""}{p.categoria_nome ? ` / ${p.categoria_nome}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Data Faturamento</Label>
+                <Input type="date" value={classificarForm.data_de_faturamento} onChange={e => setClassificarForm(f => ({ ...f, data_de_faturamento: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label>Data Vencimento</Label>
+                <Input type="date" value={classificarForm.data_de_vencimento} onChange={e => setClassificarForm(f => ({ ...f, data_de_vencimento: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClassificarItem(null)}>Cancelar</Button>
+            <Button onClick={handleClassificar} disabled={classificarMutation.isPending}>
+              {classificarMutation.isPending ? "Salvando..." : "Salvar Classificação"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -424,10 +654,24 @@ const ContasPagar = () => {
                 <SelectTrigger><SelectValue placeholder="Selecionar conta..." /></SelectTrigger>
                 <SelectContent>
                   {(Array.isArray(contasBancarias) ? contasBancarias : (contasBancarias as any).results || []).map((cb: any) => (
-                    <SelectItem key={cb.id} value={String(cb.id)}>{cb.banco} — {cb.agencia}/{cb.conta}</SelectItem>
+                    <SelectItem key={cb.id} value={String(cb.id)}>
+                      {cb.numero_conta || `${cb.agencia}/${cb.conta}`}
+                      {cb.unidade_nome ? ` — ${cb.unidade_nome}` : ""}
+                      {cb.tipo ? ` (${cb.tipo})` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label className="flex items-center gap-1"><Paperclip className="w-3 h-3" />Comprovante (opcional)</Label>
+              <Input
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={e => setComprovanteFile(e.target.files?.[0] ?? null)}
+                className="cursor-pointer"
+              />
+              {comprovanteFile && <p className="text-xs text-muted-foreground mt-1">{comprovanteFile.name}</p>}
             </div>
           </div>
           <DialogFooter>

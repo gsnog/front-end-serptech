@@ -35,6 +35,10 @@ export interface ContaPagar {
     data_de_vencimento?: string;
     status?: string;
     parcelas?: ParcelaReceber[];
+    centro_de_custo?: number | null;
+    plano_de_contas?: number | null;
+    centro_de_custo_detalhe?: CentroCusto | null;
+    plano_de_contas_detalhe?: PlanoContas | null;
 }
 
 export interface ParcelaReceber {
@@ -47,10 +51,20 @@ export interface ParcelaReceber {
     data_de_pagamento: string | null;
     forma_de_pagamento: string | null;
     conta_bancaria: number | null;
+    comprovante?: string | null;
 }
 
 export const updateParcelaReceber = async (id: number, data: Partial<ParcelaReceber>): Promise<ParcelaReceber> => {
     const res = await api.patch(`/api/financial/parcelas/${id}/`, data);
+    return res.data;
+};
+
+export const uploadComprovante = async (parcelaId: number, file: File): Promise<{ comprovante: string }> => {
+    const formData = new FormData();
+    formData.append('comprovante', file);
+    const res = await api.patch(`/api/financial/parcelas/${parcelaId}/comprovante/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
 };
 
@@ -67,11 +81,14 @@ export interface ContaReceber {
     data_de_vencimento?: string;
     status?: string;
     parcelas?: ParcelaReceber[];
+    centro_de_receita_detalhe?: CentroReceita | null;
+    plano_de_contas_detalhe?: PlanoContas | null;
 }
 
 export interface ContaBancaria {
     id: number;
     unidade?: number;
+    unidade_nome?: string;
     codigo_banco?: string;
     banco?: string;
     agencia?: string;
@@ -208,8 +225,16 @@ export const updateContaPagar = async (id: number, data: Partial<ContaPagar>): P
     const res = await api.put(`/api/financial/contas_pagar/${id}/`, data);
     return res.data;
 };
+export const patchContaPagar = async (id: number, data: Partial<ContaPagar>): Promise<ContaPagar> => {
+    const res = await api.patch(`/api/financial/contas_pagar/${id}/`, data);
+    return res.data;
+};
 export const deleteContaPagar = async (id: number): Promise<void> => {
     await api.delete(`/api/financial/contas_pagar/${id}/`);
+};
+export const fetchContasPagarPendentes = async (): Promise<PaginatedResponse<ContaPagar>> => {
+    const res = await api.get('/api/financial/contas_pagar/pendentes-classificacao/');
+    return res.data;
 };
 
 export interface ContasPagarEstatisticas {

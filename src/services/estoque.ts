@@ -60,6 +60,7 @@ export interface OrdemCompra {
     status_da_compra?: string;
     feedback?: string | null;
     itens?: OrdemCompraItem[];
+    gestor?: number | null;
 }
 
 export interface OrdemCompraItem {
@@ -106,6 +107,7 @@ export interface OrdemServico {
     feedback?: string;
     status?: string;
     usuario_nome?: string;
+    user?: number | null;
     filho_servicos_gerais?: OrdemServicoFilhoGerais[];
     filho_imobilizado?: OrdemServicoFilhoImobilizado[];
     filho_suporte?: OrdemServicoFilhoSuporte[];
@@ -125,6 +127,7 @@ export interface RequisicaoSetor {
     status_entrega?: string;
     observacao?: string;
     itens?: RequisicaoItem[];
+    user_create?: number | null;
 }
 
 export interface RequisicaoItem {

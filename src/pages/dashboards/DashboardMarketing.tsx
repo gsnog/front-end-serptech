@@ -1,6 +1,6 @@
 import { GradientCard } from "@/components/financeiro/GradientCard";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Target, DollarSign, TrendingUp, Users, Filter } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { fetchCampanhas, fetchCanais, fetchLeadsMarketing } from "@/services/marketing";
@@ -40,14 +40,28 @@ export default function DashboardMarketing() {
   const { data: canais = [] } = useQuery({ queryKey: ['marketing_canais'], queryFn: fetchCanais });
   const { data: leads = [] } = useQuery({ queryKey: ['marketing_leads'], queryFn: fetchLeadsMarketing });
 
-  const conversoes = leads.filter(l => l.status === 'convertido').length;
-  const totalGasto = campanhas.reduce((sum, c) => sum + (Number(c.gasto) || 0), 0);
+  const cutoff = useMemo(() => {
+    const now = new Date()
+    const days = periodo === "7d" ? 7 : periodo === "30d" ? 30 : 90
+    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+  }, [periodo])
+
+  const filteredLeads = useMemo(() => leads.filter(l =>
+    l.criado_em ? new Date(l.criado_em) >= cutoff : true
+  ), [leads, cutoff])
+
+  const filteredCampanhas = useMemo(() => campanhas.filter(c =>
+    c.data_inicio ? new Date(c.data_inicio) >= cutoff : true
+  ), [campanhas, cutoff])
+
+  const conversoes = filteredLeads.filter(l => l.status === 'convertido').length;
+  const totalGasto = filteredCampanhas.reduce((sum, c) => sum + (Number(c.gasto) || 0), 0);
   const cac = conversoes > 0 ? totalGasto / conversoes : 0;
 
   const metricas = {
-    leads: leads.length,
-    mql: leads.filter(l => l.status === 'mql').length,
-    sql: leads.filter(l => l.status === 'sql').length,
+    leads: filteredLeads.length,
+    mql: filteredLeads.filter(l => l.status === 'mql').length,
+    sql: filteredLeads.filter(l => l.status === 'sql').length,
     conversoes,
     roi: 0,
     cac,
@@ -62,10 +76,10 @@ export default function DashboardMarketing() {
 
   const leadsPorCanalData = canais.map(c => ({
     canal: c.nome,
-    leads: leads.filter(l => l.canal_origem === c.id).length
+    leads: filteredLeads.filter(l => l.canal_origem === c.id).length
   }));
 
-  const roiPorCampanhaData = campanhas.map(c => ({
+  const roiPorCampanhaData = filteredCampanhas.map(c => ({
     campanha: c.nome,
     gasto: Number(c.gasto) || 0,
     roi: 0,

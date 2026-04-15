@@ -124,7 +124,6 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/gestao-pessoas/pessoas": { title: "Pessoas (360º)", description: "Visão completa dos colaboradores" },
   "/gestao-pessoas/hierarquia": { title: "Hierarquia", description: "Organograma da empresa" },
   "/gestao-pessoas/acessos": { title: "Acessos do Sistema", description: "Gerenciamento de permissões" },
-  "/gestao-pessoas/dashboards": { title: "Dashboards", description: "Controle de visibilidade" },
   "/gestao-pessoas/auditoria": { title: "Auditoria", description: "Histórico de alterações" },
   "/gestao-pessoas/medicos": { title: "Médicos", description: "Cadastro de médicos" },
   "/gestao-pessoas/medicos/novo": { title: "Médicos", description: "Novo Médico" },
@@ -155,18 +154,27 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   // Dashboards
   "/dashboards/comercial": { title: "Dashboard Comercial", description: "Métricas de vendas" },
   "/dashboards/marketing": { title: "Dashboard Marketing", description: "Métricas de marketing" },
+
+  // Admin Panel
+  "/admin-panel": { title: "Administração", description: "Painel de administração do sistema" },
+  "/admin-panel/usuarios": { title: "Administração", description: "Gerenciamento de usuários" },
 }
 
 function LayoutContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
-  const { currentUser, hasPermission } = usePermissions()
+  const { currentUser, hasPermission, isStaff } = usePermissions()
   const pageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
 
   // ── Auth guard: redirect to login if no token or userId ──────────────────
   const token = localStorage.getItem('accessToken')
   if (!token || !currentUser.userId) {
     return <Navigate to="/login" replace />
+  }
+
+  // ── Admin guard: /admin-panel only for staff users ───────────────────────
+  if (location.pathname.startsWith('/admin-panel') && !isStaff()) {
+    return <Navigate to="/acesso-negado" replace />
   }
 
   // ── Permission guard: check route against module map ─────────────────────

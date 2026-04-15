@@ -46,6 +46,7 @@ export const availableDashboards = [
 export interface UserPermissions {
   userId: string;
   roles: string[];
+  is_staff?: boolean;
   /** Permissões granulares vindas da tabela RolePermission */
   permissions: Permission[];
   dashboardAccess: { dashboardId: string; canView: boolean; canViewSensitive: boolean }[];
@@ -62,6 +63,7 @@ interface PermissionsContextType {
   hasMenuAccess: (menuPath: string) => boolean;
   hasDashboardAccess: (dashboardId: string, sensitive?: boolean) => boolean;
   getScope: (module: string, page: string) => PermissionScope;
+  isStaff: () => boolean;
   setUserPermissions: (permissions: UserPermissions | null) => void;
   login: (token: string, refreshToken: string, permissions: UserPermissions) => void;
   logout: () => void;
@@ -147,6 +149,9 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const isAdmin = (): boolean =>
     currentUser.roles.includes('admin');
+
+  const isStaff = (): boolean =>
+    !!currentUser.is_staff;
 
   // ── hasPermission ────────────────────────────────────────────────────────────
 
@@ -252,6 +257,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       hasMenuAccess,
       hasDashboardAccess,
       getScope,
+      isStaff,
       setUserPermissions,
       login,
       logout,

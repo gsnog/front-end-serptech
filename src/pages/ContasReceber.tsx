@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
 import { SortableHead } from "@/components/SortableHead"
-import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign } from "lucide-react"
+import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchContasReceber, updateContaReceber, deleteContaReceber, updateParcelaReceber, fetchContasBancarias, type ContaReceber as Conta, type ParcelaReceber, type ContaBancaria, fetchContasReceberEstatisticas, contasReceberQueryKey, contasBancariasQueryKey } from "@/services/financeiro"
+import { fetchContasReceber, updateContaReceber, deleteContaReceber, updateParcelaReceber, uploadComprovante, fetchContasBancarias, type ContaReceber as Conta, type ParcelaReceber, type ContaBancaria, fetchContasReceberEstatisticas, contasReceberQueryKey, contasBancariasQueryKey } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 
@@ -43,6 +43,7 @@ const ContasReceber = () => {
 
   const [pagamentoModal, setPagamentoModal] = useState<{ parcela: ParcelaReceber; conta: Conta } | null>(null)
   const [pagamentoForm, setPagamentoForm] = useState({ valor_pago: "", data_de_pagamento: "", forma_de_pagamento: "", conta_bancaria: "" })
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
 
   const openPagamento = (parcela: ParcelaReceber, conta: Conta) => {
     setPagamentoModal({ parcela, conta })
@@ -52,13 +53,18 @@ const ContasReceber = () => {
       forma_de_pagamento: "",
       conta_bancaria: "",
     })
+    setComprovanteFile(null)
   }
 
   const pagamentoMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<ParcelaReceber> }) => updateParcelaReceber(id, data),
+    mutationFn: async ({ id, data, file }: { id: number; data: Partial<ParcelaReceber>; file: File | null }) => {
+      await updateParcelaReceber(id, data)
+      if (file) await uploadComprovante(id, file)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: contasReceberQueryKey })
       setPagamentoModal(null)
+      setComprovanteFile(null)
       toast({ title: "Pagamento registrado!", description: "Parcela marcada como paga." })
     },
     onError: () => toast({ title: "Erro", description: "Não foi possível registrar o pagamento.", variant: "destructive" }),
@@ -226,6 +232,7 @@ const ContasReceber = () => {
                                     <TableHead className="text-right text-xs h-8">Valor Pago</TableHead>
                                     <TableHead className="text-right text-xs h-8">Pagamento</TableHead>
                                     <TableHead className="text-center text-xs h-8">Status</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Comprovante</TableHead>
                                     {conta.status !== 'Pago' && <TableHead className="text-xs h-8">Ação</TableHead>}
                                   </TableRow>
                                 </TableHeader>
@@ -238,6 +245,13 @@ const ContasReceber = () => {
                                       <TableCell className="py-1">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
                                       <TableCell className="text-center py-1">{p.data_de_pagamento || "—"}</TableCell>
                                       <TableCell className="text-center py-1"><StatusBadge status={p.status} /></TableCell>
+                                      <TableCell className="text-center py-1">
+                                        {p.comprovante ? (
+                                          <a href={p.comprovante} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                            <ExternalLink className="h-3 w-3" />Ver
+                                          </a>
+                                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                                      </TableCell>
                                       {conta.status !== 'Pago' && (
                                         <TableCell className="py-1">
                                           {p.status !== 'Pago' && (
@@ -315,6 +329,34 @@ const ContasReceber = () => {
                   </div>
                 </div>
 
+                {(viewItem.centro_de_receita_detalhe || viewItem.plano_de_contas_detalhe) && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Classificação</p>
+                      {viewItem.centro_de_receita_detalhe && (
+                        <div className="flex justify-between items-baseline py-1.5 border-b border-border/50">
+                          <span className="text-xs text-muted-foreground">Centro de Receita</span>
+                          <span className="text-xs font-medium text-right">
+                            {viewItem.centro_de_receita_detalhe.centro_id}
+                            {viewItem.centro_de_receita_detalhe.setor_nome ? ` — ${viewItem.centro_de_receita_detalhe.setor_nome}` : ""}
+                          </span>
+                        </div>
+                      )}
+                      {viewItem.plano_de_contas_detalhe && (
+                        <div className="flex justify-between items-baseline py-1.5">
+                          <span className="text-xs text-muted-foreground">Plano de Contas</span>
+                          <span className="text-xs font-medium text-right">
+                            {viewItem.plano_de_contas_detalhe.id_plano}
+                            {viewItem.plano_de_contas_detalhe.classificacao_nome ? ` — ${viewItem.plano_de_contas_detalhe.classificacao_nome}` : ""}
+                            {viewItem.plano_de_contas_detalhe.categoria_nome ? ` / ${viewItem.plano_de_contas_detalhe.categoria_nome}` : ""}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 {/* Parcelas */}
                 {(viewItem.parcelas ?? []).length > 0 && (
                   <>
@@ -335,6 +377,7 @@ const ContasReceber = () => {
                               <TableHead className="text-right text-xs h-8">Valor</TableHead>
                               <TableHead className="text-xs h-8">Pago</TableHead>
                               <TableHead className="text-center text-xs h-8">Status</TableHead>
+                              <TableHead className="text-center text-xs h-8">Comprovante</TableHead>
                               {viewItem.status !== 'Pago' && <TableHead className="w-16 h-8" />}
                             </TableRow>
                           </TableHeader>
@@ -346,6 +389,13 @@ const ContasReceber = () => {
                                 <TableCell className="py-2">{formatBRL(p.valor)}</TableCell>
                                 <TableCell className="py-2">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
                                 <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
+                                <TableCell className="text-center py-2">
+                                  {p.comprovante ? (
+                                    <a href={p.comprovante} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                      <ExternalLink className="h-3 w-3" />Ver
+                                    </a>
+                                  ) : <span className="text-muted-foreground">—</span>}
+                                </TableCell>
                                 {viewItem.status !== 'Pago' && (
                                   <TableCell className="py-2">
                                     {p.status !== 'Pago' && (
@@ -421,10 +471,24 @@ const ContasReceber = () => {
                 <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
                 <SelectContent>
                   {contasBancarias.map(c => (
-                    <SelectItem key={c.id} value={String(c.id)}>{c.banco}{c.numero_conta ? ` — nº ${c.numero_conta}` : ""}</SelectItem>
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.numero_conta || c.agencia}
+                      {c.unidade_nome ? ` — ${c.unidade_nome}` : ""}
+                      {c.tipo ? ` (${c.tipo})` : ""}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1"><Paperclip className="w-3 h-3" />Comprovante (opcional)</Label>
+              <Input
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={e => setComprovanteFile(e.target.files?.[0] ?? null)}
+                className="cursor-pointer"
+              />
+              {comprovanteFile && <p className="text-xs text-muted-foreground">{comprovanteFile.name}</p>}
             </div>
           </div>
           <DialogFooter>
@@ -453,6 +517,7 @@ const ContasReceber = () => {
                     conta_bancaria: Number(pagamentoForm.conta_bancaria),
                     status: 'Pago',
                   },
+                  file: comprovanteFile,
                 })
               }}
               disabled={pagamentoMutation.isPending}

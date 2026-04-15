@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,7 @@ import type { Permission } from "@/contexts/PermissionsContext";
 
 // ── Módulos com sub-grupos de features ───────────────────────────────────────
 
-type Feature      = { id: string; nome: string; acoes: string[] };
+type Feature      = { id: string; nome: string; acoes: string[]; hasScope?: boolean };
 // module: permission module ID for this group (may differ from parent mod.id for cadastro groups)
 type FeatureGroup = { label: string; module: string; features: Feature[] };
 type Modulo       = { id: string; nome: string; groups: FeatureGroup[] };
@@ -35,10 +35,12 @@ const modulosSistema: Modulo[] = [
   {
     id: 'dashboard', nome: 'Dashboard', groups: [
       { label: 'Dashboards', module: 'dashboard', features: [
-        { id: 'dashboard_geral',      nome: 'Dashboard Geral',      acoes: ['view'] },
-        { id: 'dashboard_financeiro', nome: 'Dashboard Financeiro', acoes: ['view'] },
-        { id: 'dashboard_estoque',    nome: 'Dashboard Estoque',    acoes: ['view'] },
-        { id: 'dashboard_comercial',  nome: 'Dashboard Comercial',  acoes: ['view'] },
+        { id: 'dashboard_geral',      nome: 'Dashboard Geral',              acoes: ['view'] },
+        { id: 'dashboard_financeiro', nome: 'Dashboard Financeiro',         acoes: ['view'] },
+        { id: 'dashboard_estoque',    nome: 'Dashboard Estoque',            acoes: ['view'] },
+        { id: 'dashboard_patrimonio', nome: 'Dashboard Patrimônio',         acoes: ['view'] },
+        { id: 'dashboard_comercial',  nome: 'Dashboard Comercial',          acoes: ['view'] },
+        { id: 'dashboard_rh',         nome: 'Dashboard Gestão de Pessoas',  acoes: ['view'] },
       ]},
     ]
   },
@@ -55,9 +57,9 @@ const modulosSistema: Modulo[] = [
         { id: 'est_entradas',         nome: 'Entradas',         acoes: ['view', 'create', 'edit', 'delete'] },
         { id: 'est_inventario',       nome: 'Inventário',       acoes: ['view'] },
         { id: 'est_saidas',           nome: 'Saídas',           acoes: ['view', 'create', 'edit', 'delete'] },
-        { id: 'est_pedidos_internos', nome: 'Pedidos Internos', acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { id: 'est_ordens_compra',    nome: 'Ordem de Compra',  acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
-        { id: 'est_ordens_servico',   nome: 'Ordem de Serviço', acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+        { id: 'est_pedidos_internos', nome: 'Pedidos Internos', acoes: ['view', 'create', 'edit', 'delete', 'approve', 'deliver'], hasScope: true },
+        { id: 'est_ordens_compra',    nome: 'Ordem de Compra',  acoes: ['view', 'create', 'edit', 'delete', 'approve', 'deliver'], hasScope: true },
+        { id: 'est_ordens_servico',   nome: 'Ordem de Serviço', acoes: ['view', 'create', 'edit', 'delete', 'approve'], hasScope: true },
       ]},
     ]
   },
@@ -97,8 +99,18 @@ const modulosSistema: Modulo[] = [
       ]},
       { label: 'Gestão', module: 'gestao_pessoas', features: [
         { id: 'gp_pessoas',    nome: 'Pessoas (360º)', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'gp_medicos',    nome: 'Médicos',        acoes: ['view', 'create', 'edit', 'delete'] },
         { id: 'gp_hierarquia', nome: 'Hierarquia',     acoes: ['view'] },
         { id: 'gp_permissoes', nome: 'Permissões',     acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'gp_dashboards', nome: 'Dashboards',     acoes: ['view'] },
+        { id: 'gp_auditoria',  nome: 'Auditoria',      acoes: ['view'] },
+      ]},
+    ]
+  },
+  {
+    id: 'relatorios', nome: 'Relatórios', groups: [
+      { label: 'Relatórios', module: 'relatorios', features: [
+        { id: 'relatorios', nome: 'Relatórios Financeiros', acoes: ['view', 'export'] },
       ]},
     ]
   },
@@ -112,26 +124,34 @@ const allAcoes = Object.keys(acoesLabels);
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 type PermissionsMap = Record<string, Set<string>>;
+/** featureId → 'self' | 'all' (only relevant for hasScope features) */
+type ScopeMap = Record<string, 'self' | 'all'>;
 
 /** Converts backend Permission[] → local PermissionsMap keyed by feature id */
 function permissionsToMap(permissions: Permission[]): PermissionsMap {
   const map: PermissionsMap = {};
   for (const p of permissions) {
-    // feature id format: module_page  (e.g. "est_entradas" or "dashboard_geral")
-    const key = p.page === 'all' ? p.module : `${p.module}_${p.page}`.replace(/^.*\//, '');
-    // Also accept the key as-is (page field already is the feature id)
     const featureKey = p.page !== 'all' ? p.page : p.module;
     map[featureKey] = new Set(p.actions);
   }
   return map;
 }
 
-/** Converts local PermissionsMap → backend Permission[] */
-function mapToPermissions(map: PermissionsMap): Permission[] {
+/** Extracts scope values from backend permissions for hasScope features */
+function permissionsToScopeMap(permissions: Permission[]): ScopeMap {
+  const map: ScopeMap = {};
+  for (const p of permissions) {
+    const featureKey = p.page !== 'all' ? p.page : p.module;
+    map[featureKey] = (p.scope === 'all' ? 'all' : 'self');
+  }
+  return map;
+}
+
+/** Converts local PermissionsMap → backend Permission[], using scopeMap for scope */
+function mapToPermissions(map: PermissionsMap, scopeMap: ScopeMap = {}): Permission[] {
   const result: Permission[] = [];
   for (const [featureId, actions] of Object.entries(map)) {
     if (actions.size === 0) continue;
-    // Use group.module (not mod.id) so cadastro features get the right module ID
     let module = 'all';
     outer: for (const mod of modulosSistema) {
       for (const group of mod.groups) {
@@ -141,11 +161,14 @@ function mapToPermissions(map: PermissionsMap): Permission[] {
         }
       }
     }
+    // Dashboard features usam o featureId como module (ex: 'dashboard_estoque')
+    // para bater com a verificação do backend em _build_permissions.
+    const isDashboard = module === 'dashboard';
     result.push({
-      module,
-      page: featureId,
+      module: isDashboard ? featureId : module,
+      page:   isDashboard ? 'all' : featureId,
       actions: Array.from(actions),
-      scope: 'all',
+      scope: scopeMap[featureId] ?? 'all',
     });
   }
   return result;
@@ -167,6 +190,7 @@ export default function Acessos() {
 
   // Local edits: roleId → PermissionsMap (only for unsaved changes)
   const [localEdits, setLocalEdits] = useState<Record<number, PermissionsMap>>({});
+  const [localScopes, setLocalScopes] = useState<Record<number, ScopeMap>>({});
   const [dirtyRoles, setDirtyRoles] = useState<Set<number>>(new Set());
 
   const queryClient = useQueryClient();
@@ -193,6 +217,7 @@ export default function Acessos() {
       queryClient.invalidateQueries({ queryKey: rolesQueryKey });
       setDirtyRoles(prev => { const n = new Set(prev); n.delete(updated.id); return n; });
       setLocalEdits(prev => { const n = { ...prev }; delete n[updated.id]; return n; });
+      setLocalScopes(prev => { const n = { ...prev }; delete n[updated.id]; return n; });
       toast({ title: "Permissões salvas", description: `Perfil "${updated.name}" atualizado.` });
     },
     onError: (err: any) => {
@@ -262,6 +287,27 @@ export default function Acessos() {
     return role ? permissionsToMap(role.permissions) : {};
   };
 
+  /** Returns the scope map for the selected role (local edits or from server) */
+  const getScopeMap = (roleId: number): ScopeMap => {
+    if (localScopes[roleId]) return localScopes[roleId];
+    const role = roles.find(r => r.id === roleId);
+    return role ? permissionsToScopeMap(role.permissions) : {};
+  };
+
+  const getFeatureScope = (featureId: string): 'self' | 'all' => {
+    if (!selectedRoleId) return 'self';
+    return getScopeMap(selectedRoleId)[featureId] ?? 'self';
+  };
+
+  const toggleScope = (featureId: string, scope: 'self' | 'all') => {
+    if (!selectedRoleId || isAdminRole(selectedRole) || !isAdmin) return;
+    setLocalScopes(prev => {
+      const base = getScopeMap(selectedRoleId);
+      return { ...prev, [selectedRoleId]: { ...base, [featureId]: scope } };
+    });
+    setDirtyRoles(prev => new Set(prev).add(selectedRoleId));
+  };
+
   const isAdminRole = (role?: RoleAPI) => role?.name?.toLowerCase() === 'admin';
 
   const isChecked = (featureId: string, acao: string): boolean => {
@@ -284,7 +330,8 @@ export default function Acessos() {
   const handleSavePermissions = () => {
     if (!selectedRoleId || !dirtyRoles.has(selectedRoleId)) return;
     const map = getPermsMap(selectedRoleId);
-    savePermsMutation.mutate({ id: selectedRoleId, permissions: mapToPermissions(map) });
+    const scopes = getScopeMap(selectedRoleId);
+    savePermsMutation.mutate({ id: selectedRoleId, permissions: mapToPermissions(map, scopes) });
   };
 
   const handleApplyRole = (pessoa: Pessoa) => {
@@ -429,22 +476,25 @@ export default function Acessos() {
                                     {allAcoes.map(a => (
                                       <TableHead key={a} className="text-center w-16 text-xs">{acoesLabels[a]}</TableHead>
                                     ))}
+                                    <TableHead className="text-xs w-36">Visibilidade</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {modulo.groups.map((group, gi) => (
-                                    <>
+                                    <React.Fragment key={`group-${gi}`}>
                                       {modulo.groups.length > 1 && (
-                                        <TableRow key={`label-${gi}`} className="bg-muted/40 hover:bg-muted/40">
+                                        <TableRow className="bg-muted/40 hover:bg-muted/40">
                                           <TableCell
-                                            colSpan={allAcoes.length + 1}
+                                            colSpan={allAcoes.length + 2}
                                             className="py-1 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
                                           >
                                             {group.label}
                                           </TableCell>
                                         </TableRow>
                                       )}
-                                      {group.features.map(feat => (
+                                      {group.features.map(feat => {
+                                        const hasView = isAdminRole(selectedRole) || getPermsMap(selectedRoleId!)[feat.id]?.has('view');
+                                        return (
                                         <TableRow key={feat.id}>
                                           <TableCell className="text-sm">{feat.nome}</TableCell>
                                           {allAcoes.map(acao => (
@@ -460,9 +510,29 @@ export default function Acessos() {
                                               )}
                                             </TableCell>
                                           ))}
+                                          <TableCell>
+                                            {feat.hasScope && hasView ? (
+                                              <Select
+                                                value={isAdminRole(selectedRole) ? 'all' : getFeatureScope(feat.id)}
+                                                onValueChange={(v) => toggleScope(feat.id, v as 'self' | 'all')}
+                                                disabled={isAdminRole(selectedRole) || !isAdmin}
+                                              >
+                                                <SelectTrigger className="h-7 text-xs">
+                                                  <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="self">Somente as suas</SelectItem>
+                                                  <SelectItem value="all">Todas</SelectItem>
+                                                </SelectContent>
+                                              </Select>
+                                            ) : (
+                                              <span className="text-muted-foreground/30 text-xs">—</span>
+                                            )}
+                                          </TableCell>
                                         </TableRow>
-                                      ))}
-                                    </>
+                                        );
+                                      })}
+                                    </React.Fragment>
                                   ))}
                                 </TableBody>
                               </Table>

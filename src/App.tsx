@@ -103,7 +103,6 @@ import PessoasVisao360 from "./pages/gestao-pessoas/PessoasVisao360";
 import PessoaDetalhe from "./pages/gestao-pessoas/PessoaDetalhe";
 import Hierarquia from "./pages/gestao-pessoas/Hierarquia";
 import Acessos from "./pages/gestao-pessoas/Acessos";
-import DashboardsGestao from "./pages/gestao-pessoas/Dashboards";
 import Auditoria from "./pages/gestao-pessoas/Auditoria";
 import Medicos from "./pages/gestao-pessoas/Medicos";
 import NovoMedico from "./pages/gestao-pessoas/NovoMedico";
@@ -128,7 +127,11 @@ import NovaProposta from "./pages/comercial/NovaProposta";
 import NovaAtividade from "./pages/comercial/NovaAtividade";
 
 // Dashboards
-import DashboardComercial from "./pages/dashboards/DashboardComercial";
+import DashboardComercial from "./pages/dashboards/DashboardComercial"
+
+// Admin Panel
+import AdminPanel from "./pages/admin/AdminPanel"
+import AdminUsuarios from "./pages/admin/AdminUsuarios";
 
 const queryClient = new QueryClient();
 
@@ -245,7 +248,6 @@ const App = () => (
                   <Route path="/gestao-pessoas/pessoas/:id" element={<PessoaDetalhe />} />
                   <Route path="/gestao-pessoas/hierarquia" element={<Hierarquia />} />
                   <Route path="/gestao-pessoas/acessos" element={<Acessos />} />
-                  <Route path="/gestao-pessoas/dashboards" element={<DashboardsGestao />} />
                   <Route path="/gestao-pessoas/auditoria" element={<Auditoria />} />
                   <Route path="/gestao-pessoas/medicos" element={<Medicos />} />
                   <Route path="/gestao-pessoas/medicos/novo" element={<Navigate to="/cadastro/pessoas/pessoas/nova" replace />} />
@@ -275,6 +277,10 @@ const App = () => (
 
                   {/* Dashboards Globais */}
                   <Route path="/dashboards/comercial" element={<DashboardComercial />} />
+
+                  {/* Admin Panel */}
+                  <Route path="/admin-panel" element={<AdminPanel />} />
+                  <Route path="/admin-panel/usuarios" element={<AdminUsuarios />} />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

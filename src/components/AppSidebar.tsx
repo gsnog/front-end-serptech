@@ -14,6 +14,7 @@ import {
   BarChart3,
   Sun,
   Moon,
+  ShieldCheck,
 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
@@ -89,15 +90,15 @@ const menuItems = [
     module: "estoque",
     help: "Controle de estoque: entradas, saídas, inventário, requisições e patrimônio.",
     subItems: [
-      { title: "Entradas", url: "/estoque/entradas" },
-      { title: "Inventário", url: "/estoque/inventario" },
-      { title: "Locações", url: "/estoque/locacoes" },
-      { title: "Ordem de Compra", url: "/estoque/ordem-compra" },
-      { title: "Ordem de Serviço", url: "/estoque/ordem-servico" },
-      { title: "Pedidos Internos", url: "/estoque/pedidos-internos" },
-      { title: "Saídas", url: "/estoque/saidas" },
-      { title: "Transferências", url: "/estoque/transferencias" },
-      { title: "Patrimônio", url: "/patrimonio" },
+      { title: "Entradas",         url: "/estoque/entradas",         module: "estoque",    page: "est_entradas"         },
+      { title: "Inventário",        url: "/estoque/inventario",        module: "estoque",    page: "est_inventario"        },
+      { title: "Locações",          url: "/estoque/locacoes",          module: "estoque",    page: "est_locacoes"          },
+      { title: "Ordem de Compra",   url: "/estoque/ordem-compra",      module: "estoque",    page: "est_ordens_compra"     },
+      { title: "Ordem de Serviço",  url: "/estoque/ordem-servico",     module: "estoque",    page: "est_ordens_servico"    },
+      { title: "Pedidos Internos",  url: "/estoque/pedidos-internos",  module: "estoque",    page: "est_pedidos_internos"  },
+      { title: "Saídas",            url: "/estoque/saidas",            module: "estoque",    page: "est_saidas"            },
+      { title: "Transferências",    url: "/estoque/transferencias",    module: "estoque",    page: "est_transferencias"    },
+      { title: "Patrimônio",        url: "/patrimonio",                module: "patrimonio", page: "patrimonio"            },
     ]
   },
   {
@@ -132,15 +133,25 @@ const menuItems = [
     badge: "BETA",
     help: "RH e gestão de pessoas: visão 360º, hierarquia, permissões e auditoria.",
     subItems: [
-      { title: "Pessoas (360º)", url: "/gestao-pessoas/pessoas" },
-      { title: "Médicos", url: "/gestao-pessoas/medicos" },
-      { title: "Hierarquia", url: "/gestao-pessoas/hierarquia" },
-      { title: "Permissões", url: "/gestao-pessoas/acessos" },
-      { title: "Dashboards", url: "/gestao-pessoas/dashboards" },
-      { title: "Auditoria", url: "/gestao-pessoas/auditoria" },
+      { title: "Pessoas (360º)", url: "/gestao-pessoas/pessoas",   module: "gestao_pessoas", page: "gp_pessoas"    },
+      { title: "Médicos",        url: "/gestao-pessoas/medicos",    module: "gestao_pessoas", page: "gp_medicos"    },
+      { title: "Hierarquia",     url: "/gestao-pessoas/hierarquia", module: "gestao_pessoas", page: "gp_hierarquia" },
+      { title: "Permissões",     url: "/gestao-pessoas/acessos",    module: "gestao_pessoas", page: "gp_permissoes" },
+      { title: "Auditoria",      url: "/gestao-pessoas/auditoria",  module: "gestao_pessoas", page: "gp_auditoria"  },
     ]
   },
-  { title: "Relatórios", url: "/relatorios", icon: BarChart3, help: "Geração de relatórios financeiros e operacionais." },
+  { title: "Relatórios", url: "/relatorios", icon: BarChart3, module: "relatorios", help: "Geração de relatórios financeiros e operacionais." },
+  {
+    title: "Administração",
+    icon: ShieldCheck,
+    basePath: "/admin-panel",
+    staffOnly: true,
+    help: "Painel de administração do sistema. Exclusivo para usuários staff.",
+    subItems: [
+      { title: "Visão Geral", url: "/admin-panel", end: true },
+      { title: "Usuários", url: "/admin-panel/usuarios" },
+    ]
+  },
 ]
 
 interface SidebarProps {
@@ -153,15 +164,21 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<string[]>([])
   const [activeItem, setActiveItem] = useState<string>("Dashboard")
   const { theme, toggleTheme } = useTheme()
-  const { logout, currentUser, hasPermission } = usePermissions()
+  const { logout, currentUser, hasPermission, isStaff } = usePermissions()
   const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase()
 
   // ── Permission helpers ───────────────────────────────────────────────────
   const canView = (module?: string) =>
     !module || hasPermission(module, 'all', 'view')
 
+  const canViewPage = (module?: string, page?: string) =>
+    !module || hasPermission(module, page || 'all', 'view')
+
   // Filter top-level items
   const visibleMenuItems = menuItems.filter(item => {
+    // Staff-only items
+    if ('staffOnly' in item && item.staffOnly) return isStaff()
+
     // Items with a direct module field
     if ('module' in item && item.module) return canView(item.module)
 
@@ -281,7 +298,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                   {!collapsed && openMenus.includes(item.title) && (
                     <ul className="mt-1 space-y-1 pl-4">
                       {item.subItems
-                        .filter(subItem => canView((subItem as any).module))
+                        .filter(subItem => canViewPage((subItem as any).module, (subItem as any).page))
                         .map((subItem) => (
                           'subItems' in subItem && subItem.subItems ? (
                             <li key={subItem.title}>
@@ -328,6 +345,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                             <li key={subItem.title}>
                               <NavLink
                                 to={'url' in subItem ? subItem.url : '#'}
+                                end={'end' in subItem ? subItem.end : false}
                                 className={({ isActive }) =>
                                   cn(
                                     "sidebar-item text-sm",

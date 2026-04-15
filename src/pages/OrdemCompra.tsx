@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { usePermissions } from "@/contexts/PermissionsContext";
 import { FilterSection } from "@/components/FilterSection";
 import { SortableHead } from "@/components/SortableHead";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -40,6 +41,9 @@ const OrdemCompraPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { currentUser, getScope, hasPermission } = usePermissions();
+  const scope = getScope('estoque', 'est_ordens_compra');
+  const currentUserId = currentUser?.userId ? Number(currentUser.userId) : null;
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") ?? "");
   const [filterFornecedor, setFilterFornecedor] = useState("");
@@ -243,8 +247,9 @@ const OrdemCompraPage = () => {
       o.setor_nome?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = filterStatus && filterStatus !== "todos" ? o.status === filterStatus : true;
     const matchFornecedor = filterFornecedor && filterFornecedor !== "todos" ? String(o.setor) === filterFornecedor : true;
-    return matchSearch && matchStatus && matchFornecedor;
-  }), [allItems, search, filterStatus, filterFornecedor]);
+    const matchScope = scope === 'self' && currentUserId != null ? o.gestor === currentUserId : true;
+    return matchSearch && matchStatus && matchFornecedor && matchScope;
+  }), [allItems, search, filterStatus, filterFornecedor, scope, currentUserId]);
 
   const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered);
   const total = serverTotal;
@@ -304,9 +309,9 @@ const OrdemCompraPage = () => {
                 sorted.map(o => {
                   const isExpanded = expandedIds.has(o.id);
                   const itens = o.itens ?? [];
-                  const canAprovar = o.status === 'Análise';
+                  const canAprovar = o.status === 'Análise' && hasPermission('estoque', 'est_ordens_compra', 'approve');
                   const canComprar = o.status === 'Aprovado' && o.status_da_compra !== 'Efetuada';
-                  const canEntregar = o.status === 'Aprovado' && !o.data_de_entrega;
+                  const canEntregar = o.status === 'Aprovado' && !o.data_de_entrega && hasPermission('estoque', 'est_ordens_compra', 'deliver');
                   const hasStatusActions = canAprovar || canComprar || canEntregar;
 
                   return (

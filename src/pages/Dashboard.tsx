@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { fmtDate } from "@/lib/utils"
 import { Link } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -200,6 +200,14 @@ const renderDonutCenter = (text: string, subtext?: string) => (
     )}
   </>
 )
+
+// Period helper — returns a cutoff Date for the selected period string
+const getPeriodCutoff = (periodo: string): Date => {
+  const now = new Date()
+  const map: Record<string, number> = { "1h": 1 / 24, "24h": 1, "7d": 7, "30d": 30, "90d": 90, "1y": 365 }
+  const days = map[periodo] ?? 30
+  return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
+}
 
 // ===== DASHBOARD GERAL =====
 const DashboardGeral = () => {
@@ -472,9 +480,33 @@ const DashboardFinanceiro = () => {
   const [beneficiario, setBeneficiario] = useState<string>("todos")
   const [status, setStatus] = useState<string>("todos")
 
-  const clientes = ["todos", "Cliente ABC", "Cliente XYZ", "Cliente DEF", "Cliente GHI"]
-  const beneficiarios = ["todos", "Fornecedor A", "Fornecedor B", "Fornecedor C", "Fornecedor D"]
+  const clientes = useMemo(() => ["todos", ...Array.from(new Set(contasReceberData.map((i: any) => i.cliente).filter(Boolean)))], [contasReceberData])
+  const beneficiarios = useMemo(() => ["todos", ...Array.from(new Set(contasPagarData.map((i: any) => i.beneficiario).filter(Boolean)))], [contasPagarData])
   const statusList = ["todos", "Em Aberto", "Vencida", "Paga", "Recebida", "Processada", "Pendente"]
+
+  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
+
+  const filteredContasReceber = useMemo(() => contasReceberData.filter((item: any) => {
+    const matchCliente = cliente === "todos" || item.cliente === cliente
+    const matchStatus = status === "todos" || item.status === status
+    return matchCliente && matchStatus
+  }), [contasReceberData, cliente, status])
+
+  const filteredContasPagar = useMemo(() => contasPagarData.filter((item: any) => {
+    const matchBeneficiario = beneficiario === "todos" || item.beneficiario === beneficiario
+    const matchStatus = status === "todos" || item.status === status
+    return matchBeneficiario && matchStatus
+  }), [contasPagarData, beneficiario, status])
+
+  const filteredDocumentosFiscais = useMemo(() => documentosFiscaisData.filter((doc: any) => {
+    const matchStatus = status === "todos" || doc.status === status
+    const matchPeriodo = doc.emissao ? new Date(doc.emissao) >= cutoff : true
+    return matchStatus && matchPeriodo
+  }), [documentosFiscaisData, status, cutoff])
+
+  const filteredUltimasMovimentacoes = useMemo(() => ultimasMovimentacoes.filter((mov: any) =>
+    mov.data ? new Date(mov.data) >= cutoff : true
+  ), [ultimasMovimentacoes, cutoff])
 
   const { data: estatisticasFinanceiras, isLoading: isLoadingFin } = useQuery({
     queryKey: ['estatisticasFinanceiras'],
@@ -633,7 +665,7 @@ const DashboardFinanceiro = () => {
               <Table>
                 <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Cliente</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {contasReceberData.map((item) => (
+                  {filteredContasReceber.map((item: any) => (
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.cliente}</TableCell>
@@ -655,7 +687,7 @@ const DashboardFinanceiro = () => {
               <Table>
                 <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Beneficiário</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {contasPagarData.map((item) => (
+                  {filteredContasPagar.map((item: any) => (
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.beneficiario}</TableCell>
@@ -676,7 +708,7 @@ const DashboardFinanceiro = () => {
         <div className="bg-card rounded-2xl p-6 shadow-sm shadow-black/[0.04] dark:shadow-black/20">
           <h3 className="text-sm font-semibold text-foreground mb-5">Últimas Movimentações</h3>
           <div className="space-y-1">
-            {ultimasMovimentacoes.map((mov, index) => (
+            {filteredUltimasMovimentacoes.map((mov: any, index: number) => (
               <div key={index} className="flex items-center justify-between py-3.5 border-b border-border/20 last:border-0">
                 <div className="flex items-center gap-3">
                   <div className={`w-2.5 h-2.5 rounded-full ${mov.tipo === "Recebimento" ? "bg-lime-400" : mov.tipo === "Pagamento" ? "bg-rose-400" : "bg-amber-400"}`} />
@@ -703,7 +735,7 @@ const DashboardFinanceiro = () => {
             <Table>
               <TableHeader><TableRow><TableHead>Número</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-center">Emissão</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
               <TableBody>
-                {documentosFiscaisData.map((doc) => (
+                {filteredDocumentosFiscais.map((doc: any) => (
                   <TableRow key={doc.numero}>
                     <TableCell className="font-medium text-xs">{doc.numero}</TableCell>
                     <TableCell className="text-sm">{doc.tipo}</TableCell>
@@ -737,9 +769,27 @@ const DashboardEstoque = () => {
   const [setor, setSetor] = useState<string>("todos")
   const [status, setStatus] = useState<string>("todos")
 
-  const unidades = ["todos", "Almoxarifado SP", "TI Central", "Manutenção", "Almoxarifado RJ"]
-  const setores = ["todos", "Produção", "Manutenção", "TI", "Administrativo"]
+  const unidades = useMemo(() => ["todos", ...Array.from(new Set(inventarioData.map((i: any) => i.unidade).filter(Boolean)))], [inventarioData])
+  const setores = useMemo(() => ["todos", ...Array.from(new Set(consumoSetorData.map((i: any) => i.setor).filter(Boolean)))], [consumoSetorData])
   const statusList = ["todos", "Normal", "Crítico"]
+
+  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
+
+  const filteredInventario = useMemo(() => inventarioData.filter((item: any) => {
+    const matchUnidade = unidade === "todos" || item.unidade === unidade
+    const matchStatus = status === "todos" || item.status === status
+    return matchUnidade && matchStatus
+  }), [inventarioData, unidade, status])
+
+  const filteredHistoricoMovimentacoes = useMemo(() => historicoMovimentacoesEstoque.filter((mov: any) => {
+    const matchSetor = setor === "todos" || mov.setor === setor
+    const matchPeriodo = mov.data ? new Date(mov.data) >= cutoff : true
+    return matchSetor && matchPeriodo
+  }), [historicoMovimentacoesEstoque, setor, cutoff])
+
+  const filteredConsumoSetor = useMemo(() => consumoSetorData.filter((item: any) =>
+    setor === "todos" || item.setor === setor
+  ), [consumoSetorData, setor])
 
   return (
     <div className="space-y-6">
@@ -822,7 +872,7 @@ const DashboardEstoque = () => {
           <h3 className="text-sm font-semibold text-foreground mb-5">Consumo por Setor</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={consumoSetorData} layout="vertical" barSize={22}>
+              <BarChart data={filteredConsumoSetor} layout="vertical" barSize={22}>
                 <defs>
                   <linearGradient id="estSetorGrad" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
@@ -901,7 +951,7 @@ const DashboardEstoque = () => {
             <Table>
               <TableHeader><TableRow><TableHead>Item</TableHead><TableHead className="text-right">Quantidade</TableHead><TableHead>Unidade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
               <TableBody>
-                {inventarioData.map((item, index) => (
+                {filteredInventario.map((item: any, index: number) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium text-sm">{item.item}</TableCell>
                     <TableCell className="text-sm">{item.quantidade}</TableCell>
@@ -923,7 +973,7 @@ const DashboardEstoque = () => {
             <Table>
               <TableHeader><TableRow><TableHead className="text-center">Data</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead>Item</TableHead><TableHead className="text-right">Quantidade</TableHead><TableHead>Requisitante</TableHead><TableHead>Setor</TableHead></TableRow></TableHeader>
               <TableBody>
-                {historicoMovimentacoesEstoque.map((mov, index) => (
+                {filteredHistoricoMovimentacoes.map((mov: any, index: number) => (
                   <TableRow key={index}>
                     <TableCell className="text-center text-sm">{fmtDate(mov.data)}</TableCell>
                     <TableCell><StatusBadge status={mov.tipo} /></TableCell>
@@ -957,7 +1007,7 @@ const DashboardPatrimonio = () => {
   const [tipoItem, setTipoItem] = useState<string>("todos")
   const [faixaValor, setFaixaValor] = useState<string>("todos")
 
-  const tiposPatrimonio = ["todos", "Automóveis", "Equipamentos", "Mobiliário", "Software"]
+  const tiposPatrimonio = useMemo(() => ["todos", ...Array.from(new Set(visaoGeralPatrimonioData.map((p: any) => p.tipo).filter(Boolean)))], [visaoGeralPatrimonioData])
   const faixasValor = [
     { value: "todos", label: "Todas as faixas" },
     { value: "0-10000", label: "Até R$ 10.000" },
@@ -968,6 +1018,26 @@ const DashboardPatrimonio = () => {
 
   const patrimonioTotal = patrimonioTipoData.reduce((s, d) => s + d.value, 0)
   const patrimonioQtdTotal = patrimonioQuantidadeData.reduce((s, d) => s + d.value, 0)
+
+  const filteredVisaoGeral = useMemo(() => visaoGeralPatrimonioData.filter((item: any) => {
+    const matchCodigo = codigoItem === "todos" || item.codigo === codigoItem
+    const matchTipo = tipoItem === "todos" || item.tipo === tipoItem
+    let matchValor = true
+    if (faixaValor !== "todos" && item.valorUnit !== undefined) {
+      const v = typeof item.valorUnit === 'number' ? item.valorUnit
+        : parseFloat(String(item.valorUnit).replace(/[^\d,]/g, '').replace(',', '.')) || 0
+      if (faixaValor === "0-10000") matchValor = v <= 10000
+      else if (faixaValor === "10000-50000") matchValor = v > 10000 && v <= 50000
+      else if (faixaValor === "50000-100000") matchValor = v > 50000 && v <= 100000
+      else if (faixaValor === "100000+") matchValor = v > 100000
+    }
+    const matchData = !dataAquisicao || !item.data_aquisicao || item.data_aquisicao >= dataAquisicao
+    return matchCodigo && matchTipo && matchValor && matchData
+  }), [visaoGeralPatrimonioData, codigoItem, tipoItem, faixaValor, dataAquisicao])
+
+  const filteredHistoricoPatrimonio = useMemo(() => historicoPatrimonio.filter((item: any) =>
+    !dataAquisicao || !item.data || item.data >= dataAquisicao
+  ), [historicoPatrimonio, dataAquisicao])
 
   return (
     <div className="space-y-6">
@@ -1108,7 +1178,7 @@ const DashboardPatrimonio = () => {
             <Table>
               <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-right">Valor Unitário</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
               <TableBody>
-                {visaoGeralPatrimonioData.map((item) => (
+                {filteredVisaoGeral.map((item: any) => (
                   <TableRow key={item.codigo}>
                     <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                     <TableCell className="text-sm">{item.item}</TableCell>
@@ -1130,7 +1200,7 @@ const DashboardPatrimonio = () => {
             <Table>
               <TableHeader><TableRow><TableHead className="text-center">Data</TableHead><TableHead>Código</TableHead><TableHead>Item</TableHead><TableHead className="text-center">Tipo</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
               <TableBody>
-                {historicoPatrimonio.map((item, index) => (
+                {filteredHistoricoPatrimonio.map((item: any, index: number) => (
                   <TableRow key={index}>
                     <TableCell className="text-center text-sm">{formatDate(item.data)}</TableCell>
                     <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
@@ -1413,7 +1483,7 @@ const DashboardOperacional = () => {
 
 // ===== MAIN DASHBOARD =====
 const Dashboard = () => {
-  const { hasPermission } = usePermissions()
+  const { hasDashboardAccess } = usePermissions()
   const [activeDashboard, setActiveDashboard] = useState<DashboardType>("meu-perfil")
 
   const allTabs: { key: DashboardType; label: string; icon: typeof LayoutGrid; module?: string }[] = [
@@ -1427,7 +1497,9 @@ const Dashboard = () => {
     { key: "rh",          label: "Gestão de Pessoas",  icon: UserRoundPlus, module: "gestao_pessoas" },
   ]
 
-  const tabs = allTabs.filter(t => !t.module || hasPermission(t.module, 'all', 'view'))
+  const tabs = allTabs.filter(t =>
+    t.key === 'meu-perfil' || hasDashboardAccess(t.key)
+  )
 
   // If current active tab was filtered out, fall back to first available
   useEffect(() => {
