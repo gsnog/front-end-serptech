@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useNavigate } from "react-router-dom"
 import { FilterSection } from "@/components/FilterSection"
 import { SortableHead } from "@/components/SortableHead"
-import { Plus, FileText, CreditCard, Receipt, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink, AlertTriangle, ClipboardEdit } from "lucide-react"
+import { Plus, FileText, CreditCard, Receipt, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink, AlertTriangle, ClipboardEdit, AlertCircle } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -25,6 +25,7 @@ import {
   fetchContasBancarias, contasBancariasQueryKey,
   updateParcelaReceber, uploadComprovante,
   centrosCustoQueryKey, planoContasQueryKey,
+  reparcelarContaPagar,
 } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
@@ -56,6 +57,10 @@ const ContasPagar = () => {
   const [classificarItem, setClassificarItem] = useState<Conta | null>(null)
   const [classificarForm, setClassificarForm] = useState({ centro_de_custo: "", plano_de_contas: "", data_de_faturamento: "", data_de_vencimento: "" })
 
+  interface ParcelaEditRow { numero: number; data_de_vencimento: string; valor: string; }
+  const [parcelasEdit, setParcelasEdit] = useState<ParcelaEditRow[]>([])
+  const [showReparcelar, setShowReparcelar] = useState(false)
+
   useRealtimeUpdates([[...contasPagarQueryKey]]);
 
   const [page, setPage] = useState(1);
@@ -86,15 +91,7 @@ const ContasPagar = () => {
   const { data: planoContasRaw } = useQuery({ queryKey: planoContasQueryKey, queryFn: fetchPlanoContas });
   const planoContas = Array.isArray(planoContasRaw) ? planoContasRaw : (planoContasRaw as any)?.results ?? [];
 
-  const classificarMutation = useMutation({
-    mutationFn: (data: { id: number; payload: Partial<Conta> }) => patchContaPagar(data.id, data.payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
-      setClassificarItem(null);
-      toast({ title: "Classificado", description: "Conta classificada com sucesso." });
-    },
-    onError: () => toast({ title: "Erro", description: "Falha ao classificar.", variant: "destructive" }),
-  });
+  const [classificarSaving, setClassificarSaving] = useState(false);
 
   const openClassificar = (c: Conta) => {
     setClassificarItem(c);
@@ -104,22 +101,56 @@ const ContasPagar = () => {
       data_de_faturamento: c.data_de_faturamento || "",
       data_de_vencimento: c.data_de_vencimento ? c.data_de_vencimento.slice(0, 10) : "",
     });
+    setShowReparcelar(false);
+    const existentes = (c.parcelas ?? [])
+      .filter(p => p.status !== 'Pago' && p.status !== 'Adiantamento')
+      .map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento ?? "", valor: String(p.valor) }));
+    setParcelasEdit(existentes.length > 0 ? existentes : [{ numero: 1, data_de_vencimento: c.data_de_vencimento?.slice(0, 10) ?? "", valor: String(c.valor_total ?? "") }]);
   };
 
-  const handleClassificar = () => {
+  const handleClassificar = async () => {
     if (!classificarItem) return;
     if (!classificarForm.centro_de_custo || !classificarForm.plano_de_contas) {
       toast({ title: "Atenção", description: "Centro de custo e plano de contas são obrigatórios.", variant: "destructive" }); return;
     }
-    classificarMutation.mutate({
-      id: classificarItem.id,
-      payload: {
+    if (showReparcelar) {
+      const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+      const total = parseFloat(String(classificarItem.valor_total || "0")) || 0;
+      if (total > 0 && Math.abs(soma - total) > 0.01) {
+        toast({ title: "A soma das parcelas deve ser igual ao valor total.", variant: "destructive" }); return;
+      }
+    }
+    setClassificarSaving(true);
+    try {
+      await patchContaPagar(classificarItem.id, {
         centro_de_custo: parseInt(classificarForm.centro_de_custo),
         plano_de_contas: parseInt(classificarForm.plano_de_contas),
         ...(classificarForm.data_de_faturamento && { data_de_faturamento: classificarForm.data_de_faturamento }),
         ...(classificarForm.data_de_vencimento && { data_de_vencimento: classificarForm.data_de_vencimento }),
-      },
-    });
+      });
+      if (showReparcelar) {
+        await reparcelarContaPagar(classificarItem.id, parcelasEdit.map(p => ({
+          numero: p.numero,
+          data_de_vencimento: p.data_de_vencimento || null,
+          valor: parseFloat(p.valor) || 0,
+        })));
+      }
+      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      setClassificarItem(null);
+      setShowReparcelar(false);
+      toast({ title: "Salvo", description: "Conta classificada com sucesso." });
+    } catch {
+      toast({ title: "Erro", description: "Falha ao salvar.", variant: "destructive" });
+    } finally {
+      setClassificarSaving(false);
+    }
+  };
+
+  const addMonthsEdit = (dateStr: string, months: number): string => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split("T")[0];
   };
 
   const updateMutation = useMutation({
@@ -130,6 +161,18 @@ const ContasPagar = () => {
       toast({ title: "Salvo", description: "Conta atualizada com sucesso." });
     },
     onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
+  });
+
+  const reparcelarMutation = useMutation({
+    mutationFn: (data: { id: number; parcelas: { numero: number; data_de_vencimento: string | null; valor: number }[] }) =>
+      reparcelarContaPagar(data.id, data.parcelas),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      setEditItem(null);
+      setShowReparcelar(false);
+      toast({ title: "Parcelas atualizadas com sucesso." });
+    },
+    onError: (err: any) => toast({ title: "Erro", description: err?.response?.data?.detail ?? "Falha ao reparcelar.", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -218,7 +261,15 @@ const ContasPagar = () => {
 
   const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Beneficiário: c.fornecedor_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
-  const openEdit = (c: Conta) => { setEditItem(c); setEditData({ ...c }); };
+  const openEdit = (c: Conta) => {
+    setEditItem(c);
+    setEditData({ ...c });
+    setShowReparcelar(false);
+    const existentes = (c.parcelas ?? [])
+      .filter(p => p.status !== 'Pago' && p.status !== 'Adiantamento')
+      .map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento ?? "", valor: String(p.valor) }));
+    setParcelasEdit(existentes.length > 0 ? existentes : [{ numero: 1, data_de_vencimento: c.data_de_vencimento?.slice(0, 10) ?? "", valor: String(c.valor_total ?? "") }]);
+  };
   const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: editData }); } };
   const deleteItemData = items.find((i: Conta) => i.id === deleteId);
 
@@ -544,76 +595,309 @@ const ContasPagar = () => {
       </Dialog>
 
       {/* Edit Modal */}
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Conta a Pagar</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Beneficiário (ID)</Label><Input type="number" value={editData.beneficiario || ""} onChange={e => setEditData({ ...editData, beneficiario: parseInt(e.target.value) })} /></div>
-            <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
-            <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo || ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
-            <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
+      <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setShowReparcelar(false); }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+          <div className="px-6 pt-6 pb-4">
+            <DialogHeader><DialogTitle>Editar Conta a Pagar</DialogTitle></DialogHeader>
           </div>
-          <DialogFooter><Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar"}</Button></DialogFooter>
+          <Separator />
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
+              <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo || ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
+              <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
+              <div><Label>Vencimento</Label><Input type="date" value={editData.data_de_vencimento?.slice(0, 10) || ""} onChange={e => setEditData({ ...editData, data_de_vencimento: e.target.value })} /></div>
+            </div>
+
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Parcelas</p>
+                <button
+                  className="text-xs text-primary underline"
+                  onClick={() => setShowReparcelar(v => !v)}
+                >
+                  {showReparcelar ? "Cancelar edição de parcelas" : "Editar parcelas"}
+                </button>
+              </div>
+
+              {!showReparcelar && editItem && (
+                <div className="rounded border border-border overflow-hidden text-xs">
+                  <Table>
+                    <TableHeader><TableRow className="bg-muted/50">
+                      <TableHead className="h-7 text-xs">Nº</TableHead>
+                      <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                      <TableHead className="h-7 text-xs text-right">Valor</TableHead>
+                      <TableHead className="h-7 text-xs text-center">Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {(editItem.parcelas ?? []).length === 0
+                        ? <TableRow><TableCell colSpan={4} className="text-center py-3 text-muted-foreground">Sem parcelas.</TableCell></TableRow>
+                        : (editItem.parcelas ?? []).map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell className="py-1.5">{p.numero}</TableCell>
+                            <TableCell className="py-1.5 text-center">{p.data_de_vencimento || "—"}</TableCell>
+                            <TableCell className="py-1.5 text-right">{formatBRL(p.valor)}</TableCell>
+                            <TableCell className="py-1.5 text-center"><StatusBadge status={p.status} /></TableCell>
+                          </TableRow>
+                        ))
+                      }
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {showReparcelar && (
+                <div className="space-y-3 p-3 border border-border rounded bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Parcelas pagas são mantidas. Apenas as pendentes serão substituídas.</p>
+                  <div className="flex gap-2 items-center">
+                    <Label className="text-xs whitespace-nowrap">Nº de parcelas:</Label>
+                    <Input
+                      type="number" min="1" className="h-7 w-20 text-xs"
+                      value={parcelasEdit.length}
+                      onChange={e => {
+                        const n = Math.max(1, parseInt(e.target.value) || 1);
+                        const total = parseFloat(String(editData.valor_total || "0")) || 0;
+                        const base = total > 0 ? Math.floor((total / n) * 100) / 100 : 0;
+                        const remainder = total > 0 ? parseFloat((total - base * n).toFixed(2)) : 0;
+                        const firstDate = parcelasEdit[0]?.data_de_vencimento || editData.data_de_vencimento?.slice(0, 10) || "";
+                        setParcelasEdit(Array.from({ length: n }, (_, i) => ({
+                          numero: i + 1,
+                          data_de_vencimento: addMonthsEdit(firstDate, i),
+                          valor: (i === n - 1 ? base + remainder : base).toFixed(2),
+                        })));
+                      }}
+                    />
+                  </div>
+                  <div className="rounded border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader><TableRow className="bg-muted/50">
+                        <TableHead className="h-7 text-xs w-10">Nº</TableHead>
+                        <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                        <TableHead className="h-7 text-xs text-right">Valor (R$)</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {parcelasEdit.map((p, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-1 text-xs font-medium">{p.numero}</TableCell>
+                            <TableCell className="py-1">
+                              <Input type="date" value={p.data_de_vencimento} className="h-7 text-xs"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, data_de_vencimento: e.target.value } : r))} />
+                            </TableCell>
+                            <TableCell className="py-1">
+                              <Input type="number" step="0.01" value={p.valor} className="h-7 text-xs text-right"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, valor: e.target.value } : r))} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {(() => {
+                    const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                    const total = parseFloat(String(editData.valor_total || "0")) || 0;
+                    const ok = total > 0 && Math.abs(soma - total) < 0.01;
+                    return total > 0 ? (
+                      <p className={`text-xs flex items-center gap-1 ${ok ? "text-green-600" : "text-destructive"}`}>
+                        {!ok && <AlertCircle className="h-3 w-3" />}
+                        Soma: R$ {soma.toFixed(2)} / Total: R$ {total.toFixed(2)}
+                      </p>
+                    ) : null;
+                  })()}
+                  <Button size="sm" className="mt-1"
+                    disabled={reparcelarMutation.isPending}
+                    onClick={() => {
+                      if (!editItem) return;
+                      const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                      const total = parseFloat(String(editData.valor_total || editItem.valor_total || "0")) || 0;
+                      if (total > 0 && Math.abs(soma - total) > 0.01) {
+                        toast({ title: "A soma das parcelas deve ser igual ao valor total.", variant: "destructive" }); return;
+                      }
+                      reparcelarMutation.mutate({
+                        id: editItem.id,
+                        parcelas: parcelasEdit.map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento || null, valor: parseFloat(p.valor) || 0 })),
+                      });
+                    }}
+                  >{reparcelarMutation.isPending ? "Salvando..." : "Salvar Parcelas"}</Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <Separator />
+          <div className="px-6 py-4">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEditItem(null); setShowReparcelar(false); }}>Cancelar</Button>
+              <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar Dados"}</Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Classificar Modal */}
-      <Dialog open={!!classificarItem} onOpenChange={() => setClassificarItem(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ClipboardEdit className="w-4 h-4" />Classificar Conta
-            </DialogTitle>
-          </DialogHeader>
-          {classificarItem && (
-            <div className="space-y-1 mb-4 p-3 rounded bg-muted/40 border border-border">
-              <p className="text-sm font-medium">{classificarItem.fornecedor_nome || "—"}</p>
-              <p className="text-xs text-muted-foreground">Doc: {classificarItem.numero_documento || classificarItem.documento || "—"} · {formatBRL(classificarItem.valor_total)}</p>
-            </div>
-          )}
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <Label>Centro de Custo <span className="text-destructive">*</span></Label>
-              <Select value={classificarForm.centro_de_custo} onValueChange={v => setClassificarForm(f => ({ ...f, centro_de_custo: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                <SelectContent>
-                  {centrosCusto.map((c: any) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.centro_id}{c.setor_nome ? ` — ${c.setor_nome}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Plano de Contas <span className="text-destructive">*</span></Label>
-              <Select value={classificarForm.plano_de_contas} onValueChange={v => setClassificarForm(f => ({ ...f, plano_de_contas: v }))}>
-                <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
-                <SelectContent>
-                  {planoContas.map((p: any) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      {p.id_plano}{p.classificacao_nome ? ` — ${p.classificacao_nome}` : ""}{p.categoria_nome ? ` / ${p.categoria_nome}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+      <Dialog open={!!classificarItem} onOpenChange={() => { setClassificarItem(null); setShowReparcelar(false); }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+          <div className="px-6 pt-6 pb-4">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ClipboardEdit className="w-4 h-4" />Classificar Conta
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <Separator />
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            {classificarItem && (
+              <div className="space-y-1 p-3 rounded bg-muted/40 border border-border">
+                <p className="text-sm font-medium">{classificarItem.fornecedor_nome || "—"}</p>
+                <p className="text-xs text-muted-foreground">Doc: {classificarItem.numero_documento || classificarItem.documento || "—"} · {formatBRL(classificarItem.valor_total)}</p>
+              </div>
+            )}
+            <div className="space-y-4">
               <div className="space-y-1">
-                <Label>Data Faturamento</Label>
-                <Input type="date" value={classificarForm.data_de_faturamento} onChange={e => setClassificarForm(f => ({ ...f, data_de_faturamento: e.target.value }))} />
+                <Label>Centro de Custo <span className="text-destructive">*</span></Label>
+                <Select value={classificarForm.centro_de_custo} onValueChange={v => setClassificarForm(f => ({ ...f, centro_de_custo: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    {centrosCusto.map((c: any) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.centro_id}{c.setor_nome ? ` — ${c.setor_nome}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1">
-                <Label>Data Vencimento</Label>
-                <Input type="date" value={classificarForm.data_de_vencimento} onChange={e => setClassificarForm(f => ({ ...f, data_de_vencimento: e.target.value }))} />
+                <Label>Plano de Contas <span className="text-destructive">*</span></Label>
+                <Select value={classificarForm.plano_de_contas} onValueChange={v => setClassificarForm(f => ({ ...f, plano_de_contas: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                  <SelectContent>
+                    {planoContas.map((p: any) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.id_plano}{p.classificacao_nome ? ` — ${p.classificacao_nome}` : ""}{p.categoria_nome ? ` / ${p.categoria_nome}` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label>Data Faturamento</Label>
+                  <Input type="date" value={classificarForm.data_de_faturamento} onChange={e => setClassificarForm(f => ({ ...f, data_de_faturamento: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Data Vencimento</Label>
+                  <Input type="date" value={classificarForm.data_de_vencimento} onChange={e => setClassificarForm(f => ({ ...f, data_de_vencimento: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Parcelas</p>
+                <button
+                  className="text-xs text-primary underline"
+                  onClick={() => setShowReparcelar(v => !v)}
+                >
+                  {showReparcelar ? "Cancelar edição de parcelas" : "Editar parcelas"}
+                </button>
+              </div>
+
+              {!showReparcelar && classificarItem && (
+                <div className="rounded border border-border overflow-hidden text-xs">
+                  <Table>
+                    <TableHeader><TableRow className="bg-muted/50">
+                      <TableHead className="h-7 text-xs">Nº</TableHead>
+                      <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                      <TableHead className="h-7 text-xs text-right">Valor</TableHead>
+                      <TableHead className="h-7 text-xs text-center">Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {(classificarItem.parcelas ?? []).length === 0
+                        ? <TableRow><TableCell colSpan={4} className="text-center py-3 text-muted-foreground">Sem parcelas.</TableCell></TableRow>
+                        : (classificarItem.parcelas ?? []).map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell className="py-1.5">{p.numero}</TableCell>
+                            <TableCell className="py-1.5 text-center">{p.data_de_vencimento || "—"}</TableCell>
+                            <TableCell className="py-1.5 text-right">{formatBRL(p.valor)}</TableCell>
+                            <TableCell className="py-1.5 text-center"><StatusBadge status={p.status} /></TableCell>
+                          </TableRow>
+                        ))
+                      }
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {showReparcelar && (
+                <div className="space-y-3 p-3 border border-border rounded bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Parcelas pagas são mantidas. Apenas as pendentes serão substituídas.</p>
+                  <div className="flex gap-2 items-center">
+                    <Label className="text-xs whitespace-nowrap">Nº de parcelas:</Label>
+                    <Input
+                      type="number" min="1" className="h-7 w-20 text-xs"
+                      value={parcelasEdit.length}
+                      onChange={e => {
+                        const n = Math.max(1, parseInt(e.target.value) || 1);
+                        const total = parseFloat(String(classificarItem?.valor_total || "0")) || 0;
+                        const base = total > 0 ? Math.floor((total / n) * 100) / 100 : 0;
+                        const remainder = total > 0 ? parseFloat((total - base * n).toFixed(2)) : 0;
+                        const firstDate = parcelasEdit[0]?.data_de_vencimento || classificarForm.data_de_vencimento || "";
+                        setParcelasEdit(Array.from({ length: n }, (_, i) => ({
+                          numero: i + 1,
+                          data_de_vencimento: addMonthsEdit(firstDate, i),
+                          valor: (i === n - 1 ? base + remainder : base).toFixed(2),
+                        })));
+                      }}
+                    />
+                  </div>
+                  <div className="rounded border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader><TableRow className="bg-muted/50">
+                        <TableHead className="h-7 text-xs w-10">Nº</TableHead>
+                        <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                        <TableHead className="h-7 text-xs text-right">Valor (R$)</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {parcelasEdit.map((p, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-1 text-xs font-medium">{p.numero}</TableCell>
+                            <TableCell className="py-1">
+                              <Input type="date" value={p.data_de_vencimento} className="h-7 text-xs"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, data_de_vencimento: e.target.value } : r))} />
+                            </TableCell>
+                            <TableCell className="py-1">
+                              <Input type="number" step="0.01" value={p.valor} className="h-7 text-xs text-right"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, valor: e.target.value } : r))} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {(() => {
+                    const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                    const total = parseFloat(String(classificarItem?.valor_total || "0")) || 0;
+                    const ok = total > 0 && Math.abs(soma - total) < 0.01;
+                    return total > 0 ? (
+                      <p className={`text-xs flex items-center gap-1 ${ok ? "text-green-600" : "text-destructive"}`}>
+                        {!ok && <AlertCircle className="h-3 w-3" />}
+                        Soma: R$ {soma.toFixed(2)} / Total: R$ {total.toFixed(2)}
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setClassificarItem(null)}>Cancelar</Button>
-            <Button onClick={handleClassificar} disabled={classificarMutation.isPending}>
-              {classificarMutation.isPending ? "Salvando..." : "Salvar Classificação"}
-            </Button>
-          </DialogFooter>
+          <Separator />
+          <div className="px-6 py-4">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setClassificarItem(null); setShowReparcelar(false); }}>Cancelar</Button>
+              <Button onClick={handleClassificar} disabled={classificarSaving}>
+                {classificarSaving ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

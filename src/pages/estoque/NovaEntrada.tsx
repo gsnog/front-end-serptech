@@ -18,6 +18,7 @@ import api from "@/lib/api";
 import {
   fetchFornecedores, fetchItensEstoque, fetchUnidades,
   fornecedoresQueryKey, itensEstoqueQueryKey, unidadesQueryKey,
+  formasApresentacaoQueryKey, fetchFormasApresentacao,
   createFornecedor,
 } from "@/services/estoque";
 
@@ -27,6 +28,8 @@ interface ItemEntrada {
   itemNome: string;
   quantidade: string;
   custoUnitario: string;
+  formaApresentacao?: string;
+  fatorConversao?: string;
 }
 
 interface ItemInsumo {
@@ -52,6 +55,9 @@ export default function NovaEntrada() {
 
   const { data: unidadesRaw = [] } = useQuery({ queryKey: unidadesQueryKey, queryFn: fetchUnidades });
   const unidades = (Array.isArray(unidadesRaw) ? unidadesRaw : (unidadesRaw as any)?.results ?? []) as any[];
+
+  const { data: formasRaw = [] } = useQuery({ queryKey: formasApresentacaoQueryKey, queryFn: fetchFormasApresentacao });
+  const formasApresentacao = (Array.isArray(formasRaw) ? formasRaw : (formasRaw as any)?.results ?? []) as any[];
 
   const fornecedorOptions = fornecedores.map((f: any) => ({ value: String(f.id), label: f.nome }));
   const itemOptions = itensEstoque.map((i: any) => ({ value: String(i.id), label: i.itens_do_estoque }));
@@ -127,6 +133,8 @@ export default function NovaEntrada() {
   const [itemSelecionado, setItemSelecionado] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [custoUnitario, setCustoUnitario] = useState("");
+  const [formaApresentacao, setFormaApresentacao] = useState("");
+  const [fatorConversao, setFatorConversao] = useState("");
 
   // Insumos (apenas produção local)
   const [insumos, setInsumos] = useState<ItemInsumo[]>([]);
@@ -181,10 +189,14 @@ export default function NovaEntrada() {
       itemNome: found?.itens_do_estoque ?? itemSelecionado,
       quantidade,
       custoUnitario: custoUnitario || "0",
+      formaApresentacao: formaApresentacao || undefined,
+      fatorConversao: fatorConversao || undefined,
     }]);
     setItemSelecionado("");
     setQuantidade("");
     setCustoUnitario("");
+    setFormaApresentacao("");
+    setFatorConversao("");
   };
 
   const handleRemoveItem = (id: number) => setItens(prev => prev.filter(i => i.id !== id));
@@ -304,6 +316,8 @@ export default function NovaEntrada() {
           if (dataStr) { setDataEmissao(dataStr); setDataEntrada(dataStr); }
         }
 
+        let resolvedFornecedorId: number | null = null;
+
         if (emit) {
           const xNome = getEl(emit, "xNome")?.textContent?.trim() || "";
           const cnpjRaw = getEl(emit, "CNPJ")?.textContent?.trim() || "";
@@ -314,6 +328,7 @@ export default function NovaEntrada() {
               : "";
             const found = fornecedores.find((f: any) => f.nome?.toLowerCase() === xNome.toLowerCase());
             if (found) {
+              resolvedFornecedorId = found.id;
               setFornecedorId(String(found.id));
               setXmlFornecedorNotFound(false);
             } else {
@@ -352,15 +367,29 @@ export default function NovaEntrada() {
           const xProd = v("xProd");
           const qCom = v("qCom");
           const vUnCom = v("vUnCom");
+          const uCom = v("uCom");
           const matched = itensEstoque.find(
             (it: any) => it.itens_do_estoque?.toLowerCase() === xProd.toLowerCase()
           );
+          let preFator: string | undefined;
+          let preForma: string | undefined = uCom || undefined;
+          if (matched && resolvedFornecedorId) {
+            const formaExistente = formasApresentacao.find(
+              (f: any) => f.item === matched.id && f.fornecedor === resolvedFornecedorId
+            );
+            if (formaExistente) {
+              preFator = String(formaExistente.fator_conversao);
+              preForma = formaExistente.forma_apresentacao || uCom || undefined;
+            }
+          }
           parsedItens.push({
             id: Date.now() + i,
             itemId: matched ? String(matched.id) : "",
             itemNome: xProd,
             quantidade: qCom ? String(parseFloat(qCom)) : "1",
             custoUnitario: vUnCom ? String(parseFloat(vUnCom)) : "0",
+            formaApresentacao: preForma,
+            fatorConversao: preFator,
           });
         });
 
@@ -400,9 +429,19 @@ export default function NovaEntrada() {
         setIsSaving(false);
         return;
       }
+      const conversoes: Record<string, { forma_apresentacao: string; fator_conversao: number }> = {};
+      itens.forEach(item => {
+        if (item.fatorConversao && parseFloat(item.fatorConversao) > 0) {
+          conversoes[item.itemNome] = {
+            forma_apresentacao: item.formaApresentacao || '',
+            fator_conversao: parseFloat(item.fatorConversao),
+          };
+        }
+      });
       const formData = new FormData();
       formData.append('xml_file', xmlFile);
       formData.append('unidade', estoqueDestinoId);
+      formData.append('conversoes', JSON.stringify(conversoes));
       if (pdfNf) formData.append('pdf_nf', pdfNf);
       if (pdfBoleto) formData.append('pdf_ticket', pdfBoleto);
       xmlMutation.mutate(formData);
@@ -452,7 +491,14 @@ export default function NovaEntrada() {
 
     const itensCadastrados = itens
       .filter(i => i.itemId)
-      .map(i => ({ item_id: parseInt(i.itemId), quantidade: parseFloat(i.quantidade) || 1, custo_unitario: parseFloat(i.custoUnitario) || 0 }));
+      .map(i => ({
+        item_id: parseInt(i.itemId),
+        quantidade: parseFloat(i.quantidade) || 1,
+        custo_unitario: parseFloat(i.custoUnitario) || 0,
+        ...(i.fatorConversao && parseFloat(i.fatorConversao) > 0
+          ? { fator_conversao: parseFloat(i.fatorConversao) }
+          : {}),
+      }));
 
     const itensNovos = itens
       .filter(i => !i.itemId)
@@ -471,6 +517,7 @@ export default function NovaEntrada() {
     if (nfNumero) {
       payload.nota_fiscal_numero = nfNumero;
       payload.nota_fiscal_data_emissao = dataEmissao || dataEntrada || new Date().toISOString().split("T")[0];
+      if (dataVencimento) payload.nota_fiscal_data_vencimento = dataVencimento;
     }
 
     createMutation.mutate(payload);
@@ -845,7 +892,8 @@ export default function NovaEntrada() {
                   <TableHeader>
                     <TableRow className="bg-table-header">
                       <TableHead>Item</TableHead>
-                      <TableHead className="text-right">Quantidade</TableHead>
+                      <TableHead className="text-right">Qtd (Fornecedor)</TableHead>
+                      <TableHead className="text-right">Conversão</TableHead>
                       <TableHead className="text-right">Custo Unit.</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                       {!isFieldLocked && <TableHead className="text-center">Ações</TableHead>}
@@ -853,24 +901,58 @@ export default function NovaEntrada() {
                   </TableHeader>
                   <TableBody>
                     {itens.length === 0 ? (
-                      <TableRow><TableCell colSpan={isFieldLocked ? 4 : 5} className="text-center py-6 text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={isFieldLocked ? 5 : 6} className="text-center py-6 text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
                     ) : (
-                      itens.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <div>{item.itemNome}</div>
-                            {!item.itemId && <span className="text-xs text-amber-600">Pré-cadastro (item novo)</span>}
-                          </TableCell>
-                          <TableCell>{item.quantidade}</TableCell>
-                          <TableCell className="text-right">R$ {parseFloat(item.custoUnitario || "0").toFixed(2).replace(".", ",")}</TableCell>
-                          <TableCell className="text-right">R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}</TableCell>
-                          {!isFieldLocked && (
+                      itens.map((item) => {
+                        const temConversao = item.formaApresentacao && item.fatorConversao && parseFloat(item.fatorConversao) > 0;
+                        const qtdInterna = temConversao
+                          ? Math.round(parseFloat(item.quantidade) * parseFloat(item.fatorConversao!))
+                          : null;
+                        return (
+                          <TableRow key={item.id}>
                             <TableCell>
-                              <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
+                              <div>{item.itemNome}</div>
+                              {!item.itemId && <span className="text-xs text-amber-600">Pré-cadastro (item novo)</span>}
                             </TableCell>
-                          )}
-                        </TableRow>
-                      ))
+                            <TableCell className="text-right">
+                              {item.quantidade}
+                            </TableCell>
+                            <TableCell>
+                              {isFieldLocked ? (
+                                <div className="flex gap-1 items-center">
+                                  <Input
+                                    className="h-7 text-xs w-20"
+                                    placeholder="Unidade"
+                                    value={item.formaApresentacao ?? ""}
+                                    onChange={(e) => setItens(prev => prev.map(i => i.id === item.id ? { ...i, formaApresentacao: e.target.value } : i))}
+                                  />
+                                  <Input
+                                    className="h-7 text-xs w-20"
+                                    type="number"
+                                    step="any"
+                                    min="0.0001"
+                                    placeholder="Fator"
+                                    value={item.fatorConversao ?? ""}
+                                    onChange={(e) => setItens(prev => prev.map(i => i.id === item.id ? { ...i, fatorConversao: e.target.value } : i))}
+                                  />
+                                  {temConversao && (
+                                    <span className="text-xs font-semibold text-foreground ml-1 whitespace-nowrap">= {qtdInterna?.toLocaleString('pt-BR')} unid.</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">R$ {parseFloat(item.custoUnitario || "0").toFixed(2).replace(".", ",")}</TableCell>
+                            <TableCell className="text-right">R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}</TableCell>
+                            {!isFieldLocked && (
+                              <TableCell>
+                                <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>

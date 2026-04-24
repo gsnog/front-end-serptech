@@ -54,12 +54,14 @@ const modulosSistema: Modulo[] = [
         { id: 'cad_est_softwares',    nome: 'Softwares',    acoes: ['view', 'create', 'edit', 'delete'] },
       ]},
       { label: 'Operacional', module: 'estoque', features: [
-        { id: 'est_entradas',         nome: 'Entradas',         acoes: ['view', 'create', 'edit', 'delete'] },
-        { id: 'est_inventario',       nome: 'Inventário',       acoes: ['view'] },
-        { id: 'est_saidas',           nome: 'Saídas',           acoes: ['view', 'create', 'edit', 'delete'] },
-        { id: 'est_pedidos_internos', nome: 'Pedidos Internos', acoes: ['view', 'create', 'edit', 'delete', 'approve', 'deliver'], hasScope: true },
-        { id: 'est_ordens_compra',    nome: 'Ordem de Compra',  acoes: ['view', 'create', 'edit', 'delete', 'approve', 'deliver'], hasScope: true },
-        { id: 'est_ordens_servico',   nome: 'Ordem de Serviço', acoes: ['view', 'create', 'edit', 'delete', 'approve'], hasScope: true },
+        { id: 'est_entradas',         nome: 'Entradas',                  acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+        { id: 'est_inventario',       nome: 'Inventário',                acoes: ['view'] },
+        { id: 'est_saidas',           nome: 'Saídas',                    acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'est_transferencias',   nome: 'Transferências de Estoque', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'est_patrimonio',       nome: 'Patrimônio',                acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'est_pedidos_internos', nome: 'Pedidos Internos',          acoes: ['view', 'create', 'edit', 'delete', 'approve', 'deliver'], hasScope: true },
+        { id: 'est_ordens_compra',    nome: 'Ordem de Compra',           acoes: ['view', 'create', 'edit', 'delete', 'approve', 'deliver', 'buy'], hasScope: true },
+        { id: 'est_ordens_servico',   nome: 'Ordem de Serviço',          acoes: ['view', 'create', 'edit', 'delete', 'approve'], hasScope: true },
       ]},
     ]
   },
@@ -80,6 +82,7 @@ const modulosSistema: Modulo[] = [
         { id: 'fin_contas_receber', nome: 'Contas a Receber', acoes: ['view', 'create', 'edit', 'delete', 'export'] },
         { id: 'fin_contas_pagar',   nome: 'Contas a Pagar',   acoes: ['view', 'create', 'edit', 'delete', 'export'] },
         { id: 'fin_fluxo_caixa',    nome: 'Fluxo de Caixa',   acoes: ['view', 'export'] },
+        { id: 'fin_notas_fiscais',  nome: 'Notas Fiscais',     acoes: ['view', 'create', 'edit', 'delete', 'export'] },
       ]},
     ]
   },
@@ -117,7 +120,7 @@ const modulosSistema: Modulo[] = [
 ];
 
 const acoesLabels: Record<string, string> = {
-  view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', export: 'Exportar',
+  view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', deliver: 'Entregar', buy: 'Comprar', export: 'Exportar',
 };
 const allAcoes = Object.keys(acoesLabels);
 
@@ -177,8 +180,10 @@ function mapToPermissions(map: PermissionsMap, scopeMap: ScopeMap = {}): Permiss
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function Acessos() {
-  const { hasPermission } = usePermissions();
-  const isAdmin = hasPermission('all', 'all', 'delete');
+  const { hasPermission, isStaff } = usePermissions();
+  const staff = isStaff();
+  const canView = staff || hasPermission('gestao_pessoas', 'gp_permissoes', 'view');
+  const isAdmin = staff || hasPermission('gestao_pessoas', 'gp_permissoes', 'edit');
 
   const [activeTab, setActiveTab]         = useState("perfis");
   const [searchTerm, setSearchTerm]       = useState("");
@@ -357,12 +362,12 @@ export default function Acessos() {
 
   // ── Guard ─────────────────────────────────────────────────────────────────────
 
-  if (!isAdmin) {
+  if (!canView) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4">
         <Lock className="h-16 w-16 text-muted-foreground" />
         <h2 className="text-xl font-semibold text-foreground">Acesso Restrito</h2>
-        <p className="text-muted-foreground">Apenas administradores podem gerenciar acessos.</p>
+        <p className="text-muted-foreground">Você não tem permissão para visualizar esta página.</p>
       </div>
     );
   }
@@ -606,6 +611,7 @@ export default function Acessos() {
                               <Select
                                 value={userRoles[pessoa.id] || ''}
                                 onValueChange={(v) => setUserRoles(prev => ({ ...prev, [pessoa.id]: v }))}
+                                disabled={!isAdmin}
                               >
                                 <SelectTrigger className="w-36">
                                   <SelectValue placeholder={pessoa.role} />
@@ -618,7 +624,7 @@ export default function Acessos() {
                                   ))}
                                 </SelectContent>
                               </Select>
-                              {userRoles[pessoa.id] && userRoles[pessoa.id] !== pessoa.role && (
+                              {isAdmin && userRoles[pessoa.id] && userRoles[pessoa.id] !== pessoa.role && (
                                 <Button
                                   size="sm"
                                   onClick={() => handleApplyRole(pessoa)}

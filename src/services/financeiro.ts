@@ -211,6 +211,26 @@ export const createParcela = async (data: Record<string, unknown>): Promise<Parc
     return res.data;
 };
 
+export const deleteParcela = async (id: number): Promise<void> => {
+    await api.delete(`/api/financial/parcelas/${id}/`);
+};
+
+interface ParcelaReparcelar {
+    numero: number;
+    data_de_vencimento: string | null;
+    valor: number;
+}
+
+export const reparcelarContaPagar = async (id: number, parcelas: ParcelaReparcelar[]): Promise<ContaPagar> => {
+    const res = await api.post(`/api/financial/contas_pagar/${id}/reparcelar/`, { parcelas });
+    return res.data;
+};
+
+export const reparcelarContaReceber = async (id: number, parcelas: ParcelaReparcelar[]): Promise<ContaReceber> => {
+    const res = await api.post(`/api/financial/contas_receber/${id}/reparcelar/`, { parcelas });
+    return res.data;
+};
+
 // ─── Contas a Pagar ───────────────────────────────────────────────────────────
 
 export const fetchContasPagar = async (page = 1): Promise<PaginatedResponse<ContaPagar>> => {

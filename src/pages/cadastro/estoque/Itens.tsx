@@ -31,14 +31,13 @@ const Itens = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<any>(null);
   const [editItem, setEditItem] = useState<any>(null);
-  const [editData, setEditData] = useState({ item: "", formaApresentacao: "", setores: "" });
+  const [editData, setEditData] = useState({ item: "", setores: "" });
 
   const items = (itensApi || []).map(apiItem => ({
     id: apiItem.id,
     codigo: `EST${String(apiItem.id).padStart(3, '0')}`,
     dataCadastro: "-",
     item: apiItem.itens_do_estoque,
-    formaApresentacao: "-",
     setores: "-"
   }));
 

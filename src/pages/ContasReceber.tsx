@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom"
 import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
 import { SortableHead } from "@/components/SortableHead"
-import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink } from "lucide-react"
+import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink, AlertCircle } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -19,7 +19,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchContasReceber, updateContaReceber, deleteContaReceber, updateParcelaReceber, uploadComprovante, fetchContasBancarias, type ContaReceber as Conta, type ParcelaReceber, type ContaBancaria, fetchContasReceberEstatisticas, contasReceberQueryKey, contasBancariasQueryKey } from "@/services/financeiro"
+import { fetchContasReceber, updateContaReceber, deleteContaReceber, updateParcelaReceber, uploadComprovante, fetchContasBancarias, type ContaReceber as Conta, type ParcelaReceber, type ContaBancaria, fetchContasReceberEstatisticas, contasReceberQueryKey, contasBancariasQueryKey, reparcelarContaReceber } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 
@@ -40,6 +40,17 @@ const ContasReceber = () => {
   const [editData, setEditData] = useState<Partial<Conta>>({})
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
   const toggleExpand = (id: number) => setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; })
+
+  interface ParcelaEditRow { numero: number; data_de_vencimento: string; valor: string; }
+  const [parcelasEdit, setParcelasEdit] = useState<ParcelaEditRow[]>([])
+  const [showReparcelar, setShowReparcelar] = useState(false)
+
+  const addMonthsEdit = (dateStr: string, months: number): string => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split("T")[0];
+  };
 
   const [pagamentoModal, setPagamentoModal] = useState<{ parcela: ParcelaReceber; conta: Conta } | null>(null)
   const [pagamentoForm, setPagamentoForm] = useState({ valor_pago: "", data_de_pagamento: "", forma_de_pagamento: "", conta_bancaria: "" })
@@ -95,6 +106,18 @@ const ContasReceber = () => {
     onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
   });
 
+  const reparcelarMutation = useMutation({
+    mutationFn: (data: { id: number; parcelas: { numero: number; data_de_vencimento: string | null; valor: number }[] }) =>
+      reparcelarContaReceber(data.id, data.parcelas),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: contasReceberQueryKey });
+      setEditItem(null);
+      setShowReparcelar(false);
+      toast({ title: "Parcelas atualizadas com sucesso." });
+    },
+    onError: (err: any) => toast({ title: "Erro", description: err?.response?.data?.detail ?? "Falha ao reparcelar.", variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: deleteContaReceber,
     onSuccess: () => {
@@ -125,7 +148,15 @@ const ContasReceber = () => {
 
   const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Cliente: c.cliente_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
-  const openEdit = (c: Conta) => { setEditItem(c); setEditData({ ...c }); };
+  const openEdit = (c: Conta) => {
+    setEditItem(c);
+    setEditData({ ...c });
+    setShowReparcelar(false);
+    const existentes = (c.parcelas ?? [])
+      .filter(p => p.status !== 'Pago' && p.status !== 'Adiantamento')
+      .map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento ?? "", valor: String(p.valor) }));
+    setParcelasEdit(existentes.length > 0 ? existentes : [{ numero: 1, data_de_vencimento: c.data_de_vencimento?.slice(0, 10) ?? "", valor: String(c.valor_total ?? "") }]);
+  };
   const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: editData }); } };
   const deleteItemData = items.find((i: Conta) => i.id === deleteId);
 
@@ -419,15 +450,138 @@ const ContasReceber = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Cliente (ID)</Label><Input type="number" value={editData.cliente || ""} onChange={e => setEditData({ ...editData, cliente: parseInt(e.target.value) })} /></div>
-            <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
-            <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo || ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
-            <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
+      <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setShowReparcelar(false); }}>
+        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+          <div className="px-6 pt-6 pb-4">
+            <DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
           </div>
-          <DialogFooter><Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar"}</Button></DialogFooter>
+          <Separator />
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
+              <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo || ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
+              <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
+              <div><Label>Vencimento</Label><Input type="date" value={editData.data_de_vencimento?.slice(0, 10) || ""} onChange={e => setEditData({ ...editData, data_de_vencimento: e.target.value })} /></div>
+            </div>
+
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Parcelas</p>
+                <button className="text-xs text-primary underline" onClick={() => setShowReparcelar(v => !v)}>
+                  {showReparcelar ? "Cancelar edição de parcelas" : "Editar parcelas"}
+                </button>
+              </div>
+
+              {!showReparcelar && editItem && (
+                <div className="rounded border border-border overflow-hidden text-xs">
+                  <Table>
+                    <TableHeader><TableRow className="bg-muted/50">
+                      <TableHead className="h-7 text-xs">Nº</TableHead>
+                      <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                      <TableHead className="h-7 text-xs text-right">Valor</TableHead>
+                      <TableHead className="h-7 text-xs text-center">Status</TableHead>
+                    </TableRow></TableHeader>
+                    <TableBody>
+                      {(editItem.parcelas ?? []).length === 0
+                        ? <TableRow><TableCell colSpan={4} className="text-center py-3 text-muted-foreground">Sem parcelas.</TableCell></TableRow>
+                        : (editItem.parcelas ?? []).map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell className="py-1.5">{p.numero}</TableCell>
+                            <TableCell className="py-1.5 text-center">{p.data_de_vencimento || "—"}</TableCell>
+                            <TableCell className="py-1.5 text-right">{formatBRL(p.valor)}</TableCell>
+                            <TableCell className="py-1.5 text-center">{p.status}</TableCell>
+                          </TableRow>
+                        ))
+                      }
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {showReparcelar && (
+                <div className="space-y-3 p-3 border border-border rounded bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Parcelas pagas são mantidas. Apenas as pendentes serão substituídas.</p>
+                  <div className="flex gap-2 items-center">
+                    <Label className="text-xs whitespace-nowrap">Nº de parcelas:</Label>
+                    <Input
+                      type="number" min="1" className="h-7 w-20 text-xs"
+                      value={parcelasEdit.length}
+                      onChange={e => {
+                        const n = Math.max(1, parseInt(e.target.value) || 1);
+                        const total = parseFloat(String(editData.valor_total || "0")) || 0;
+                        const base = total > 0 ? Math.floor((total / n) * 100) / 100 : 0;
+                        const remainder = total > 0 ? parseFloat((total - base * n).toFixed(2)) : 0;
+                        const firstDate = parcelasEdit[0]?.data_de_vencimento || editData.data_de_vencimento?.slice(0, 10) || "";
+                        setParcelasEdit(Array.from({ length: n }, (_, i) => ({
+                          numero: i + 1,
+                          data_de_vencimento: addMonthsEdit(firstDate, i),
+                          valor: (i === n - 1 ? base + remainder : base).toFixed(2),
+                        })));
+                      }}
+                    />
+                  </div>
+                  <div className="rounded border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader><TableRow className="bg-muted/50">
+                        <TableHead className="h-7 text-xs w-10">Nº</TableHead>
+                        <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                        <TableHead className="h-7 text-xs text-right">Valor (R$)</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {parcelasEdit.map((p, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-1 text-xs font-medium">{p.numero}</TableCell>
+                            <TableCell className="py-1">
+                              <Input type="date" value={p.data_de_vencimento} className="h-7 text-xs"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, data_de_vencimento: e.target.value } : r))} />
+                            </TableCell>
+                            <TableCell className="py-1">
+                              <Input type="number" step="0.01" value={p.valor} className="h-7 text-xs text-right"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, valor: e.target.value } : r))} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {(() => {
+                    const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                    const total = parseFloat(String(editData.valor_total || "0")) || 0;
+                    const ok = total > 0 && Math.abs(soma - total) < 0.01;
+                    return total > 0 ? (
+                      <p className={`text-xs flex items-center gap-1 ${ok ? "text-green-600" : "text-destructive"}`}>
+                        {!ok && <AlertCircle className="h-3 w-3" />}
+                        Soma: R$ {soma.toFixed(2)} / Total: R$ {total.toFixed(2)}
+                      </p>
+                    ) : null;
+                  })()}
+                  <Button size="sm" className="mt-1"
+                    disabled={reparcelarMutation.isPending}
+                    onClick={() => {
+                      if (!editItem) return;
+                      const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                      const total = parseFloat(String(editData.valor_total || editItem.valor_total || "0")) || 0;
+                      if (total > 0 && Math.abs(soma - total) > 0.01) {
+                        toast({ title: "A soma das parcelas deve ser igual ao valor total.", variant: "destructive" }); return;
+                      }
+                      reparcelarMutation.mutate({
+                        id: editItem.id,
+                        parcelas: parcelasEdit.map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento || null, valor: parseFloat(p.valor) || 0 })),
+                      });
+                    }}
+                  >{reparcelarMutation.isPending ? "Salvando..." : "Salvar Parcelas"}</Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <Separator />
+          <div className="px-6 py-4">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEditItem(null); setShowReparcelar(false); }}>Cancelar</Button>
+              <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar Dados"}</Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

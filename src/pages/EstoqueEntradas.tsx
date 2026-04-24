@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import api from "@/lib/api"
-import { fetchEntradas, fetchAllEntradas, entradasQueryKey } from "@/services/estoque"
+import { fetchEntradas, fetchAllEntradas, entradasQueryKey, fetchNomenclaturas, nomenclaturasQueryKey } from "@/services/estoque"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { Entradas } from "@/types/estoque"
 import { fetchItensEstoque } from "@/services/estoque"
@@ -37,6 +37,8 @@ interface ItemPreCadastroNF {
   nome_item: string;
   quantidade: number;
   custo_unitario: number;
+  unidade_fornecedor: string;
+  fator_conversao_fornecedor?: number | null;
 }
 
 interface EntradaNF {
@@ -70,12 +72,9 @@ function loadSavedEntries(): EntradaNF[] {
 export default function EstoqueEntradas() {
   const navigate = useNavigate()
   const queryClient = useQueryClient();
-  const { currentUser } = usePermissions();
+  const { currentUser, hasPermission } = usePermissions();
 
-  // ── RBAC guard: only gestor/diretor/admin see and trigger approval actions
-  const APPROVAL_ROLES = ["admin", "diretor", "gestor"];
-  const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase();
-  const canApprove = APPROVAL_ROLES.includes(currentRole);
+  const canApprove = hasPermission('estoque', 'est_entradas', 'approve');
 
   const [page, setPage] = useState(1)
 
@@ -189,8 +188,15 @@ export default function EstoqueEntradas() {
   const [approvalItem, setApprovalItem] = useState<EntradaNF | null>(null)
   const [rejectItem, setRejectItem] = useState<EntradaNF | null>(null)
   const [rejectJustificativa, setRejectJustificativa] = useState("")
-  // Normalização de itens pré-cadastrados: { [precadastroId]: { acao: "novo"|"existente"|"", itemId: string } }
+  // Normalização de itens pré-cadastrados: { [precadastroId]: { acao, itemId } }
   const [precadastroSelections, setPrecadastroSelections] = useState<Record<number, { acao: "novo" | "existente" | ""; itemId: string }>>({})
+  // Dados de conversão por item pré-cadastrado: { [precadastroId]: { fatorConversao,  formaApresentacao } }
+  const [conversaoSelections, setConversaoSelections] = useState<Record<number, { fatorConversao: string; string; formaApresentacao: string }>>({})
+
+  const { data: nomenclaturas = [] } = useQuery({
+    queryKey: nomenclaturasQueryKey,
+    queryFn: fetchNomenclaturas,
+  })
   const [conciliateItem, setConciliateItem] = useState<{ entradaId: number; itemNF: ItemNF } | null>(null)
   const [conciliateWith, setConciliateWith] = useState("")
   const [conciliateComboboxOpen, setConciliateComboboxOpen] = useState(false)
@@ -214,14 +220,18 @@ export default function EstoqueEntradas() {
   };
 
   const normalizarMutation = useMutation({
-    mutationFn: async ({ entradaId, precadastroId, acao, itemExistenteId }: {
-      entradaId: number; precadastroId: number; acao: "novo" | "existente"; itemExistenteId?: string;
+    mutationFn: async ({ entradaId, precadastroId, acao, itemExistenteId, fatorConversao, formaApresentacao }: {
+      entradaId: number; precadastroId: number; acao: "novo" | "existente";
+      itemExistenteId?: string; fatorConversao?: string; formaApresentacao?: string;
     }) => {
-      const res = await api.post(`/api/estoque/entradas/${entradaId}/normalizar-precadastro/`, {
+      const body: Record<string, any> = {
         precadastro_id: precadastroId,
         acao,
         item_existente_id: itemExistenteId ? parseInt(itemExistenteId) : undefined,
-      });
+        fator_conversao: fatorConversao ? parseFloat(fatorConversao) : 1,
+        forma_apresentacao: formaApresentacao ?? '',
+      };
+      const res = await api.post(`/api/estoque/entradas/${entradaId}/normalizar-precadastro/`, body);
       return res.data;
     },
     onSuccess: (_data, variables) => {
@@ -299,6 +309,8 @@ export default function EstoqueEntradas() {
         nome_item: it.nome_item,
         quantidade: it.quantidade,
         custo_unitario: Number(it.custo_unitario ?? 0),
+        unidade_fornecedor: it.unidade_fornecedor ?? '',
+        fator_conversao_fornecedor: it.fator_conversao_fornecedor ?? null,
       })),
       _tipo: (e?.tipo ?? 'compra') as string,
       _insumos: (e?.insumos || []).map((ins: any) => ({
@@ -393,13 +405,17 @@ export default function EstoqueEntradas() {
   const handleNormalizar = (entradaId: number, precadastroId: number) => {
     const sel = precadastroSelections[precadastroId];
     if (!sel || !sel.acao) return;
+    const conv = conversaoSelections[precadastroId];
     normalizarMutation.mutate({
       entradaId,
       precadastroId,
       acao: sel.acao,
       itemExistenteId: sel.acao === "existente" ? sel.itemId : undefined,
+      fatorConversao: conv?.fatorConversao,
+      formaApresentacao: conv?.formaApresentacao,
     });
     setPrecadastroSelections(prev => { const next = { ...prev }; delete next[precadastroId]; return next; });
+    setConversaoSelections(prev => { const next = { ...prev }; delete next[precadastroId]; return next; });
   };
 
   return (
@@ -457,13 +473,13 @@ export default function EstoqueEntradas() {
                       <TableCell >{entrada.responsavel}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span>{(entrada as any)._tipo === 'producao_local' ? '—' : entrada.notaFiscal}</span>
+                          <span>{(entrada as any)._tipo === 'producao_local' ? '' : entrada.notaFiscal}</span>
                           {(entrada as any)._tipo === 'producao_local' && (
-                            <Badge variant="outline" className="text-[10px] border-emerald-400 text-emerald-700">Produção Local</Badge>
+                            <Badge variant="outline">Produção Local</Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{(entrada as any)._tipo === 'producao_local' ? '—' : entrada.fornecedor}</TableCell>
+                      <TableCell>{(entrada as any)._tipo === 'producao_local' ? '' : entrada.fornecedor}</TableCell>
                       <TableCell >{entrada.unidade}</TableCell>
                       <TableCell >{entrada.custoTotal}</TableCell>
                       <TableCell className="text-center"><StatusBadge status={entrada.status} /></TableCell>
@@ -478,7 +494,17 @@ export default function EstoqueEntradas() {
                                 size="sm"
                                 className="gap-1.5 text-xs"
                                 disabled={aprovarMutation.isPending || rejeitarMutation.isPending}
-                                onClick={() => setApprovalItem(entrada)}
+                                onClick={() => {
+                                  setApprovalItem(entrada);
+                                  const initConversao: Record<number, { fatorConversao: string; formaApresentacao: string }> = {};
+                                  entrada.itens_precadastro.forEach(it => {
+                                    initConversao[it.id] = {
+                                      fatorConversao: it.fator_conversao_fornecedor ? String(it.fator_conversao_fornecedor) : "",
+                                      formaApresentacao: it.unidade_fornecedor ?? "",
+                                    };
+                                  });
+                                  setConversaoSelections(initConversao);
+                                }}
                               >
                                 <ClipboardCheck className="w-3.5 h-3.5" /> Analisar
                               </Button>
@@ -520,16 +546,16 @@ export default function EstoqueEntradas() {
                                   <TableHeader>
                                     <TableRow>
                                       <TableHead >Item</TableHead>
-                                      <TableHead className="text-right">Quantidade</TableHead>
-                                      <TableHead className="text-right">Custo Unitário</TableHead>
+                                      <TableHead className="text-center">Quantidade</TableHead>
+                                      <TableHead className="text-center">Custo Unitário</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
                                     {entrada.itens.map(item => (
                                       <TableRow key={item.id}>
-                                        <TableCell >{item.item}</TableCell>
-                                        <TableCell >{item.quantidade}</TableCell>
-                                        <TableCell >{item.custoUnitario}</TableCell>
+                                        <TableCell>{item.item}</TableCell>
+                                        <TableCell className="text-left">{Number(item.quantidade).toLocaleString('pt-BR')}</TableCell>
+                                        <TableCell className="text-center">{item.custoUnitario}</TableCell>
                                       </TableRow>
                                     ))}
                                   </TableBody>
@@ -543,21 +569,33 @@ export default function EstoqueEntradas() {
                                 <Table>
                                   <TableHeader>
                                     <TableRow>
-                                      <TableHead >Nome</TableHead>
-                                      <TableHead className="text-right">Quantidade</TableHead>
-                                      <TableHead className="text-right">Custo Unitário</TableHead>
+                                      <TableHead>Nome</TableHead>
+                                      <TableHead className="text-right">Qtd Fornecedor</TableHead>
+                                      <TableHead className="text-right">Qtd Interna</TableHead>
+                                      <TableHead className="text-center">Custo Unitário</TableHead>
                                       <TableHead className="text-center">Status</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
-                                    {(entrada as any).itens_precadastro.map((it: ItemPreCadastroNF) => (
-                                      <TableRow key={it.id}>
-                                        <TableCell >{it.nome_item}</TableCell>
-                                        <TableCell >{it.quantidade}</TableCell>
-                                        <TableCell >{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</TableCell>
-                                        <TableCell className="text-center"><StatusBadge status="Pré-Cadastro" className="text-[10px]" /></TableCell>
-                                      </TableRow>
-                                    ))}
+                                    {(entrada as any).itens_precadastro.map((it: ItemPreCadastroNF) => {
+                                      const fator = it.fator_conversao_fornecedor ? parseFloat(String(it.fator_conversao_fornecedor)) : null;
+                                      const qtdInterna = fator && fator > 0 ? Math.round(it.quantidade * fator) : null;
+                                      return (
+                                        <TableRow key={it.id}>
+                                          <TableCell>{it.nome_item}</TableCell>
+                                          <TableCell className="text-right">
+                                            {Number(it.quantidade).toLocaleString('pt-BR')}{it.unidade_fornecedor ? ` ${it.unidade_fornecedor}` : ""}
+                                          </TableCell>
+                                          <TableCell className="text-right">
+                                            {qtdInterna !== null
+                                              ? <span className="font-semibold">{qtdInterna.toLocaleString('pt-BR')} unid.</span>
+                                              : <span className="text-muted-foreground">—</span>}
+                                          </TableCell>
+                                          <TableCell className="text-center">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</TableCell>
+                                          <TableCell className="text-center"><StatusBadge status="Pré-Cadastro" className="text-[10px]" /></TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
                                   </TableBody>
                                 </Table>
                               </div>
@@ -600,10 +638,10 @@ export default function EstoqueEntradas() {
           </Table>
           {totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20, total)} de {total} registros</span>
+              <span className="text-sm text-muted-foreground">{(page - 1) * 20 + 1}–{Math.min(page * 20, total)} de {total} registros</span>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
-                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page - 1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page + 1)} disabled={!hasNext}>Próxima</Button>
               </div>
             </div>
           )}
@@ -611,7 +649,7 @@ export default function EstoqueEntradas() {
       </div>
 
       {/* Analysis / Approval Dialog */}
-      <Dialog open={!!approvalItem} onOpenChange={() => { setApprovalItem(null); setPrecadastroSelections({}); }}>
+      <Dialog open={!!approvalItem} onOpenChange={() => { setApprovalItem(null); setPrecadastroSelections({}); setConversaoSelections({}); }}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Análise de Entrada — {approvalItem?.notaFiscal}</DialogTitle>
@@ -654,7 +692,17 @@ export default function EstoqueEntradas() {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium text-foreground">{it.nome_item}</p>
-                              <p className="text-xs text-muted-foreground">Qtd: {it.quantidade} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {it.fator_conversao_fornecedor && parseFloat(String(it.fator_conversao_fornecedor)) > 0 ? (
+                                  <>
+                                    <span>{Number(it.quantidade).toLocaleString('pt-BR')} {it.unidade_fornecedor || "unid."} × {Number(it.fator_conversao_fornecedor).toLocaleString('pt-BR')} = </span>
+                                    <span className="font-semibold text-foreground">{Math.round(it.quantidade * parseFloat(String(it.fator_conversao_fornecedor))).toLocaleString('pt-BR')} unid. internas</span>
+                                    <span> • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</span>
+                                  </>
+                                ) : (
+                                  <>Qtd: {Number(it.quantidade).toLocaleString('pt-BR')}{it.unidade_fornecedor ? ` ${it.unidade_fornecedor}` : ""} • {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(it.custo_unitario)}</>
+                                )}
+                              </p>
                             </div>
                             <StatusBadge status="Pré-Cadastro" className="text-[10px]" />
                           </div>
@@ -702,15 +750,55 @@ export default function EstoqueEntradas() {
                                 </PopoverContent>
                               </Popover>
                             )}
-                            {sel.acao && (sel.acao === "novo" || sel.itemId) && (
-                              <Button
-                                size="sm" className="h-8 text-xs gap-1 self-end"
-                                disabled={isPending}
-                                onClick={() => handleNormalizar((approvalItem as any)._rawId ?? approvalItem.id, it.id)}
-                              >
-                                <CheckCircle className="w-3.5 h-3.5" /> Confirmar Normalização
-                              </Button>
-                            )}
+                            {sel.acao && (sel.acao === "novo" || sel.itemId) && (() => {
+                              const conv = conversaoSelections[it.id];
+                              const conversaoValida = !!conv?.formaApresentacao && !!conv?.fatorConversao && parseFloat(conv.fatorConversao) > 0;
+                              return (
+                                <>
+                                  <div className="border border-border rounded-md p-3 space-y-2 bg-background">
+                                    <p className="text-xs font-semibold">Conversão de unidade <span className="text-destructive">*</span></p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Unidade do Fornecedor <span className="text-destructive">*</span></Label>
+                                        <Input
+                                          className="h-7 text-xs"
+                                          placeholder="Ex: CENTO"
+                                          value={conv?.formaApresentacao ?? ""}
+                                          onChange={e => setConversaoSelections(p => ({ ...p, [it.id]: { ...p[it.id], formaApresentacao: e.target.value } }))}
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label className="text-xs">Fator (1 unid. = ?) <span className="text-destructive">*</span></Label>
+                                        <Input
+                                          className="h-7 text-xs"
+                                          type="number"
+                                          min="0.0001"
+                                          step="any"
+                                          placeholder="Ex: 100"
+                                          value={conv?.fatorConversao ?? ""}
+                                          onChange={e => setConversaoSelections(p => ({ ...p, [it.id]: { ...p[it.id], fatorConversao: e.target.value } }))}
+                                        />
+                                      </div>
+                                    </div>
+                                    {conv?.fatorConversao && parseFloat(conv.fatorConversao) > 0 && (
+                                      <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
+                                        <span>{Number(it.quantidade).toLocaleString('pt-BR')} {conv.formaApresentacao || "unid."} × {Number(conv.fatorConversao).toLocaleString('pt-BR')} =</span>
+                                        <span className="font-semibold text-foreground">
+                                          {Math.round(it.quantidade * parseFloat(conv.fatorConversao)).toLocaleString('pt-BR')} unid. internas
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <Button
+                                    size="sm" className="h-8 text-xs gap-1 self-end"
+                                    disabled={isPending || !conversaoValida}
+                                    onClick={() => handleNormalizar((approvalItem as any)._rawId ?? approvalItem.id, it.id)}
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" /> Confirmar Normalização
+                                  </Button>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       );

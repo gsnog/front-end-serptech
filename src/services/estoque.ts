@@ -176,6 +176,13 @@ export interface Unidade {
 export interface FormaApresentacao {
     id: number;
     forma_apresentacao: string;
+    item: number | null;
+    item_nome?: string;
+    nomenclatura: number | null;
+    nomenclatura_nome?: string;
+    fornecedor: number | null;
+    fornecedor_nome?: string;
+    fator_conversao: string;
 }
 
 export interface ItemSaida {

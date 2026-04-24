@@ -357,7 +357,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                               >
                                 {subItem.title}
                               </NavLink>
-                            </li>
+                           </li>
                           )
                         ))}
                     </ul>
