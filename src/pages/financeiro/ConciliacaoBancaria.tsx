@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchConciliacoes,
   fetchConciliacaoParaConciliar,
   efetivarConciliacaoBancaria,
   importarOfxNovo,
+  conciliacoesQueryKey,
   Conciliacao,
   ConciliacaoParaConciliar,
   ContaPagar,
@@ -34,7 +36,7 @@ import { ptBR } from "date-fns/locale";
 const isEntrada = (valor: number) => valor >= 0;
 
 const ConciliacaoBancaria = () => {
-  const [conciliacoes, setConciliacoes] = useState<Conciliacao[]>([]);
+  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detalhes, setDetalhes] = useState<ConciliacaoParaConciliar | null>(null);
   const [selectedConta, setSelectedConta] = useState<{
@@ -42,28 +44,16 @@ const ConciliacaoBancaria = () => {
     id: number;
   } | null>(null);
 
-  const [loadingLista, setLoadingLista] = useState(false);
   const [loadingDetalhes, setLoadingDetalhes] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [efetuando, setEfetuando] = useState(false);
 
   const { toast } = useToast();
 
-  useEffect(() => {
-    carregarLista();
-  }, []);
-
-  const carregarLista = async () => {
-    setLoadingLista(true);
-    try {
-      const all = await fetchConciliacoes();
-      setConciliacoes(all.filter((c) => c.conciliacao !== "Efetuado"));
-    } catch {
-      toast({ title: "Erro ao carregar conciliações", variant: "destructive" });
-    } finally {
-      setLoadingLista(false);
-    }
-  };
+  const { data: conciliacoesRaw = [], isLoading: loadingLista } = useQuery({
+    queryKey: [...conciliacoesQueryKey],
+    queryFn: fetchConciliacoes,
+  });
+  const conciliacoes = conciliacoesRaw.filter((c) => c.conciliacao !== "Efetuado");
 
   const handleSelecionar = async (id: number) => {
     if (selectedId === id) {
@@ -93,52 +83,43 @@ const ConciliacaoBancaria = () => {
     }
   };
 
+  const importMutation = useMutation({
+    mutationFn: (file: File) => importarOfxNovo(file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...conciliacoesQueryKey] });
+      toast({ title: "OFX importado com sucesso." });
+    },
+    onError: () => toast({ title: "Erro na importação", description: "Verifique o arquivo OFX e tente novamente.", variant: "destructive" }),
+  });
+
   const handleImportarOfx = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     setImporting(true);
     try {
-      await importarOfxNovo(file);
-      const all = await fetchConciliacoes();
-      const pendentes = all.filter((c) => c.conciliacao !== "Efetuado");
-      setConciliacoes(pendentes);
-      toast({
-        title: "OFX importado",
-        description: `${pendentes.length} conciliações pendentes.`,
-      });
-    } catch {
-      toast({
-        title: "Erro na importação",
-        description: "Verifique o arquivo OFX e tente novamente.",
-        variant: "destructive",
-      });
+      await importMutation.mutateAsync(file);
     } finally {
       setImporting(false);
       event.target.value = "";
     }
   };
 
-  const handleEfetivar = async () => {
-    if (!selectedId || !selectedConta) return;
-
-    setEfetuando(true);
-    try {
-      await efetivarConciliacaoBancaria(selectedId, {
-        conta_tipo: selectedConta.tipo,
-        conta_id: selectedConta.id,
-      });
-
+  const efetivarMutation = useMutation({
+    mutationFn: ({ id, conta }: { id: number; conta: { tipo: "receber" | "pagar"; id: number } }) =>
+      efetivarConciliacaoBancaria(id, { conta_tipo: conta.tipo, conta_id: conta.id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...conciliacoesQueryKey] });
       toast({ title: "Conciliação efetivada com sucesso!" });
-      setConciliacoes((prev) => prev.filter((c) => c.id !== selectedId));
       setSelectedId(null);
       setDetalhes(null);
       setSelectedConta(null);
-    } catch {
-      toast({ title: "Erro ao efetivar conciliação", variant: "destructive" });
-    } finally {
-      setEfetuando(false);
-    }
+    },
+    onError: () => toast({ title: "Erro ao efetivar conciliação", variant: "destructive" }),
+  });
+
+  const handleEfetivar = async () => {
+    if (!selectedId || !selectedConta) return;
+    efetivarMutation.mutate({ id: selectedId, conta: selectedConta });
   };
 
   const formatCurrency = (value: number) =>
@@ -267,10 +248,10 @@ const ConciliacaoBancaria = () => {
 
           <Button
             onClick={handleEfetivar}
-            disabled={!selectedId || !selectedConta || efetuando}
+            disabled={!selectedId || !selectedConta || efetivarMutation.isPending}
             className="gap-2"
           >
-            {efetuando ? (
+            {efetivarMutation.isPending ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <CheckCircle2 className="w-4 h-4" />

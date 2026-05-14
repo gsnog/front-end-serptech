@@ -23,6 +23,8 @@ export interface Pessoa {
     cargo_id: number | null;
     setor_id: number | null;
     setor: string | null;
+    unidade_id: number | null;
+    unidade: string | null;
     supervisor_id: number | null;
     supervisor_nome: string | null;
     role: string;           // lowercase group name: admin, gestor, etc.
@@ -115,6 +117,16 @@ export const updateMeWithImage = async (data: any): Promise<Pessoa> => {
     return res.data;
 };
 
+/** GET /api/pessoas/relatorio/ — all pessoas without pagination for report generation */
+export const fetchPessoasRelatorio = async (search = ''): Promise<Pessoa[]> => {
+    const params: Record<string, string> = {};
+    if (search.trim()) params.search = search.trim();
+    const res = await api.get('/api/pessoas/relatorio/', { params });
+    return Array.isArray(res.data) ? res.data : (res.data?.results ?? []);
+};
+
+export const pessoasRelatorioQueryKey = ['pessoas-relatorio'] as const;
+
 /** GET /api/pessoas/meu_time/ — subordinates of current user */
 export const fetchMeuTime = async (): Promise<Pessoa[]> => {
     const res = await api.get('/api/pessoas/meu_time/');
@@ -165,6 +177,12 @@ export const fetchMedicos = async (page = 1, search = ''): Promise<PaginatedResp
     if (search) params.search = search;
     const res = await api.get('/api/medicos/', { params });
     return res.data;
+};
+
+/** GET /api/medicos/ sem paginação — para uso em dropdowns */
+export const fetchAllMedicos = async (): Promise<Medico[]> => {
+    const res = await api.get('/api/medicos/');
+    return Array.isArray(res.data) ? res.data : (res.data?.results ?? []);
 };
 
 export const createMedico = async (data: Partial<Medico> & { user: number }): Promise<Medico> => {

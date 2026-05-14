@@ -24,17 +24,32 @@ import VisaoGeralRH from "@/pages/gestao-pessoas/VisaoGeralRH"
 
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { useQuery } from "@tanstack/react-query"
-import { fetchEstatisticasFinanceiras, fetchDashboardFull } from "@/services/financeiro"
-import { fetchProjetos, fetchTarefas } from "@/services/operacional"
+import { fetchEstatisticasFinanceiras, fetchDashboardFull, type DashboardParams } from "@/services/financeiro"
+import { fetchUnidades } from "@/services/estoque"
 import { fetchPessoas, fetchSetores, fetchMe, fetchMeuTime, type Pessoa } from "@/services/pessoas"
 
 type DashboardType = "geral" | "meu-perfil" | "financeiro" | "estoque" | "patrimonio" | "operacional" | "comercial" | "rh"
-type PeriodoType = "1h" | "24h" | "7d" | "30d" | "90d" | "1y"
+type PeriodoType = "7d" | "30d" | "90d" | "1y" | "custom"
 type TipoType = "todos" | "financeiro" | "estoque" | "patrimonio"
 
 // ===== DASHBOARD DATA HOOK =====
-export const useDashboardData = () => {
-  const { data = {}, isLoading } = useQuery({ queryKey: ['dashboard_full'], queryFn: fetchDashboardFull });
+export const useDashboardData = (
+  periodo: PeriodoType = '30d',
+  extra: { dateFrom?: string; dateTo?: string; unidade?: string } = {}
+) => {
+  const { dateFrom, dateTo, unidade } = extra
+  const isCustom = periodo === 'custom'
+  const enabled = !isCustom || (!!dateFrom && !!dateTo)
+
+  const apiParams: DashboardParams = isCustom
+    ? { date_from: dateFrom, date_to: dateTo, unidade }
+    : { periodo, unidade }
+
+  const { data = {}, isLoading } = useQuery({
+    queryKey: ['dashboard_full', periodo, dateFrom ?? '', dateTo ?? '', unidade ?? ''],
+    queryFn: () => fetchDashboardFull(apiParams),
+    enabled,
+  });
   return { dash: data, isLoading };
 }
 
@@ -172,15 +187,53 @@ const FilterBar = ({ children }: { children: React.ReactNode }) => (
   </FadeIn>
 )
 
-const PeriodFilter = ({ periodo, setPeriodo, options = ["1h", "24h", "7d", "30d", "90d", "1y"] }: { periodo: string; setPeriodo: (v: string) => void; options?: string[] }) => (
-  <div className="flex flex-col gap-1.5 min-w-[200px]">
-    <label className="filter-label">Período</label>
-    <Select value={periodo} onValueChange={setPeriodo}>
-      <SelectTrigger className="filter-input"><SelectValue /></SelectTrigger>
-      <SelectContent>
-        {options.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-      </SelectContent>
-    </Select>
+const PeriodSelector = ({
+  periodo, setPeriodo,
+  dateFrom = "", setDateFrom = () => { },
+  dateTo = "", setDateTo = () => { },
+  options = ["7d", "30d", "90d", "1y"],
+}: {
+  periodo: string
+  setPeriodo: (v: string) => void
+  dateFrom?: string
+  setDateFrom?: (v: string) => void
+  dateTo?: string
+  setDateTo?: (v: string) => void
+  options?: string[]
+}) => (
+  <div className="flex flex-wrap items-end gap-3">
+    <div className="flex flex-col gap-1.5 min-w-[190px]">
+      <label className="filter-label">Período</label>
+      <Select value={periodo} onValueChange={setPeriodo}>
+        <SelectTrigger className="filter-input"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((p) => <SelectItem key={p} value={p}>{PERIODO_LABELS[p] ?? p}</SelectItem>)}
+          <SelectItem value="custom">Personalizado</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+    {periodo === "custom" && (
+      <>
+        <div className="flex flex-col gap-1.5">
+          <label className="filter-label">De</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            className="filter-input h-9 px-3 text-sm rounded-md border border-input bg-background"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="filter-label">Até</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            className="filter-input h-9 px-3 text-sm rounded-md border border-input bg-background"
+          />
+        </div>
+      </>
+    )}
   </div>
 )
 
@@ -201,17 +254,29 @@ const renderDonutCenter = (text: string, subtext?: string) => (
   </>
 )
 
-// Period helper — returns a cutoff Date for the selected period string
-const getPeriodCutoff = (periodo: string): Date => {
+export const PERIODO_LABELS: Record<string, string> = {
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  "90d": "Últimos 90 dias",
+  "1y": "Último ano",
+}
+
+export const getPeriodCutoff = (periodo: string): Date => {
   const now = new Date()
-  const map: Record<string, number> = { "1h": 1 / 24, "24h": 1, "7d": 7, "30d": 30, "90d": 90, "1y": 365 }
+  const map: Record<string, number> = { "7d": 7, "30d": 30, "90d": 90, "1y": 365 }
   const days = map[periodo] ?? 30
   return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
 }
 
 // ===== DASHBOARD GERAL =====
 const DashboardGeral = () => {
-  const { dash } = useDashboardData();
+  const [periodo, setPeriodo  ] = useState<PeriodoType>("30d")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [setor, setSetor] = useState<string>("todos")
+  const [tipo, setTipo] = useState<TipoType>("todos")
+
+  const { dash } = useDashboardData(periodo, { dateFrom, dateTo })
   const evolutionData = dash.evolutionData || defaultEvolutionData;
   const consumoSetorData = dash.consumoSetorData || defaultConsumoSetorData;
   const patrimonioTipoData = dash.patrimonioTipoData || defaultPatrimonioTipoData;
@@ -227,18 +292,36 @@ const DashboardGeral = () => {
   const contasReceberAbertas = contasReceberData.filter((col: any) => col.status === 'Em Aberto').length;
   const itensCriticosEstoque = inventarioData.filter((col: any) => col.status === 'Crítico').length;
 
-  const [periodo, setPeriodo] = useState<PeriodoType>("30d")
-  const [setor, setSetor] = useState<string>("todos")
-  const [tipo, setTipo] = useState<TipoType>("todos")
-
   const setores = ["todos", "Produção", "Manutenção", "TI", "Administrativo", "Operacional"]
+
+  const filteredConsumoSetorData = useMemo(() => setor === "todos"
+    ? consumoSetorData
+    : consumoSetorData.filter((d: any) => d.setor === setor)
+    , [consumoSetorData, setor])
+
+  const customDays = useMemo(() => {
+    if (periodo !== 'custom' || !dateFrom || !dateTo) return null
+    return Math.ceil((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000)
+  }, [periodo, dateFrom, dateTo])
+
+  const formatChartTick = (v: string) => {
+    const d = new Date(v + 'T00:00:00')
+    if (isNaN(d.getTime())) return v
+    const isDaily = ['7d', '24h', '1h'].includes(periodo) || (periodo === 'custom' && (customDays ?? 30) <= 7)
+    if (isDaily) return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+    return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+  }
 
   const patrimonioTotal = patrimonioTipoData.reduce((s, d) => s + d.value, 0)
 
   return (
     <div className="space-y-6">
       <FilterBar>
-        <PeriodFilter periodo={periodo} setPeriodo={(v) => setPeriodo(v as PeriodoType)} />
+        <PeriodSelector
+          periodo={periodo} setPeriodo={(v) => setPeriodo(v as PeriodoType)}
+          dateFrom={dateFrom} setDateFrom={setDateFrom}
+          dateTo={dateTo} setDateTo={setDateTo}
+        />
         <div className="flex flex-col gap-1.5 min-w-[160px]">
           <label className="filter-label">Setor</label>
           <Select value={setor} onValueChange={setSetor}>
@@ -293,7 +376,7 @@ const DashboardGeral = () => {
                       <stop offset="100%" stopColor="hsl(var(--chart-3))" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="month" tickFormatter={formatChartTick} tick={axisStyle} axisLine={false} tickLine={false} />
                   <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -317,7 +400,7 @@ const DashboardGeral = () => {
                       <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0.5} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="month" tickFormatter={formatChartTick} tick={axisStyle} axisLine={false} tickLine={false} />
                   <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -370,7 +453,7 @@ const DashboardGeral = () => {
 
           <ChartCard title="Consumo de Estoque por Setor" delay={9}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={consumoSetorData} layout="vertical" barSize={20}>
+              <BarChart data={filteredConsumoSetorData} layout="vertical" barSize={20}>
                 <defs>
                   <linearGradient id="barHorizGrad" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.6} />
@@ -466,7 +549,14 @@ const DashboardGeral = () => {
 
 // ===== DASHBOARD FINANCEIRO =====
 const DashboardFinanceiro = () => {
-  const { dash } = useDashboardData();
+  const [periodo, setPeriodo] = useState<PeriodoType>("30d")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [cliente, setCliente] = useState<string>("todos")
+  const [beneficiario, setBeneficiario] = useState<string>("todos")
+  const [status, setStatus] = useState<string>("todos")
+
+  const { dash } = useDashboardData(periodo, { dateFrom, dateTo })
   const evolutionData = dash.evolutionData || defaultEvolutionData;
   const contasStatusData = dash.contasStatusData || defaultContasStatusData;
   const contasReceberData = dash.contasReceberData || defaultContasReceberData;
@@ -475,17 +565,11 @@ const DashboardFinanceiro = () => {
   const tipoDocumentoData = dash.tipoDocumentoData || defaultTipoDocumentoData;
   const ultimasMovimentacoes = dash.ultimasMovimentacoes || defaultUltimasMovimentacoes;
 
-  const [periodo, setPeriodo] = useState<PeriodoType>("30d")
-  const [cliente, setCliente] = useState<string>("todos")
-  const [beneficiario, setBeneficiario] = useState<string>("todos")
-  const [status, setStatus] = useState<string>("todos")
-
   const clientes = useMemo(() => ["todos", ...Array.from(new Set(contasReceberData.map((i: any) => i.cliente).filter(Boolean)))], [contasReceberData])
   const beneficiarios = useMemo(() => ["todos", ...Array.from(new Set(contasPagarData.map((i: any) => i.beneficiario).filter(Boolean)))], [contasPagarData])
   const statusList = ["todos", "Em Aberto", "Vencida", "Paga", "Recebida", "Processada", "Pendente"]
 
-  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
-
+  // Backend already filters by period — only cliente/status/beneficiario need client-side filtering
   const filteredContasReceber = useMemo(() => contasReceberData.filter((item: any) => {
     const matchCliente = cliente === "todos" || item.cliente === cliente
     const matchStatus = status === "todos" || item.status === status
@@ -498,15 +582,22 @@ const DashboardFinanceiro = () => {
     return matchBeneficiario && matchStatus
   }), [contasPagarData, beneficiario, status])
 
-  const filteredDocumentosFiscais = useMemo(() => documentosFiscaisData.filter((doc: any) => {
-    const matchStatus = status === "todos" || doc.status === status
-    const matchPeriodo = doc.emissao ? new Date(doc.emissao) >= cutoff : true
-    return matchStatus && matchPeriodo
-  }), [documentosFiscaisData, status, cutoff])
+  const filteredDocumentosFiscais = useMemo(() => documentosFiscaisData.filter((doc: any) =>
+    status === "todos" || doc.status === status
+  ), [documentosFiscaisData, status])
 
-  const filteredUltimasMovimentacoes = useMemo(() => ultimasMovimentacoes.filter((mov: any) =>
-    mov.data ? new Date(mov.data) >= cutoff : true
-  ), [ultimasMovimentacoes, cutoff])
+  const customDays = useMemo(() => {
+    if (periodo !== 'custom' || !dateFrom || !dateTo) return null
+    return Math.ceil((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000)
+  }, [periodo, dateFrom, dateTo])
+
+  const formatChartTick = (v: string) => {
+    const d = new Date(v + 'T00:00:00')
+    if (isNaN(d.getTime())) return v
+    const isDaily = ['7d', '24h', '1h'].includes(periodo) || (periodo === 'custom' && (customDays ?? 30) <= 7)
+    if (isDaily) return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+    return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+  }
 
   const { data: estatisticasFinanceiras, isLoading: isLoadingFin } = useQuery({
     queryKey: ['estatisticasFinanceiras'],
@@ -525,7 +616,11 @@ const DashboardFinanceiro = () => {
   return (
     <div className="space-y-6">
       <FilterBar>
-        <PeriodFilter periodo={periodo} setPeriodo={(v) => setPeriodo(v as PeriodoType)} />
+        <PeriodSelector
+          periodo={periodo} setPeriodo={(v) => setPeriodo(v as PeriodoType)}
+          dateFrom={dateFrom} setDateFrom={setDateFrom}
+          dateTo={dateTo} setDateTo={setDateTo}
+        />
         <div className="flex flex-col gap-1.5 min-w-[160px]">
           <label className="filter-label">Cliente</label>
           <Select value={cliente} onValueChange={setCliente}>
@@ -574,7 +669,7 @@ const DashboardFinanceiro = () => {
                   <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tickFormatter={formatChartTick} tick={axisStyle} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Area type="monotone" dataKey="saldo" name="Saldo" stroke="hsl(var(--primary))" fill="url(#colorSaldoFin)" strokeWidth={3} dot={false} activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 3 }} />
@@ -595,7 +690,7 @@ const DashboardFinanceiro = () => {
                   <stop offset="100%" stopColor="hsl(var(--destructive))" stopOpacity={0.5} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="month" tick={axisStyle} axisLine={false} tickLine={false} />
+              <XAxis dataKey="month" tickFormatter={formatChartTick} tick={axisStyle} axisLine={false} tickLine={false} />
               <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
               <Tooltip content={<ChartTooltip />} cursor={false} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -663,13 +758,29 @@ const DashboardFinanceiro = () => {
             <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Contas a Receber</h3></div>
             <div className="px-6 pb-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Cliente</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="text-center">Vencimento</TableHead>
+                  <TableHead className="text-center">Parcelas</TableHead>
+                  <TableHead className="text-center">Próx. Venc.</TableHead>
+                  <TableHead className="text-center">Em Atraso</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                </TableRow></TableHeader>
                 <TableBody>
                   {filteredContasReceber.map((item: any) => (
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.cliente}</TableCell>
                       <TableCell className="text-center text-sm">{formatDate(item.vencimento)}</TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground">{item.total_parcelas ?? "—"}</TableCell>
+                      <TableCell className="text-center text-xs">{item.proxima_data_vencimento ? formatDate(item.proxima_data_vencimento) : "—"}</TableCell>
+                      <TableCell className="text-center text-xs">
+                        {(item.parcelas_em_atraso ?? 0) > 0
+                          ? <span className="text-destructive font-bold">{item.parcelas_em_atraso}</span>
+                          : <span className="text-muted-foreground">0</span>}
+                      </TableCell>
                       <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                       <TableCell><StatusBadge status={item.status} /></TableCell>
                     </TableRow>
@@ -685,13 +796,29 @@ const DashboardFinanceiro = () => {
             <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Contas a Pagar</h3></div>
             <div className="px-6 pb-6">
               <Table>
-                <TableHeader><TableRow><TableHead>Código</TableHead><TableHead>Beneficiário</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-center">Status</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Beneficiário</TableHead>
+                  <TableHead className="text-center">Vencimento</TableHead>
+                  <TableHead className="text-center">Parcelas</TableHead>
+                  <TableHead className="text-center">Próx. Venc.</TableHead>
+                  <TableHead className="text-center">Em Atraso</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                </TableRow></TableHeader>
                 <TableBody>
                   {filteredContasPagar.map((item: any) => (
                     <TableRow key={item.codigo}>
                       <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                       <TableCell className="text-sm">{item.beneficiario}</TableCell>
                       <TableCell className="text-center text-sm">{formatDate(item.vencimento)}</TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground">{item.total_parcelas ?? "—"}</TableCell>
+                      <TableCell className="text-center text-xs">{item.proxima_data_vencimento ? formatDate(item.proxima_data_vencimento) : "—"}</TableCell>
+                      <TableCell className="text-center text-xs">
+                        {(item.parcelas_em_atraso ?? 0) > 0
+                          ? <span className="text-destructive font-bold">{item.parcelas_em_atraso}</span>
+                          : <span className="text-muted-foreground">0</span>}
+                      </TableCell>
                       <TableCell className="font-semibold text-sm">{parseCurrency(item.valor)}</TableCell>
                       <TableCell><StatusBadge status={item.status} /></TableCell>
                     </TableRow>
@@ -708,7 +835,7 @@ const DashboardFinanceiro = () => {
         <div className="bg-card rounded-2xl p-6 shadow-sm shadow-black/[0.04] dark:shadow-black/20">
           <h3 className="text-sm font-semibold text-foreground mb-5">Últimas Movimentações</h3>
           <div className="space-y-1">
-            {filteredUltimasMovimentacoes.map((mov: any, index: number) => (
+            {ultimasMovimentacoes.map((mov: any, index: number) => (
               <div key={index} className="flex items-center justify-between py-3.5 border-b border-border/20 last:border-0">
                 <div className="flex items-center gap-3">
                   <div className={`w-2.5 h-2.5 rounded-full ${mov.tipo === "Recebimento" ? "bg-lime-400" : mov.tipo === "Pagamento" ? "bg-rose-400" : "bg-amber-400"}`} />
@@ -755,7 +882,21 @@ const DashboardFinanceiro = () => {
 
 // ===== DASHBOARD ESTOQUE =====
 const DashboardEstoque = () => {
-  const { dash } = useDashboardData();
+  const [periodo, setPeriodo] = useState<PeriodoType>("30d")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [unidade, setUnidade] = useState<string>("todos")
+  const [setor, setSetor] = useState<string>("todos")
+  const [status, setStatus] = useState<string>("todos")
+
+  const unidadeName = unidade === "todos" ? undefined : unidade
+  const { dash } = useDashboardData(periodo, { dateFrom, dateTo, unidade: unidadeName })
+
+  const { data: unidadesData = [] } = useQuery({
+    queryKey: ['unidades'],
+    queryFn: fetchUnidades,
+  })
+
   const estoqueUnidadeData = dash.estoqueUnidadeData || defaultEstoqueUnidadeData;
   const inventarioData = dash.inventarioData || defaultInventarioData;
   const estoqueEvolutionData = dash.estoqueEvolutionData || defaultEstoqueEvolutionData;
@@ -764,28 +905,18 @@ const DashboardEstoque = () => {
   const historicoMovimentacoesEstoque = dash.historicoMovimentacoesEstoque || defaultHistoricoMovimentacoesEstoque;
   const consumoSetorData = dash.consumoSetorData || defaultConsumoSetorData;
 
-  const [periodo, setPeriodo] = useState<PeriodoType>("30d")
-  const [unidade, setUnidade] = useState<string>("todos")
-  const [setor, setSetor] = useState<string>("todos")
-  const [status, setStatus] = useState<string>("todos")
-
-  const unidades = useMemo(() => ["todos", ...Array.from(new Set(inventarioData.map((i: any) => i.unidade).filter(Boolean)))], [inventarioData])
+  // Unidades vêm da API, não derivadas do inventário
   const setores = useMemo(() => ["todos", ...Array.from(new Set(consumoSetorData.map((i: any) => i.setor).filter(Boolean)))], [consumoSetorData])
   const statusList = ["todos", "Normal", "Crítico"]
 
-  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
+  // Inventário já vem filtrado pelo backend (unidade + período)
+  const filteredInventario = useMemo(() => inventarioData.filter((item: any) =>
+    status === "todos" || item.status === status
+  ), [inventarioData, status])
 
-  const filteredInventario = useMemo(() => inventarioData.filter((item: any) => {
-    const matchUnidade = unidade === "todos" || item.unidade === unidade
-    const matchStatus = status === "todos" || item.status === status
-    return matchUnidade && matchStatus
-  }), [inventarioData, unidade, status])
-
-  const filteredHistoricoMovimentacoes = useMemo(() => historicoMovimentacoesEstoque.filter((mov: any) => {
-    const matchSetor = setor === "todos" || mov.setor === setor
-    const matchPeriodo = mov.data ? new Date(mov.data) >= cutoff : true
-    return matchSetor && matchPeriodo
-  }), [historicoMovimentacoesEstoque, setor, cutoff])
+  const filteredHistoricoMovimentacoes = useMemo(() => historicoMovimentacoesEstoque.filter((mov: any) =>
+    setor === "todos" || mov.setor === setor
+  ), [historicoMovimentacoesEstoque, setor])
 
   const filteredConsumoSetor = useMemo(() => consumoSetorData.filter((item: any) =>
     setor === "todos" || item.setor === setor
@@ -794,12 +925,21 @@ const DashboardEstoque = () => {
   return (
     <div className="space-y-6">
       <FilterBar>
-        <PeriodFilter periodo={periodo} setPeriodo={(v) => setPeriodo(v as PeriodoType)} />
+        <PeriodSelector
+          periodo={periodo} setPeriodo={(v) => setPeriodo(v as PeriodoType)}
+          dateFrom={dateFrom} setDateFrom={setDateFrom}
+          dateTo={dateTo} setDateTo={setDateTo}
+        />
         <div className="flex flex-col gap-1.5 min-w-[160px]">
           <label className="filter-label">Unidade</label>
           <Select value={unidade} onValueChange={setUnidade}>
             <SelectTrigger className="filter-input"><SelectValue placeholder="Todas Unidades" /></SelectTrigger>
-            <SelectContent>{unidades.map((u) => <SelectItem key={u} value={u}>{u === "todos" ? "Todas Unidades" : u}</SelectItem>)}</SelectContent>
+            <SelectContent>
+              <SelectItem value="todos">Todas Unidades</SelectItem>
+              {unidadesData.map((u) => (
+                <SelectItem key={u.id} value={u.unidade}>{u.unidade}</SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </div>
         <div className="flex flex-col gap-1.5 min-w-[140px]">
@@ -1487,14 +1627,14 @@ const Dashboard = () => {
   const [activeDashboard, setActiveDashboard] = useState<DashboardType>("meu-perfil")
 
   const allTabs: { key: DashboardType; label: string; icon: typeof LayoutGrid; module?: string }[] = [
-    { key: "meu-perfil",  label: "Meu Perfil",        icon: UserCircle                         },
-    { key: "geral",       label: "Geral",              icon: LayoutGrid                         },
-    { key: "financeiro",  label: "Financeiro",         icon: DollarSign,  module: "financeiro"  },
-    { key: "estoque",     label: "Estoque",            icon: Package,     module: "estoque"     },
-    { key: "patrimonio",  label: "Patrimônio",         icon: Building2,   module: "estoque"     },
-    { key: "operacional", label: "Operacional",        icon: BarChart3,   module: "operacional" },
-    { key: "comercial",   label: "Comercial",          icon: TrendingUp,  module: "comercial"   },
-    { key: "rh",          label: "Gestão de Pessoas",  icon: UserRoundPlus, module: "gestao_pessoas" },
+    { key: "meu-perfil", label: "Meu Perfil", icon: UserCircle },
+    { key: "geral", label: "Geral", icon: LayoutGrid },
+    { key: "financeiro", label: "Financeiro", icon: DollarSign, module: "financeiro" },
+    { key: "estoque", label: "Estoque", icon: Package, module: "estoque" },
+    { key: "patrimonio", label: "Patrimônio", icon: Building2, module: "estoque" },
+    { key: "operacional", label: "Operacional", icon: BarChart3, module: "operacional" },
+    { key: "comercial", label: "Comercial", icon: TrendingUp, module: "comercial" },
+    { key: "rh", label: "Gestão de Pessoas", icon: UserRoundPlus, module: "gestao_pessoas" },
   ]
 
   const tabs = allTabs.filter(t =>

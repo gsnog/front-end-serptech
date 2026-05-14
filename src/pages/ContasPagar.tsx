@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
@@ -66,9 +66,10 @@ const ContasPagar = () => {
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim]);
 
+  const filters = { beneficiario: filterBeneficiario, documento: filterDocumento, dataInicio: filterDataInicio, dataFim: filterDataFim };
   const { data: response, isLoading } = useQuery({
-    queryKey: [...contasPagarQueryKey, page],
-    queryFn: () => fetchContasPagar(page),
+    queryKey: [...contasPagarQueryKey, page, filters],
+    queryFn: () => fetchContasPagar(page, filters),
   });
   const items = response?.results ?? [];
   const serverTotal = response?.count ?? 0;
@@ -201,17 +202,7 @@ const ContasPagar = () => {
     onError: () => toast({ title: "Erro", description: "Falha ao registrar pagamento.", variant: "destructive" }),
   });
 
-  const filtered = useMemo(() => {
-    return items.filter((conta: Conta) => {
-      const matchBeneficiario = (conta.fornecedor_nome || "").toLowerCase().includes(filterBeneficiario.toLowerCase())
-      const matchDocumento = (conta.numero_documento || conta.documento || "").toLowerCase().includes(filterDocumento.toLowerCase())
-      const matchDataInicio = filterDataInicio ? (conta.data_de_faturamento || "") >= filterDataInicio : true
-      const matchDataFim = filterDataFim ? (conta.data_de_faturamento || "") <= filterDataFim : true
-      return matchBeneficiario && matchDocumento && matchDataInicio && matchDataFim
-    })
-  }, [items, filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim])
-
-  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(items)
   const paginatedItems = sorted;
   const total = serverTotal;
   const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
@@ -259,7 +250,7 @@ const ContasPagar = () => {
     });
   };
 
-  const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Beneficiário: c.fornecedor_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
+  const getExportData = () => items.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Beneficiário: c.fornecedor_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
   const openEdit = (c: Conta) => {
     setEditItem(c);
@@ -408,8 +399,7 @@ const ContasPagar = () => {
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/financeiro/contas-pagar/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Conta</Button>
-          <Button onClick={() => navigate("/financeiro/contas-pagar/relatorio")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
-          <ExportButton getData={getExportData} fileName="contas-pagar" />
+          <Button onClick={() => navigate("/relatorios")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 
         <FilterSection
@@ -419,7 +409,7 @@ const ContasPagar = () => {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={serverTotal}
         />
 
         <div className="rounded border border-border overflow-hidden">
@@ -433,6 +423,9 @@ const ContasPagar = () => {
               <col className="w-[100px]" />
               <col className="w-[100px]" />
               <col className="w-[90px]" />
+              <col className="w-[60px]" />
+              <col className="w-[100px]" />
+              <col className="w-[70px]" />
               <col className="w-[110px]" />
               <col className="w-[72px]" />
             </colgroup>
@@ -445,14 +438,17 @@ const ContasPagar = () => {
               <SortableHead label="Título" field="valor_do_titulo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Total" field="valor_total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Vencimento" field="data_de_vencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold text-xs">Parcelas</TableHead>
+              <TableHead className="text-center font-semibold text-xs">Próx. Venc.</TableHead>
+              <TableHead className="text-center font-semibold text-xs">Em Atraso</TableHead>
               <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : paginatedItems.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
               ) : (
                 paginatedItems.map((conta: Conta) => (
                   <React.Fragment key={conta.id}>
@@ -475,12 +471,19 @@ const ContasPagar = () => {
                       <TableCell >{formatBRL(conta.valor_do_titulo)}</TableCell>
                       <TableCell >{formatBRL(conta.valor_total)}</TableCell>
                       <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground">{conta.total_parcelas ?? "—"}</TableCell>
+                      <TableCell className="text-center text-xs">{conta.proxima_data_vencimento || "—"}</TableCell>
+                      <TableCell className="text-center text-xs">
+                        {(conta.parcelas_em_atraso ?? 0) > 0
+                          ? <span className="text-destructive font-bold">{conta.parcelas_em_atraso}</span>
+                          : <span className="text-muted-foreground">0</span>}
+                      </TableCell>
                       <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
                       <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
                     </TableRow>
                     {expandedIds.has(conta.id) && (
                       <TableRow className="bg-muted/30">
-                        <TableCell colSpan={10} className="px-6 py-3">
+                        <TableCell colSpan={13} className="px-6 py-3">
                           <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">
                             Parcelas — {(conta.parcelas || []).filter(p => p.status === 'Pago').length}/{(conta.parcelas || []).length} pagas
                           </p>
@@ -903,7 +906,7 @@ const ContasPagar = () => {
 
       {/* Delete Dialog */}
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir conta?</AlertDialogTitle><AlertDialogDescription>Deseja excluir a conta de "{deleteItemData?.beneficiario}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir conta?</AlertDialogTitle><AlertDialogDescription>Deseja excluir a conta de "{deleteItemData?.fornecedor_nome ?? deleteItemData?.beneficiario}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "Excluindo..." : "Excluir"}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

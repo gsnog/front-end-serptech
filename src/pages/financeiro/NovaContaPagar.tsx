@@ -14,10 +14,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import {
-  fetchCentrosCusto, fetchPlanoContas, createContaPagar, createParcela,
+  fetchCentrosCusto, fetchPlanoContas, createContaPagar, createParcela, deleteContaPagar,
+  centrosCustoQueryKey, planoContasQueryKey,
   type CentroCusto, type PlanoContas,
 } from "@/services/financeiro";
-import { fetchFornecedores, fetchUnidades, unidadesQueryKey } from "@/services/estoque";
+import { fetchFornecedores, fetchUnidades, unidadesQueryKey, fornecedoresQueryKey } from "@/services/estoque";
 
 interface ParcelaRow {
   numero: number;
@@ -99,7 +100,7 @@ export default function NovaContaPagar() {
   const unidades = Array.isArray(unidadesResponse) ? unidadesResponse : (unidadesResponse as any)?.results ?? [];
 
   const { data: fornecedoresResponse } = useQuery({
-    queryKey: ['fornecedores'],
+    queryKey: [...fornecedoresQueryKey],
     queryFn: () => fetchFornecedores(),
   });
   const fornecedores: { id: number; nome: string }[] = Array.isArray(fornecedoresResponse)
@@ -107,7 +108,7 @@ export default function NovaContaPagar() {
     : (fornecedoresResponse as any)?.results ?? [];
 
   const { data: centrosCustoResponse } = useQuery({
-    queryKey: ['centrosCusto'],
+    queryKey: [...centrosCustoQueryKey],
     queryFn: () => fetchCentrosCusto(),
   });
   const centrosCusto: CentroCusto[] = Array.isArray(centrosCustoResponse)
@@ -115,7 +116,7 @@ export default function NovaContaPagar() {
     : (centrosCustoResponse as any)?.results ?? [];
 
   const { data: planoContasResponse } = useQuery({
-    queryKey: ['planoContas'],
+    queryKey: [...planoContasQueryKey],
     queryFn: () => fetchPlanoContas(),
   });
   const planoContasList: PlanoContas[] = Array.isArray(planoContasResponse)
@@ -135,6 +136,7 @@ export default function NovaContaPagar() {
     }
 
     setIsSaving(true);
+    let contaId: number | null = null;
     try {
       const conta = await createContaPagar({
         beneficiario: Number(formData.beneficiario),
@@ -152,9 +154,10 @@ export default function NovaContaPagar() {
         data_de_vencimento: formData.dataVencimento,
         descricao: formData.descricao,
       } as any);
+      contaId = (conta as any).id;
       await Promise.all(parcelasData.map(p =>
         createParcela({
-          conta_pagar: (conta as any).id,
+          conta_pagar: contaId!,
           numero: p.numero,
           data_de_vencimento: p.data_de_vencimento || null,
           valor: parseFloat(p.valor) || 0,
@@ -163,6 +166,10 @@ export default function NovaContaPagar() {
       toast({ title: "Conta a pagar salva com sucesso!" });
       navigate("/financeiro/contas-pagar");
     } catch {
+      // Compensating delete: if parcela creation fails, remove the orphaned ContaPagar
+      if (contaId !== null) {
+        try { await deleteContaPagar(contaId); } catch { /* ignore cleanup error */ }
+      }
       toast({ title: "Erro ao salvar", description: "Não foi possível salvar a conta.", variant: "destructive" });
     } finally {
       setIsSaving(false);

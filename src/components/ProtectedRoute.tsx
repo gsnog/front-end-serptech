@@ -18,7 +18,7 @@ export function ProtectedRoute({ children, perm, module, action = 'view', page =
     ? hasDjangoPerm(perm)
     : module
       ? hasPermission(module, page, action)
-      : true;
+      : false; // deny by default — require explicit permission specification
 
   if (!allowed) return <Navigate to="/acesso-negado" replace />;
   return <>{children}</>;

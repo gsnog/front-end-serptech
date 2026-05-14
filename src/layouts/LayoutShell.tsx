@@ -5,6 +5,7 @@ import { Topbar } from "@/components/Topbar"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/contexts/PermissionsContext"
+import { Loader2 } from "lucide-react"
 
 // Maps path prefixes to the module required for access.
 // Checked in order — first match wins.
@@ -74,6 +75,7 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/estoque/ordem-compra": { title: "Ordem de Compra", description: "Gerenciamento de ordens de compra" },
   "/estoque/ordem-servico": { title: "Ordem de Serviço", description: "Gerenciamento de ordens de serviço" },
   "/estoque/requisicoes": { title: "Requisições", description: "Gerenciamento de requisições" },
+  "/estoque/pedidos-internos": { title: "Pedidos Internos", description: "Gerenciamento de pedidos internos" },
   
   // Estoque - Subpáginas
   "/estoque/entradas/nova": { title: "Entradas de Estoque", description: "Nova Entrada" },
@@ -163,12 +165,22 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
 function LayoutContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
-  const { currentUser, hasPermission, isStaff } = usePermissions()
+  const { currentUser, isLoadingUser, hasPermission, isStaff } = usePermissions()
   const pageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
 
-  // ── Auth guard: redirect to login if no token or userId ──────────────────
+  // ── Auth guard: wait for hydration before deciding to redirect ────────────
   const token = localStorage.getItem('accessToken')
-  if (!token || !currentUser.userId) {
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
+  if (isLoadingUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-primary" />
+      </div>
+    )
+  }
+  if (!currentUser.userId) {
     return <Navigate to="/login" replace />
   }
 

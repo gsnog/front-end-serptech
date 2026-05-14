@@ -422,7 +422,8 @@ export const fetchEntradas = async (page = 1): Promise<PaginatedResponse<any>> =
 export const fetchAllEntradas = async (): Promise<any[]> => {
     const all: any[] = [];
     let page = 1;
-    while (true) {
+    const maxPages = 100;
+    while (page <= maxPages) {
         const res = await api.get('/api/estoque/entradas/', { params: { page, page_size: 100 } });
         const data: PaginatedResponse<any> = res.data;
         all.push(...(data.results ?? []));
@@ -446,6 +447,20 @@ export const createTransferencia = async (data: any): Promise<any> => {
 export const fetchSaidas = async (page = 1): Promise<PaginatedResponse<Saida>> => {
     const res = await api.get('/api/estoque/saidas/', { params: { page, page_size: 20 } });
     return res.data;
+};
+
+export const fetchAllSaidas = async (): Promise<Saida[]> => {
+    const all: Saida[] = [];
+    let page = 1;
+    const maxPages = 100;
+    while (page <= maxPages) {
+        const res = await api.get('/api/estoque/saidas/', { params: { page, page_size: 100 } });
+        const data: PaginatedResponse<Saida> = res.data;
+        all.push(...(data.results ?? []));
+        if (!data.next) break;
+        page++;
+    }
+    return all;
 };
 export const createSaida = async (data: Partial<Saida> & { itens: any[] }): Promise<Saida> => {
     const res = await api.post('/api/estoque/saidas/', data);

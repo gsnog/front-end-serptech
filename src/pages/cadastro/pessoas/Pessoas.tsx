@@ -22,7 +22,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { fetchPessoas, fetchSetores, deletePessoa, pessoasQueryKey, setoresQueryKey, type Pessoa } from "@/services/pessoas";
+import { fetchPessoas, fetchSetores, fetchPessoasRelatorio, deletePessoa, pessoasQueryKey, setoresQueryKey, type Pessoa } from "@/services/pessoas";
 import { usePermissions } from "@/contexts/PermissionsContext";
 
 const TIPOS_VINCULO = [
@@ -80,10 +80,20 @@ export default function Pessoas() {
     return matchesSetor && matchesCargo;
   }), [pessoas, setorFilter, cargoFilter]);
 
-  const getExportData = () => filteredPessoas.map(p => ({
-    Nome: p.nome, Email: p.email, Cargo: p.cargo, Setor: p.setor || "—",
-    Gestor: p.supervisor_nome || "—", Role: p.role,
-  }));
+  const getExportData = async () => {
+    const todas = await fetchPessoasRelatorio(searchTerm);
+    return todas
+      .filter(p => setorFilter === "all" || String(p.setor_id) === setorFilter)
+      .filter(p => cargoFilter === "all" || p.cargo === cargoFilter)
+      .map(p => ({
+        Nome: p.nome,
+        "E-mail": p.email,
+        Cargo: p.cargo || "—",
+        Setor: p.setor || "—",
+        Unidade: p.unidade || "—",
+        Gestor: p.supervisor_nome || "—",
+      }));
+  };
 
   const deletePessoaItem = pessoas.find(p => p.id === deleteId);
 

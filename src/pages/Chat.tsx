@@ -118,9 +118,6 @@ export default function Chat() {
   const myId = authUser?.userId || authUser?.id || authUser?.pk || '';
   const currentUserId = String(myId);
 
-  useEffect(() => {
-    console.log("MEU ID LOGADO (userId):", currentUserId, "USER COMPLETO:", authUser);
-  }, [currentUserId, authUser]);
 
   const { unreadCounts, clearUnread, setActiveChatId, lastMessages } = useChatContext();
   const [selectedConversa, setSelectedConversa] = useState<ChatConversa | null>(null);
@@ -151,13 +148,18 @@ export default function Chat() {
     remoteStream,
     callStatus,
     startCallTo,
+    isMuted,
+    isCameraOff,
+    toggleMute,
+    toggleCamera,
   } = useWebRTCContext();
 
   // Keep a local state for the UI modal so we can transition nicely,
   // or use the global one.
   const [showCallModal, setShowCallModal] = useState<'audio' | 'video' | null>(null);
-  const [callMuted, setCallMuted] = useState(false);
-  const [callVideoOff, setCallVideoOff] = useState(false);
+  // callMuted/callVideoOff are derived from the real WebRTC state
+  const callMuted = isMuted;
+  const callVideoOff = isCameraOff;
 
   // New group modal state
   const [newGroupName, setNewGroupName] = useState('');
@@ -226,7 +228,7 @@ export default function Chat() {
 
   // Real-time listener for incoming messages
   useEffect(() => {
-    chatSocket.connect();
+    // chatSocket is connected by PermissionsContext on mount — no need to reconnect here
     const unsubscribe = chatSocket.subscribe('chat_message_broadcast', (data) => {
       const groupId = String(data.group_id || data.group || '');
 
@@ -410,29 +412,27 @@ export default function Chat() {
     imageInputRef.current?.click();
   };
 
-  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>, type: 'file' | 'image') => {
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>, type: 'file' | 'image') => {
     const file = e.target.files?.[0];
     if (!file || !selectedConversa) return;
-    const newMsg: ChatMessage = {
-      id: `m${Date.now()}`,
-      conversaId: selectedConversa.id,
-      remetenteId: currentUserId,
-      remetenteNome: currentUserObj.nome,
-      remetenteIniciais: currentUserObj.iniciais,
-      conteudo: type === 'image' ? `📷 ${file.name}` : `📎 ${file.name}`,
-      tipo: type === 'image' ? 'imagem' : 'arquivo',
-      arquivoNome: file.name,
-      dataHora: new Date().toISOString(),
-      lido: true,
-    };
-
-    // Optimistic insert for files (you might want a real backend endpoint for files later)
-    queryClient.setQueryData(['chat-messages', selectedConversa.id], (old: any) => {
-      return [...(old || []), newMsg];
-    });
-
-    toast({ title: type === 'image' ? "Imagem enviada" : "Arquivo enviado", description: file.name });
     e.target.value = '';
+
+    try {
+      const formData = new FormData();
+      formData.append('group', String(selectedConversa.id));
+      formData.append('message', type === 'image' ? `📷 ${file.name}` : `📎 ${file.name}`);
+      formData.append('file', file);
+
+      await api.post('/api/chat/messages/', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      // Invalidate so the messages list refreshes from the server
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', selectedConversa.id] });
+      toast({ title: type === 'image' ? "Imagem enviada" : "Arquivo enviado", description: file.name });
+    } catch {
+      toast({ title: "Erro ao enviar arquivo", description: "Não foi possível enviar o arquivo.", variant: "destructive" });
+    }
   };
 
   const handleEmojiSelect = (emoji: string) => {
@@ -441,8 +441,6 @@ export default function Chat() {
 
   const handleStartCall = async (type: 'audio' | 'video') => {
     setShowCallModal(type);
-    setCallMuted(false);
-    setCallVideoOff(false);
 
     if (selectedConversa && selectedConversa.tipo === 'direto') {
       const targetUser = selectedConversa.participantes.find(p => String(p.id) !== String(currentUserId));
@@ -1016,7 +1014,7 @@ export default function Chat() {
                 variant="outline"
                 size="icon"
                 className={cn("h-12 w-12 rounded-full", callMuted && "bg-destructive/20 border-destructive")}
-                onClick={() => setCallMuted(!callMuted)}
+                onClick={toggleMute}
               >
                 {callMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
               </Button>
@@ -1026,7 +1024,7 @@ export default function Chat() {
                   variant="outline"
                   size="icon"
                   className={cn("h-12 w-12 rounded-full", callVideoOff && "bg-destructive/20 border-destructive")}
-                  onClick={() => setCallVideoOff(!callVideoOff)}
+                  onClick={toggleCamera}
                 >
                   {callVideoOff ? <VideoOff className="h-5 w-5" /> : <Video className="h-5 w-5" />}
                 </Button>
@@ -1085,17 +1083,12 @@ function ConversaItem({
   const currentChatId = String(conversa.id);
   const localUnread = Number(localUnreadCount) || 0;
   const apiUnread = Number(conversa.naoLidas) || 0;
-  const totalUnread = localUnread + apiUnread;
+  // localUnread is already seeded from apiUnread on mount — avoid double-counting
+  const totalUnread = localUnread > 0 ? localUnread : apiUnread;
 
   const displayMessage = localLastMessage?.content || conversa.ultimaMensagem || 'Nenhuma mensagem';
   const displayDate = localLastMessage?.timestamp || conversa.ultimaMensagemData;
 
-  // Log de debug para rastreio de notificações
-  useEffect(() => {
-    if (totalUnread > 0) {
-      console.log(`Render Chat ${conversa.nome || chatInfo.name}: local=${localUnread}, api=${apiUnread}, total=${totalUnread}`);
-    }
-  }, [conversa.nome, chatInfo.name, localUnread, apiUnread, totalUnread]);
 
   return (
     <button

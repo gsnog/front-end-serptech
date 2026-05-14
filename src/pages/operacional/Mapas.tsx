@@ -19,7 +19,7 @@ import {
   mapasQueryKey, mapaFilhosQueryKey,
   type MapaPrincipal, type MapaFilho, type MapasFiltros,
 } from "@/services/operacional";
-import { fetchMedicos, type Medico } from "@/services/pessoas";
+import { fetchAllMedicos, type Medico } from "@/services/pessoas";
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
@@ -300,11 +300,10 @@ export default function Mapas() {
   const total = response?.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / 20));
 
-  const { data: medicosResp } = useQuery({
-    queryKey: ['medicos'],
-    queryFn: () => fetchMedicos(),
+  const { data: medicos = [] } = useQuery({
+    queryKey: ['medicos-all'],
+    queryFn: fetchAllMedicos,
   });
-  const medicos: Medico[] = medicosResp?.results ?? [];
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const invalidateMapas = () => queryClient.invalidateQueries({ queryKey: mapasQueryKey });

@@ -54,7 +54,6 @@ const Login = () => {
           exceptions: [],
         };
         login(access, refresh, resolvedPermissions);
-        localStorage.setItem('currentUser', JSON.stringify(user));
       }
 
       toast.success("Login realizado com sucesso!");
@@ -191,6 +190,7 @@ const Login = () => {
               <button
                 type="button"
                 className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+                onClick={() => toast.info("Funcionalidade em breve")}
               >
                 Esqueceu a senha?
               </button>
@@ -231,6 +231,7 @@ const Login = () => {
             <button
               type="button"
               className="text-primary hover:text-primary/80 font-semibold transition-colors"
+              onClick={() => toast.info("Funcionalidade em breve")}
             >
               Solicitar acesso
             </button>

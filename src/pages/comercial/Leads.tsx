@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -8,7 +8,7 @@ import { FilterSection } from "@/components/FilterSection";
 import { SortableHead } from "@/components/SortableHead";
 import { Plus, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { fetchLeads, leadsQueryKey, origensLead } from "@/services/comercial";
+import { fetchLeads, updateLead, deleteLead, leadsQueryKey, origensLead } from "@/services/comercial";
 import { usePagination } from "@/hooks/usePagination";
 import { useSortable } from "@/hooks/useSortable";
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
@@ -26,6 +26,7 @@ import * as XLSX from "xlsx";
 
 export default function Leads() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -94,9 +95,29 @@ export default function Leads() {
     Proprietário: l.responsavel, "Última Atividade": ""
   }));
 
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: typeof editData }) => updateLead(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...leadsQueryKey] });
+      toast({ title: "Lead atualizado com sucesso." });
+      setEditItem(null);
+    },
+    onError: () => toast({ title: "Erro ao atualizar lead.", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteLead(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...leadsQueryKey] });
+      toast({ title: "Lead excluído com sucesso." });
+      setDeleteId(null);
+    },
+    onError: () => toast({ title: "Erro ao excluir lead.", variant: "destructive" }),
+  });
+
   const openEdit = (l: any) => { setEditItem(l); setEditData({ nome: l.nome, empresa: l.empresa, email: l.email, telefone: l.telefone }) };
-  const handleSaveEdit = () => { toast({ title: "Informaçao", description: "Edição via API ainda não implementada." }); setEditItem(null); };
-  const handleDelete = () => { toast({ title: "Informação", description: "Exclusão via API ainda não implementada." }); setDeleteId(null); };
+  const handleSaveEdit = () => { if (editItem) editMutation.mutate({ id: editItem.id, data: editData }); };
+  const handleDelete = () => { if (deleteId !== null) deleteMutation.mutate(deleteId); };
   const deleteItemData = leads.find(i => i.id === deleteId);
 
   return (

@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,7 +54,7 @@ export default function PessoasVisao360() {
               className="pl-10"
             />
           </div>
-          <Select value={setorFilter} onValueChange={setSetorFilter}>
+          <Select value={setorFilter} onValueChange={(v) => { setSetorFilter(v); setCurrentPage(1); }}>
             <SelectTrigger><SelectValue placeholder="Setor/Área" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os setores</SelectItem>
@@ -121,7 +122,7 @@ export default function PessoasVisao360() {
                       <Button variant="ghost" size="sm" onClick={() => navigate(`/gestao-pessoas/acessos?pessoa=${pessoa.id}`)}>
                         <Settings className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/gestao-pessoas/dashboards?pessoa=${pessoa.id}`)}>
+                      <Button variant="ghost" size="sm" onClick={() => toast({ title: "Funcionalidade em breve" })}>
                         <LayoutDashboard className="h-4 w-4" />
                       </Button>
                     </div>

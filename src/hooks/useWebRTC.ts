@@ -341,9 +341,8 @@ export function useWebRTC(currentUserId: number): UseWebRTCReturn {
         setIsCameraOff((prev) => !prev);
     }, []);
 
-    // Initial connection and cleanup on unmount
+    // rtcSocket is connected by WebRTCContext/PermissionsContext — just subscribe here
     useEffect(() => {
-        rtcSocket.connect();
         return cleanup;
     }, [cleanup]);
 

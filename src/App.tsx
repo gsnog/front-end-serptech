@@ -106,6 +106,7 @@ import Acessos from "./pages/gestao-pessoas/Acessos";
 import Auditoria from "./pages/gestao-pessoas/Auditoria";
 import Medicos from "./pages/gestao-pessoas/Medicos";
 import NovoMedico from "./pages/gestao-pessoas/NovoMedico";
+import RelatorioPessoas from "./pages/gestao-pessoas/RelatorioPessoas";
 
 // Módulos Globais (Header)
 import Calendario from "./pages/Calendario";
@@ -251,6 +252,7 @@ const App = () => (
                   <Route path="/gestao-pessoas/auditoria" element={<Auditoria />} />
                   <Route path="/gestao-pessoas/medicos" element={<Medicos />} />
                   <Route path="/gestao-pessoas/medicos/novo" element={<Navigate to="/cadastro/pessoas/pessoas/nova" replace />} />
+                  <Route path="/gestao-pessoas/relatorio" element={<RelatorioPessoas />} />
 
                   {/* Usuário e Notificações */}
                   <Route path="/usuario/visualizar" element={<VisualizarPerfil />} />

@@ -5,6 +5,7 @@ import { Target, DollarSign, TrendingUp, Users, Filter } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { fetchCampanhas, fetchCanais, fetchLeadsMarketing } from "@/services/marketing";
 import { useQuery } from "@tanstack/react-query";
+import { getPeriodCutoff, PERIODO_LABELS } from "@/pages/Dashboard";
 import { motion } from "framer-motion";
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -40,11 +41,7 @@ export default function DashboardMarketing() {
   const { data: canais = [] } = useQuery({ queryKey: ['marketing_canais'], queryFn: fetchCanais });
   const { data: leads = [] } = useQuery({ queryKey: ['marketing_leads'], queryFn: fetchLeadsMarketing });
 
-  const cutoff = useMemo(() => {
-    const now = new Date()
-    const days = periodo === "7d" ? 7 : periodo === "30d" ? 30 : 90
-    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-  }, [periodo])
+  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
 
   const filteredLeads = useMemo(() => leads.filter(l =>
     l.criado_em ? new Date(l.criado_em) >= cutoff : true
@@ -96,7 +93,7 @@ export default function DashboardMarketing() {
               <span className="text-xs text-muted-foreground font-medium">Período:</span>
               <div className="flex gap-1 bg-muted/50 rounded-full p-0.5">
                 {["7d", "30d", "90d"].map(p => (
-                  <Button key={p} variant={periodo === p ? "default" : "ghost"} size="sm" onClick={() => setPeriodo(p)} className="h-7 px-2.5 text-xs rounded-full">{p}</Button>
+                  <Button key={p} variant={periodo === p ? "default" : "ghost"} size="sm" onClick={() => setPeriodo(p)} className="h-7 px-2.5 text-xs rounded-full">{PERIODO_LABELS[p] ?? p}</Button>
                 ))}
               </div>
             </div>

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { fetchSaidas, deleteSaida, saidasQueryKey, type Saida } from "@/services/estoque"
+import { fetchSaidas, fetchAllSaidas, deleteSaida, saidasQueryKey, type Saida } from "@/services/estoque"
 
 export default function EstoqueSaidas() {
   const navigate = useNavigate()
@@ -62,13 +62,26 @@ export default function EstoqueSaidas() {
       return matchNome && matchInicio && matchFim
     }), [items, filterNome, filterDataInicio, filterDataFim])
 
-  const getExportData = () => filtered.map(s => ({
-    Data: s.data,
-    "Setor Destino": s.setor_destino_nome,
-    "Estoque Origem": s.estoque_origem_nome,
-    "Criado Por": s.criado_por_nome,
-    "Qtd Itens": s.itens?.length ?? 0,
-  }))
+  const getExportData = async () => {
+    const all = await fetchAllSaidas();
+    return all
+      .filter(s => {
+        const matchNome =
+          (s.setor_destino_nome || "").toLowerCase().includes(filterNome.toLowerCase()) ||
+          (s.criado_por_nome || "").toLowerCase().includes(filterNome.toLowerCase()) ||
+          (s.estoque_origem_nome || "").toLowerCase().includes(filterNome.toLowerCase());
+        const matchInicio = !filterDataInicio || s.data >= filterDataInicio;
+        const matchFim = !filterDataFim || s.data <= filterDataFim;
+        return matchNome && matchInicio && matchFim;
+      })
+      .map(s => ({
+        Data: s.data,
+        "Setor Destino": s.setor_destino_nome,
+        "Estoque Origem": s.estoque_origem_nome,
+        "Criado Por": s.criado_por_nome,
+        "Qtd Itens": s.itens?.length ?? 0,
+      }));
+  }
 
   const deleteItemData = items.find(i => i.id === deleteId)
 

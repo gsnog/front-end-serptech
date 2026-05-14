@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { chatSocket } from '@/lib/socket';
 import { usePermissions } from './PermissionsContext';
 import api from '@/lib/api';
@@ -20,6 +20,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
     const [lastMessages, setLastMessages] = useState<Record<string, { content: string; timestamp: string }>>({});
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
+    // Ref so the stable WebSocket handler can read the current active chat
+    // without being re-registered on every chat switch.
+    const activeChatIdRef = useRef<string | null>(null);
+    useEffect(() => { activeChatIdRef.current = activeChatId; }, [activeChatId]);
     const { currentUser } = usePermissions();
     const authUser = currentUser as any;
     const myId = authUser?.userId || authUser?.id || authUser?.pk || '';
@@ -72,8 +76,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }, [myId]);
 
     useEffect(() => {
-        chatSocket.connect();
-
+        // chatSocket is connected by PermissionsContext on mount — no reconnect needed here
         const unsubscribe = chatSocket.subscribe('chat_message_broadcast', (data) => {
             const groupId = String(data.group_id || data.group || '');
             const senderId = String(data.sender_id);
@@ -87,8 +90,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 }
             }));
 
-            // Só incrementa se não for mensagem própria e não for o chat ativo
-            if (senderId !== String(myId) && groupId !== String(activeChatId)) {
+            // activeChatId is read from a ref to avoid re-subscribing the socket
+            // on every chat switch — see the separate activeChatId ref effect below.
+            if (senderId !== String(myId) && groupId !== String(activeChatIdRef.current)) {
                 setUnreadCounts(prev => ({
                     ...prev,
                     [groupId]: (prev[groupId] || 0) + 1
@@ -97,7 +101,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         });
 
         return () => unsubscribe();
-    }, [myId, activeChatId]);
+        // activeChatId intentionally omitted — tracked via ref to avoid re-subscribing
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [myId]);
 
     const totalGlobalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
 

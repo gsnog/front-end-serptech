@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -65,7 +65,7 @@ type ViewMode = 'home' | 'board';
 
 export default function Kanban() {
   const [viewMode, setViewMode] = useState<ViewMode>('home');
-  const [selectedBoardId, setSelectedBoardId] = useState<string | null>(null);
+  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCardModal, setShowCardModal] = useState(false);
@@ -86,11 +86,12 @@ export default function Kanban() {
   const { data: systemUsers = [] } = useQuery({
     queryKey: ['systemUsers'],
     queryFn: async () => {
-      const response = await api.get('/api/chat/contacts/');
-      return response.data.map((u: any) => ({
+      const response = await api.get('/api/pessoas/lookup/');
+      const list = Array.isArray(response.data) ? response.data : (response.data.results ?? []);
+      return list.map((u: any) => ({
         id: String(u.id),
-        nome: `${u.first_name} ${u.last_name}`.trim() || u.username,
-        iniciais: (u.first_name || u.username).slice(0, 2).toUpperCase(),
+        nome: u.nome || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username,
+        iniciais: (u.iniciais || (u.nome || u.first_name || u.username || '').slice(0, 2)).toUpperCase(),
         cargo: u.cargo || '',
         setor: u.setor || '',
         status: 'Ativo',
@@ -98,7 +99,7 @@ export default function Kanban() {
     },
   });
 
-  const selectedBoard = useMemo(() => boards.find((b: any) => b.id === selectedBoardId) || null, [boards, selectedBoardId]);
+  const selectedBoard = useMemo(() => boards.find((b: any) => Number(b.id) === selectedBoardId) || null, [boards, selectedBoardId]);
   const lists = selectedBoard?.lists || [];
 
   // Drag and drop - cards
@@ -114,8 +115,8 @@ export default function Kanban() {
     const q = searchQuery.toLowerCase();
     return boards.filter(
       (b: any) =>
-        b.title.toLowerCase().includes(q) ||
-        (b.description && b.description.toLowerCase().includes(q))
+        (b.titulo || b.title || '').toLowerCase().includes(q) ||
+        ((b.descricao || b.description || '') && (b.descricao || b.description || '').toLowerCase().includes(q))
     );
   }, [boards, searchQuery]);
 
@@ -156,7 +157,7 @@ export default function Kanban() {
   // Navigation
   // ...
   const openBoard = (board: any) => {
-    setSelectedBoardId(board.id);
+    setSelectedBoardId(Number(board.id));
     setViewMode('board');
   };
 
@@ -883,6 +884,8 @@ function CardDetailModal({
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
   const [newChecklistItemText, setNewChecklistItemText] = useState<Record<string | number, string>>({});
   const [showAddChecklist, setShowAddChecklist] = useState(false);
+  // Debounce ref for checklist toggle — prevents API call on every rapid click
+  const checklistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const list = lists.find((l) => l.id === card.list);
   const assignee = card.assignee
@@ -905,7 +908,10 @@ function CardDetailModal({
         }
         : cl
     );
-    onUpdate({ ...card, checklists: updatedChecklists });
+    const updatedCard = { ...card, checklists: updatedChecklists };
+    // Debounce API call by 500ms to avoid firing on every rapid click
+    if (checklistDebounceRef.current) clearTimeout(checklistDebounceRef.current);
+    checklistDebounceRef.current = setTimeout(() => onUpdate(updatedCard), 500);
   };
 
   const addChecklistItem = (checklistId: number | string) => {

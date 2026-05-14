@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { fetchOportunidades, fetchMetas, fetchAtividades, etapasFunil } from "@/services/comercial";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMeuTime } from "@/services/pessoas";
-import { useDashboardData } from "@/pages/Dashboard";
+import { useDashboardData, getPeriodCutoff, PERIODO_LABELS } from "@/pages/Dashboard";
 
 import { motion } from "framer-motion";
 
@@ -54,17 +54,13 @@ export default function DashboardComercial() {
   const [periodo, setPeriodo] = useState("30d");
   const [vendedorFilter, setVendedorFilter] = useState("__all__");
 
-  const { dash } = useDashboardData();
+  const { dash } = useDashboardData(periodo);
   const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
   const { data: metas = [] } = useQuery({ queryKey: ['crm_metas'], queryFn: fetchMetas });
   const { data: atividades = [] } = useQuery({ queryKey: ['crm_atividades'], queryFn: fetchAtividades });
   const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
 
-  const cutoff = useMemo(() => {
-    const now = new Date()
-    const days = periodo === "7d" ? 7 : periodo === "30d" ? 30 : 90
-    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
-  }, [periodo])
+  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
 
   const filteredOportunidades = useMemo(() => oportunidades.filter(o => {
     const matchPeriodo = o.criado_em ? new Date(o.criado_em) >= cutoff : true
@@ -123,7 +119,7 @@ export default function DashboardComercial() {
               <span className="text-xs text-muted-foreground font-medium">Período:</span>
               <div className="flex gap-1 bg-muted/50 rounded-full p-0.5">
                 {["7d", "30d", "90d"].map(p => (
-                  <Button key={p} variant={periodo === p ? "default" : "ghost"} size="sm" onClick={() => setPeriodo(p)} className="h-7 px-2.5 text-xs rounded-full">{p}</Button>
+                  <Button key={p} variant={periodo === p ? "default" : "ghost"} size="sm" onClick={() => setPeriodo(p)} className="h-7 px-2.5 text-xs rounded-full">{PERIODO_LABELS[p] ?? p}</Button>
                 ))}
               </div>
             </div>

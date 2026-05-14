@@ -133,11 +133,12 @@ const menuItems = [
     badge: "BETA",
     help: "RH e gestão de pessoas: visão 360º, hierarquia, permissões e auditoria.",
     subItems: [
-      { title: "Pessoas (360º)", url: "/gestao-pessoas/pessoas",   module: "gestao_pessoas", page: "gp_pessoas"    },
-      { title: "Médicos",        url: "/gestao-pessoas/medicos",    module: "gestao_pessoas", page: "gp_medicos"    },
-      { title: "Hierarquia",     url: "/gestao-pessoas/hierarquia", module: "gestao_pessoas", page: "gp_hierarquia" },
-      { title: "Permissões",     url: "/gestao-pessoas/acessos",    module: "gestao_pessoas", page: "gp_permissoes" },
-      { title: "Auditoria",      url: "/gestao-pessoas/auditoria",  module: "gestao_pessoas", page: "gp_auditoria"  },
+      { title: "Pessoas (360º)",    url: "/gestao-pessoas/pessoas",   module: "gestao_pessoas", page: "gp_pessoas"    },
+      { title: "Médicos",          url: "/gestao-pessoas/medicos",    module: "gestao_pessoas", page: "gp_medicos"    },
+      { title: "Hierarquia",       url: "/gestao-pessoas/hierarquia", module: "gestao_pessoas", page: "gp_hierarquia" },
+      { title: "Permissões",       url: "/gestao-pessoas/acessos",    module: "gestao_pessoas", page: "gp_permissoes" },
+      { title: "Auditoria",        url: "/gestao-pessoas/auditoria",  module: "gestao_pessoas", page: "gp_auditoria"  },
+      { title: "Relatório",        url: "/gestao-pessoas/relatorio",  module: "gestao_pessoas", page: "gp_pessoas"    },
     ]
   },
   { title: "Relatórios", url: "/relatorios", icon: BarChart3, module: "relatorios", help: "Geração de relatórios financeiros e operacionais." },

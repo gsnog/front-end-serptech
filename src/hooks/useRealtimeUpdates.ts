@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { updatesSocket } from '@/lib/socket';
 
@@ -10,18 +10,19 @@ import { updatesSocket } from '@/lib/socket';
  */
 export function useRealtimeUpdates(queryKeys: readonly unknown[][]) {
   const queryClient = useQueryClient();
+  // Stable ref to avoid re-running the effect when queryKeys identity changes
+  const queryKeysRef = useRef(queryKeys);
+  useEffect(() => { queryKeysRef.current = queryKeys; });
 
   useEffect(() => {
     updatesSocket.connect();
 
     const unsub = updatesSocket.subscribe('all', () => {
-      queryKeys.forEach(qk =>
+      queryKeysRef.current.forEach(qk =>
         queryClient.invalidateQueries({ queryKey: qk })
       );
     });
 
     return unsub;
-    // queryKeys intentionally omitted — stable references expected from callers
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryClient]);
 }

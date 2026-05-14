@@ -134,11 +134,12 @@ export default function Calendario() {
   const { data: systemUsers = [] } = useQuery({
     queryKey: ['systemUsers'],
     queryFn: async () => {
-      const res = await api.get('/api/chat/contacts/');
-      return res.data.map((u: any) => ({
+      const res = await api.get('/api/pessoas/lookup/');
+      const list = Array.isArray(res.data) ? res.data : (res.data.results ?? []);
+      return list.map((u: any) => ({
         id: String(u.id),
-        nome: `${u.first_name} ${u.last_name}`.trim() || u.username,
-        iniciais: (u.first_name || u.username).slice(0, 2).toUpperCase(),
+        nome: u.nome || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username,
+        iniciais: (u.iniciais || (u.nome || u.first_name || u.username || '').slice(0, 2)).toUpperCase(),
         status: 'Ativo',
       }));
     },

@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import api from "@/lib/api"
-import { fetchEntradas, fetchAllEntradas, entradasQueryKey, fetchNomenclaturas, nomenclaturasQueryKey } from "@/services/estoque"
+import { fetchEntradas, fetchAllEntradas, entradasQueryKey, fetchNomenclaturas, nomenclaturasQueryKey, fetchFornecedores, fornecedoresQueryKey } from "@/services/estoque"
 import { usePermissions } from "@/contexts/PermissionsContext"
 import { Entradas } from "@/types/estoque"
 import { fetchItensEstoque } from "@/services/estoque"
@@ -59,22 +59,14 @@ const mockEntradas: EntradaNF[] = [];
 
 // --- Mocks removidos ---
 
-function loadSavedEntries(): EntradaNF[] {
-  const saved = sessionStorage.getItem("novas_entradas");
-  if (saved) {
-    try {
-      return JSON.parse(saved) as EntradaNF[];
-    } catch { /* ignore */ }
-  }
-  return [];
-}
 
 export default function EstoqueEntradas() {
   const navigate = useNavigate()
   const queryClient = useQueryClient();
-  const { currentUser, hasPermission } = usePermissions();
+  const { currentUser, hasPermission, isStaff } = usePermissions();
 
   const canApprove = hasPermission('estoque', 'est_entradas', 'approve');
+  const canEditApproved = isStaff() || hasPermission('estoque', 'est_entradas', 'edit_approved');
 
   const [page, setPage] = useState(1)
 
@@ -101,6 +93,18 @@ export default function EstoqueEntradas() {
   const optionsEstoque = useMemo(() =>
     itensEstoque.map((i: any) => ({ value: String(i.id), label: i.itens_do_estoque })),
     [itensEstoque]
+  );
+
+  const { data: fornecedoresResponse } = useQuery({
+    queryKey: fornecedoresQueryKey,
+    queryFn: () => fetchFornecedores(),
+  });
+  const fornecedores = Array.isArray(fornecedoresResponse)
+    ? fornecedoresResponse
+    : (fornecedoresResponse as any)?.results ?? [];
+  const fornecedorOptions = useMemo(() =>
+    (fornecedores as any[]).map((f: any) => ({ value: String(f.id), label: f.nome })),
+    [fornecedores]
   );
 
   // Delete Mutation da API
@@ -140,8 +144,8 @@ export default function EstoqueEntradas() {
   });
 
   const rejeitarMutation = useMutation({
-    mutationFn: async (id: number) => {
-      const res = await api.post(`/api/estoque/entradas/${id}/rejeitar/`);
+    mutationFn: async ({ id, justificativa }: { id: number; justificativa: string }) => {
+      const res = await api.post(`/api/estoque/entradas/${id}/rejeitar/`, { justificativa });
       return res.data;
     },
     onSuccess: () => {
@@ -161,7 +165,6 @@ export default function EstoqueEntradas() {
     }
   });
 
-  const [items, setItems] = useState<EntradaNF[]>([]);
 
   useEffect(() => {
     if (isError) {
@@ -181,7 +184,10 @@ export default function EstoqueEntradas() {
   const [viewItem, setViewItem] = useState<EntradaNF | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<EntradaNF | null>(null)
-  const [editData, setEditData] = useState({ notaFiscal: "", fornecedor: "", unidade: "", responsavel: "" })
+  const [editData, setEditData] = useState<{ notaFiscal: string; fornecedor: string; unidade: string; responsavel: string; fornecedorId: number | null }>({ notaFiscal: "", fornecedor: "", unidade: "", responsavel: "", fornecedorId: null })
+  const [editItensQtd, setEditItensQtd] = useState<Record<number, string>>({})
+  const [editFornecedorOpen, setEditFornecedorOpen] = useState(false)
+  const [isEditSaving, setIsEditSaving] = useState(false)
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
   // Approval workflow
@@ -247,25 +253,6 @@ export default function EstoqueEntradas() {
     },
   });
 
-  // Check for new entries on focus (when user returns from NovaEntrada)
-  useEffect(() => {
-    const handleFocus = () => {
-      const newEntries = loadSavedEntries();
-      if (newEntries.length > 0) {
-        setItems(prev => {
-          const existingIds = new Set(prev.map(i => i.id));
-          const unique = newEntries.filter(e => !existingIds.has(e.id));
-          if (unique.length > 0) {
-            sessionStorage.removeItem("novas_entradas");
-            return [...unique, ...prev];
-          }
-          return prev;
-        });
-      }
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, []);
 
   const toggleRow = (id: number) => {
     setExpandedRows(prev => {
@@ -313,13 +300,14 @@ export default function EstoqueEntradas() {
         fator_conversao_fornecedor: it.fator_conversao_fornecedor ?? null,
       })),
       _tipo: (e?.tipo ?? 'compra') as string,
+      _fornecedorId: (e?.fornecedor ?? null) as number | null,
       _insumos: (e?.insumos || []).map((ins: any) => ({
         id: ins.id,
         item_nome: ins.item_nome || `Item #${ins.item}`,
         quantidade: ins.quantidade,
         estoque_origem_nome: ins.estoque_origem_nome || '—',
       })),
-    } as EntradaNF & { _rawStatus?: string; _rawId?: number; _criado_por_nome?: string; _aprovado_por_nome?: string; _aprovado_em?: string | null; _tipo?: string; _insumos?: any[] }));
+    } as EntradaNF & { _rawStatus?: string; _rawId?: number; _fornecedorId?: number | null; _criado_por_nome?: string; _aprovado_por_nome?: string; _aprovado_em?: string | null; _tipo?: string; _insumos?: any[] }));
 
     return baseList.filter(entrada => {
 
@@ -373,21 +361,67 @@ export default function EstoqueEntradas() {
 
   const handleDelete = () => {
     if (deleteId !== null) {
-      // Se a entrada existir apenas no state (mock), deleta do state
-      if (items.some(i => i.id === deleteId)) {
-        setItems(prev => prev.filter(i => i.id !== deleteId));
-        toast({ title: "Removido", description: "Entrada (Mock) excluída." });
-      } else {
-        // Se existir na API, invoca a mutação
-        deleteMutation.mutate(deleteId);
-      }
+      deleteMutation.mutate(deleteId);
       setDeleteId(null);
     }
   };
 
-  const openEdit = (e: EntradaNF) => { setEditItem(e); setEditData({ notaFiscal: e.notaFiscal, fornecedor: e.fornecedor, unidade: e.unidade, responsavel: e.responsavel }); };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Entrada atualizada." }); } };
-  const deleteItem = items.find(i => i.id === deleteId);
+  const openEdit = (e: EntradaNF) => {
+    setEditItem(e);
+    setEditData({
+      notaFiscal: e.notaFiscal,
+      fornecedor: e.fornecedor,
+      unidade: e.unidade,
+      responsavel: e.responsavel,
+      fornecedorId: (e as any)._fornecedorId ?? null,
+    });
+    const qtds: Record<number, string> = {};
+    e.itens.forEach(it => { qtds[it.id] = String(it.quantidade); });
+    setEditItensQtd(qtds);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editItem || isEditSaving) return;
+    const rawStatus = (editItem as any)._rawStatus as string;
+    const entradaId = (editItem as any)._rawId ?? editItem.id;
+    const canEditItens = rawStatus === 'pendente' || (rawStatus === 'aprovado' && canEditApproved);
+
+    const calls: Promise<any>[] = [];
+
+    if (rawStatus === 'pendente') {
+      const originalFornecedorId = (editItem as any)._fornecedorId as number | null;
+      if (editData.fornecedorId !== originalFornecedorId) {
+        calls.push(api.patch(`/api/estoque/entradas/${entradaId}/`, { fornecedor: editData.fornecedorId }));
+      }
+    }
+
+    if (canEditItens && editItem.itens.length > 0) {
+      const itens = editItem.itens
+        .map(it => ({ id: it.id, quantidade: parseInt(editItensQtd[it.id] ?? String(it.quantidade), 10) }))
+        .filter(it => !isNaN(it.quantidade) && it.quantidade > 0);
+      calls.push(api.patch(`/api/estoque/entradas/${entradaId}/atualizar-itens/`, { itens }));
+    }
+
+    if (calls.length === 0) {
+      setEditItem(null);
+      setEditItensQtd({});
+      return;
+    }
+
+    setIsEditSaving(true);
+    try {
+      await Promise.all(calls);
+      queryClient.invalidateQueries({ queryKey: ['entradas_estoque'] });
+      setEditItem(null);
+      setEditItensQtd({});
+      toast({ title: "Salvo", description: "Entrada atualizada com sucesso." });
+    } catch (error: any) {
+      toast({ title: "Erro ao salvar", description: error.response?.data?.detail ?? "Tente novamente.", variant: "destructive" });
+    } finally {
+      setIsEditSaving(false);
+    }
+  };
+  const deleteItem = entradasApi.find(i => i.id === deleteId);
 
   const handleApprove = (entrada: EntradaNF & { _rawId?: number }) => {
     const apiId = entrada._rawId ?? entrada.id;
@@ -398,7 +432,7 @@ export default function EstoqueEntradas() {
   const handleReject = () => {
     if (rejectItem) {
       const apiId = (rejectItem as any)._rawId ?? rejectItem.id;
-      rejeitarMutation.mutate(apiId);
+      rejeitarMutation.mutate({ id: apiId, justificativa: rejectJustificativa });
     }
   };
 
@@ -924,18 +958,107 @@ export default function EstoqueEntradas() {
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent className="max-w-lg">
+      <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setEditItensQtd({}); setEditFornecedorOpen(false); }}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Editar Entrada</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            <div className="space-y-2"><Label>Nota Fiscal</Label><Input value={editData.notaFiscal} onChange={e => setEditData(p => ({ ...p, notaFiscal: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Fornecedor</Label><Input value={editData.fornecedor} onChange={e => setEditData(p => ({ ...p, fornecedor: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Unidade</Label><Input value={editData.unidade} onChange={e => setEditData(p => ({ ...p, unidade: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Responsável</Label><Input value={editData.responsavel} onChange={e => setEditData(p => ({ ...p, responsavel: e.target.value }))} /></div>
+          <div className="space-y-5 py-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>Nota Fiscal</Label><Input value={editData.notaFiscal} onChange={e => setEditData(p => ({ ...p, notaFiscal: e.target.value }))} /></div>
+              <div className="space-y-2">
+                <Label>Fornecedor</Label>
+                {(editItem as any)?._rawStatus === 'pendente' ? (
+                  <Popover open={editFornecedorOpen} onOpenChange={setEditFornecedorOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" role="combobox" className="w-full justify-between font-normal h-9 text-sm">
+                        <span className="truncate">
+                          {editData.fornecedorId
+                            ? (fornecedorOptions.find(o => o.value === String(editData.fornecedorId))?.label ?? editData.fornecedor)
+                            : <span className="text-muted-foreground">Selecione o fornecedor...</span>
+                          }
+                        </span>
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[280px]" align="start">
+                      <Command>
+                        <CommandInput placeholder="Buscar fornecedor..." className="h-8 text-sm" />
+                        <CommandList>
+                          <CommandEmpty>Nenhum fornecedor encontrado.</CommandEmpty>
+                          {fornecedorOptions.map(opt => (
+                            <CommandItem key={opt.value} value={opt.label} onSelect={() => {
+                              setEditData(p => ({ ...p, fornecedorId: parseInt(opt.value), fornecedor: opt.label }));
+                              setEditFornecedorOpen(false);
+                            }}>
+                              <Check className={cn("mr-2 h-4 w-4", String(editData.fornecedorId) === opt.value ? "opacity-100" : "opacity-0")} />
+                              {opt.label}
+                            </CommandItem>
+                          ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Input value={editData.fornecedor} readOnly className="bg-muted/40 cursor-default" />
+                )}
+              </div>
+              <div className="space-y-2"><Label>Unidade</Label><Input value={editData.unidade} readOnly className="bg-muted/40 cursor-default" /></div>
+              <div className="space-y-2"><Label>Responsável</Label><Input value={editData.responsavel} readOnly className="bg-muted/40 cursor-default" /></div>
+            </div>
+
+            {editItem && editItem.itens.length > 0 && (() => {
+              const rawStatus = (editItem as any)._rawStatus as string;
+              const canEdit = rawStatus === 'pendente' || (rawStatus === 'aprovado' && canEditApproved);
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Quantidade dos Itens</Label>
+                    {rawStatus === 'aprovado' && canEditApproved && (
+                      <span className="text-xs text-amber-600 font-medium">Entrada aprovada — ajuste de inventário automático</span>
+                    )}
+                    {!canEdit && (
+                      <span className="text-xs text-muted-foreground">Somente leitura</span>
+                    )}
+                  </div>
+                  <div className="rounded-md border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item</TableHead>
+                          <TableHead className="w-36 text-right">Quantidade</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {editItem.itens.map(it => (
+                          <TableRow key={it.id}>
+                            <TableCell className="text-sm">{it.item}</TableCell>
+                            <TableCell className="text-right">
+                              {canEdit ? (
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  className="h-8 w-28 text-right ml-auto"
+                                  value={editItensQtd[it.id] ?? String(it.quantidade)}
+                                  onChange={e => setEditItensQtd(p => ({ ...p, [it.id]: e.target.value }))}
+                                />
+                              ) : (
+                                <span className="text-muted-foreground">{Number(it.quantidade).toLocaleString('pt-BR')}</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
-            <Button onClick={handleSaveEdit}>Salvar</Button>
+            <Button variant="outline" onClick={() => { setEditItem(null); setEditItensQtd({}); setEditFornecedorOpen(false); }}>Cancelar</Button>
+            <Button onClick={handleSaveEdit} disabled={isEditSaving}>
+              {isEditSaving ? "Salvando..." : "Salvar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

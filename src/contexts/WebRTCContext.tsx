@@ -43,7 +43,7 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
     // Read user from localStorage (same shape as PermissionsContext)
     const currentUserId: number = useMemo(() => {
         try {
-            const raw = localStorage.getItem('user_permissions');
+            const raw = localStorage.getItem('userPermissions');
             if (raw) {
                 const parsed = JSON.parse(raw);
                 return parsed.id ?? 0;
@@ -56,17 +56,13 @@ export function WebRTCProvider({ children }: { children: ReactNode }) {
 
     // ── Connect rtcSocket with the JWT token from localStorage ────────────
     useEffect(() => {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('accessToken');
         if (!token || currentUserId === 0) return;
 
-        // Patch the socket URL to include the token
-        // We patch the internal URL by recreating is dynamically
-        const wsUrl = `ws://127.0.0.1:8000/ws/signaling/?token=${token}`;
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+        const wsBase = apiUrl.replace(/^http/, 'ws');
+        const wsUrl = `${wsBase}/ws/signaling/?token=${token}`;
 
-        // Extend the existing singleton with the correct URL
-        // The SocketManager stores url as private, so we patch via Object.defineProperty
-        // or just create a new connection directly.
-        // (The existing rtcSocket points to the URL without token — we reconnect here)
         Object.defineProperty(rtcSocket, 'url', { value: wsUrl, writable: true, configurable: true });
 
         rtcSocket.connect();

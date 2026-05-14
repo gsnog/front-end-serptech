@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
 import { chatSocket, rtcSocket } from '@/lib/socket';
 
 // ── Types (espelho do backend) ────────────────────────────────────────────────
@@ -57,6 +57,7 @@ export interface UserPermissions {
 
 interface PermissionsContextType {
   currentUser: UserPermissions;
+  isLoadingUser: boolean;
   hasPermission: (module: string, page: string, action: string) => boolean;
   /** Verifica permissão Django nativa (ex: 'accounts.view_rolepermission') */
   hasDjangoPerm: (perm: string) => boolean;
@@ -86,6 +87,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return { userId: '', roles: [], permissions: [], dashboardAccess: [], exceptions: [] };
   });
 
+  // true while the initial permissions fetch is in-flight — prevents the auth
+  // guard in LayoutShell from redirecting to /login before the fetch resolves.
+  const [isLoadingUser, setIsLoadingUser] = useState<boolean>(() => {
+    // If there's no token, there's nothing to load — no redirect risk.
+    return !!localStorage.getItem('accessToken');
+  });
+
   const setUserPermissions = (permissions: UserPermissions | null) => {
     if (permissions) {
       setCurrentUser(permissions);
@@ -102,7 +110,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   // precisar de novo login — elimina o problema de permissões stale no localStorage.
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
-    if (!token) return;
+    if (!token) {
+      setIsLoadingUser(false);
+      return;
+    }
 
     chatSocket.connect();
     rtcSocket.connect();
@@ -118,7 +129,10 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       .then((data: UserPermissions | null) => {
         if (data?.userId) setUserPermissions(data);
       })
-      .catch(() => {/* silencia falhas de rede — usa cache do localStorage */});
+      .catch(() => {/* silencia falhas de rede — usa cache do localStorage */})
+      .finally(() => {
+        setIsLoadingUser(false);
+      });
   }, []);
 
   const login = (token: string, refreshToken: string, permissions: UserPermissions) => {
@@ -130,22 +144,24 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    // Disconnect all sockets BEFORE clearing tokens to prevent
+    // reconnect timers from firing with a null token after logout
+    chatSocket.disconnect();
+    rtcSocket.disconnect();
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('userPermissions');
     setUserPermissions(null);
-    chatSocket.disconnect();
-    rtcSocket.disconnect();
     window.location.href = '/login';
   };
 
   // ── Helpers internos ────────────────────────────────────────────────────────
 
-  /** Todas as permissões do usuário (role permissions + exceções) */
-  const allPermissions = (): Permission[] => [
+  /** Todas as permissões do usuário (role permissions + exceções) — memoized */
+  const allPermissions = useMemo((): Permission[] => [
     ...currentUser.permissions,
     ...currentUser.exceptions,
-  ];
+  ], [currentUser.permissions, currentUser.exceptions]);
 
   const isAdmin = (): boolean =>
     currentUser.roles.includes('admin');
@@ -158,7 +174,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const hasPermission = (module: string, page: string, action: string): boolean => {
     if (isAdmin()) return true;
 
-    const perms = allPermissions();
+    const perms = allPermissions;
 
     // Exceções têm prioridade
     const exception = currentUser.exceptions.find(
@@ -236,7 +252,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const scopePriority: PermissionScope[] = ['self', 'team', 'area', 'all'];
     let highest: PermissionScope = 'self';
 
-    for (const p of allPermissions()) {
+    for (const p of allPermissions) {
       if (
         (p.module === 'all' || p.module === module) &&
         (p.page === 'all' || p.page === page)
@@ -252,6 +268,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   return (
     <PermissionsContext.Provider value={{
       currentUser,
+      isLoadingUser,
       hasPermission,
       hasDjangoPerm,
       hasMenuAccess,

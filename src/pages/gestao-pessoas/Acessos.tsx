@@ -54,7 +54,7 @@ const modulosSistema: Modulo[] = [
         { id: 'cad_est_softwares',    nome: 'Softwares',    acoes: ['view', 'create', 'edit', 'delete'] },
       ]},
       { label: 'Operacional', module: 'estoque', features: [
-        { id: 'est_entradas',         nome: 'Entradas',                  acoes: ['view', 'create', 'edit', 'delete', 'approve'] },
+        { id: 'est_entradas',         nome: 'Entradas',                  acoes: ['view', 'create', 'edit', 'delete', 'approve', 'edit_approved'] },
         { id: 'est_inventario',       nome: 'Inventário',                acoes: ['view'] },
         { id: 'est_saidas',           nome: 'Saídas',                    acoes: ['view', 'create', 'edit', 'delete'] },
         { id: 'est_transferencias',   nome: 'Transferências de Estoque', acoes: ['view', 'create', 'edit', 'delete'] },
@@ -120,7 +120,7 @@ const modulosSistema: Modulo[] = [
 ];
 
 const acoesLabels: Record<string, string> = {
-  view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', deliver: 'Entregar', buy: 'Comprar', export: 'Exportar',
+  view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', deliver: 'Entregar', buy: 'Comprar', export: 'Exportar', edit_approved: 'Editar Aprovada',
 };
 const allAcoes = Object.keys(acoesLabels);
 

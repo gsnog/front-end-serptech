@@ -82,6 +82,9 @@ class SocketManager {
     }
 
     private handleReconnect() {
+        if (!localStorage.getItem('accessToken')) {
+            return; // Do not reconnect after logout
+        }
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
             const timeout = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 10000);
             this.reconnectAttempts++;

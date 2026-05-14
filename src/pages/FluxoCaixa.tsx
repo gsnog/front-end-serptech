@@ -14,14 +14,15 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
-import { useQuery } from "@tanstack/react-query"
-import { fetchParcelas, fetchFluxoCaixaEstatisticas, parcelasQueryKey } from "@/services/financeiro"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { fetchParcelas, fetchFluxoCaixaEstatisticas, parcelasQueryKey, deleteParcela, updateParcelaReceber } from "@/services/financeiro"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Loader2 } from "lucide-react"
 
 const FluxoCaixa = () => {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   useRealtimeUpdates([[...parcelasQueryKey]]);
 
@@ -60,6 +61,12 @@ const FluxoCaixa = () => {
     } else if (periodo === "trimestre") {
       const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 3)
       setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+    } else if (periodo === "semestre") {
+      const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 6)
+      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+    } else if (periodo === "ano") {
+      const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 12)
+      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
     } else {
       setFilterDataInicio(""); setFilterDataFim("")
     }
@@ -86,8 +93,8 @@ const FluxoCaixa = () => {
     return items.filter(trans => {
       const matchTipo = filterTipo && filterTipo !== "todos" ? trans.tipo.toLowerCase() === filterTipo : true
       const matchBeneficiario = trans.beneficiario.toLowerCase().includes(filterBeneficiario.toLowerCase())
-      const matchDataInicio = filterDataInicio ? trans.dataVencimento >= filterDataInicio.split("-").reverse().join("/") : true
-      const matchDataFim = filterDataFim ? trans.dataVencimento <= filterDataFim.split("-").reverse().join("/") : true
+      const matchDataInicio = filterDataInicio ? trans.dataVencimento >= filterDataInicio : true
+      const matchDataFim = filterDataFim ? trans.dataVencimento <= filterDataFim : true
       return matchTipo && matchBeneficiario && matchDataInicio && matchDataFim
     })
   }, [items, filterTipo, filterBeneficiario, filterDataInicio, filterDataFim])
@@ -102,9 +109,34 @@ const FluxoCaixa = () => {
   const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
 
   const getExportData = () => filtered.map(t => ({ Vencimento: t.dataVencimento, Pagamento: t.dataPagamento, Tipo: t.tipo, Beneficiário: t.beneficiario, Status: t.status, Valor: t.valorTotal, Saldo: t.saldo }));
-  const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API" }); setDeleteId(null); } };
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteParcela(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...parcelasQueryKey] });
+      toast({ title: "Transação excluída com sucesso." });
+      setDeleteId(null);
+    },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      updateParcelaReceber(id, data as any),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...parcelasQueryKey] });
+      toast({ title: "Transação atualizada com sucesso." });
+      setEditItem(null);
+    },
+  });
+
+  const handleDelete = () => {
+    if (deleteId !== null) deleteMutation.mutate(deleteId);
+  };
   const openEdit = (t: any) => { setEditItem(t); setEditData({ beneficiario: t.beneficiario, tipo: t.tipo, valorTotal: t.valorTotal }); };
-  const handleSaveEdit = () => { if (editItem) { toast({ title: "Edição requer API" }); setEditItem(null); } };
+  const handleSaveEdit = () => {
+    if (editItem) {
+      editMutation.mutate({ id: editItem.id, data: { valor: parseFloat(editData.valorTotal.replace(/[^\d,]/g, '').replace(',', '.')) } });
+    }
+  };
   const deleteItemData = items.find(i => i.id === deleteId);
 
   if (isLoadingParcelas || isLoadingStats) {
@@ -124,15 +156,13 @@ const FluxoCaixa = () => {
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/financeiro/fluxo-caixa/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Transação</Button>
-          <Button onClick={() => navigate("/financeiro/fluxo-caixa/relatorio")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
-          <ExportButton getData={getExportData} fileName="fluxo-caixa" />
+          <Button onClick={() => navigate("/relatorios")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 
         <FilterSection
           fields={[
-            { type: "select", label: "Tipo", placeholder: "Selecione o tipo", value: filterTipo, onChange: setFilterTipo, options: [{ value: "todos", label: "Todos" }, { value: "entrada", label: "Entrada" }, { value: "saída", label: "Saída" }], width: "min-w-[160px]" },
             { type: "text", label: "Beneficiário", placeholder: "Buscar beneficiário...", value: filterBeneficiario, onChange: setFilterBeneficiario, width: "flex-1 min-w-[180px]" },
-            { type: "select", label: "Período", placeholder: "Selecione", value: filterPeriodo, onChange: handlePeriodoChange, options: [{ value: "hoje", label: "Hoje" }, { value: "semana", label: "Esta semana" }, { value: "mes", label: "Este mês" }, { value: "trimestre", label: "Últimos 3 meses" }], width: "min-w-[170px]" },
+            { type: "select", label: "Período", placeholder: "Selecione", value: filterPeriodo, onChange: handlePeriodoChange, options: [{ value: "hoje", label: "Hoje" }, { value: "semana", label: "Esta semana" }, { value: "mes", label: "Este mês" }, { value: "trimestre", label: "Últimos 3 meses" }, {value: "semestre", label: "Últimos 6 meses"}, {value: "ano", label: "Anual"}], width: "min-w-[170px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: (v) => { setFilterDataInicio(v); setFilterPeriodo("") }, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: (v) => { setFilterDataFim(v); setFilterPeriodo("") }, width: "min-w-[160px]" }
           ]}
@@ -161,7 +191,7 @@ const FluxoCaixa = () => {
                     <TableCell className="text-center"><StatusBadge status={transacao.status} /></TableCell>
                     <TableCell ><span className={transacao.tipo === 'Entrada' ? 'text-primary font-semibold' : 'text-red-700 font-semibold'}>{transacao.valorTotal}</span></TableCell>
                     <TableCell className="font-semibold">{transacao.saldo}</TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(transacao)} onEdit={() => openEdit(transacao)} onDelete={() => setDeleteId(transacao.id)} /></TableCell>
+                    <TableCell className="text-center"><TableActions onView={() => setViewItem(transacao)} /></TableCell>
                   </TableRow>
                 ))
               )}

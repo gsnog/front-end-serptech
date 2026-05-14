@@ -105,7 +105,7 @@ export default function EstoqueInventario() {
                 paginatedItems.map((item) => (
                   <TableRow key={item.id} className="hover:bg-table-hover transition-colors">
                     <TableCell >{item.item}</TableCell><TableCell >{item.quantidade}</TableCell><TableCell >{item.unidade}</TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} onEdit={() => openEdit(item)} onDelete={() => setDeleteId(item.id)} /></TableCell>
+                    <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} /></TableCell>
                   </TableRow>
                 ))
               )}

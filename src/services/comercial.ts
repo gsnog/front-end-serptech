@@ -86,6 +86,15 @@ export const fetchComissoes = async (): Promise<Comissao[] | PaginatedResponse<C
     return res.data;
 };
 
+export const updateLead = async (id: number, data: Partial<Lead>): Promise<Lead> => {
+    const res = await api.patch(`/api/crm/leads/${id}/`, data);
+    return res.data;
+};
+
+export const deleteLead = async (id: number): Promise<void> => {
+    await api.delete(`/api/crm/leads/${id}/`);
+};
+
 export const updateOportunidade = async (id: number, data: Partial<Oportunidade>): Promise<Oportunidade> => {
     const res = await api.patch(`/api/crm/oportunidades/${id}/`, data);
     return res.data;

@@ -39,6 +39,9 @@ export interface ContaPagar {
     plano_de_contas?: number | null;
     centro_de_custo_detalhe?: CentroCusto | null;
     plano_de_contas_detalhe?: PlanoContas | null;
+    total_parcelas?: number;
+    proxima_data_vencimento?: string | null;
+    parcelas_em_atraso?: number;
 }
 
 export interface ParcelaReceber {
@@ -83,6 +86,9 @@ export interface ContaReceber {
     parcelas?: ParcelaReceber[];
     centro_de_receita_detalhe?: CentroReceita | null;
     plano_de_contas_detalhe?: PlanoContas | null;
+    total_parcelas?: number;
+    proxima_data_vencimento?: string | null;
+    parcelas_em_atraso?: number;
 }
 
 export interface ContaBancaria {
@@ -192,8 +198,15 @@ export const fetchFluxoCaixaEstatisticas = async (): Promise<FluxoCaixaEstatisti
     return res.data;
 };
 
-export const fetchDashboardFull = async (): Promise<any> => {
-    const res = await api.get('/api/dashboard-full/');
+export interface DashboardParams {
+    periodo?: string;
+    date_from?: string;
+    date_to?: string;
+    unidade?: string;
+}
+
+export const fetchDashboardFull = async (params: DashboardParams = {}): Promise<any> => {
+    const res = await api.get('/api/dashboard-full/', { params });
     return res.data;
 };
 
@@ -233,8 +246,16 @@ export const reparcelarContaReceber = async (id: number, parcelas: ParcelaReparc
 
 // ─── Contas a Pagar ───────────────────────────────────────────────────────────
 
-export const fetchContasPagar = async (page = 1): Promise<PaginatedResponse<ContaPagar>> => {
-    const res = await api.get('/api/financial/contas_pagar/', { params: { page, page_size: 20 } });
+export const fetchContasPagar = async (
+    page = 1,
+    filters: { beneficiario?: string; documento?: string; dataInicio?: string; dataFim?: string } = {}
+): Promise<PaginatedResponse<ContaPagar>> => {
+    const params: Record<string, string | number> = { page, page_size: 20 };
+    if (filters.beneficiario) params['fornecedor_nome__icontains'] = filters.beneficiario;
+    if (filters.documento) params['numero_documento__icontains'] = filters.documento;
+    if (filters.dataInicio) params['data_de_faturamento__gte'] = filters.dataInicio;
+    if (filters.dataFim) params['data_de_faturamento__lte'] = filters.dataFim;
+    const res = await api.get('/api/financial/contas_pagar/', { params });
     return res.data;
 };
 export const createContaPagar = async (data: Partial<ContaPagar>): Promise<ContaPagar> => {
@@ -270,8 +291,16 @@ export const fetchContasPagarEstatisticas = async (): Promise<ContasPagarEstatis
 
 // ─── Contas a Receber ─────────────────────────────────────────────────────────
 
-export const fetchContasReceber = async (page = 1): Promise<PaginatedResponse<ContaReceber>> => {
-    const res = await api.get('/api/financial/contas_receber/', { params: { page, page_size: 20 } });
+export const fetchContasReceber = async (
+    page = 1,
+    filters: { cliente?: string; documento?: string; dataInicio?: string; dataFim?: string } = {}
+): Promise<PaginatedResponse<ContaReceber>> => {
+    const params: Record<string, string | number> = { page, page_size: 20 };
+    if (filters.cliente) params['cliente_nome__icontains'] = filters.cliente;
+    if (filters.documento) params['numero_documento__icontains'] = filters.documento;
+    if (filters.dataInicio) params['data_de_faturamento__gte'] = filters.dataInicio;
+    if (filters.dataFim) params['data_de_faturamento__lte'] = filters.dataFim;
+    const res = await api.get('/api/financial/contas_receber/', { params });
     return res.data;
 };
 export const createContaReceber = async (data: Partial<ContaReceber>): Promise<ContaReceber> => {
@@ -585,3 +614,36 @@ export const classificacoesFinanceirasQueryKey = ['classificacoesFinanceiras'] a
 export const planoContasQueryKey = ['planoContas'] as const;
 export const conciliacoesQueryKey = ['conciliacoes'] as const;
 export const transferenciasQueryKey = ['transferencias'] as const;
+
+export const fetchContasReceberAll = async (): Promise<ContaReceber[]> => {
+    const all: ContaReceber[] = [];
+    let page = 1;
+    const maxPages = 50;
+    while (page <= maxPages) {
+        const res = await api.get('/api/financial/contas_receber/', { params: { page, page_size: 100 } });
+        const data = res.data;
+        const results: ContaReceber[] = Array.isArray(data) ? data : (data.results ?? []);
+        all.push(...results);
+        if (!data.next || Array.isArray(data)) break;
+        page++;
+    }
+    return all;
+};
+
+export const fetchContasPagarAll = async (): Promise<ContaPagar[]> => {
+    const all: ContaPagar[] = [];
+    let page = 1;
+    const maxPages = 50;
+    while (page <= maxPages) {
+        const res = await api.get('/api/financial/contas_pagar/', { params: { page, page_size: 100 } });
+        const data = res.data;
+        const results: ContaPagar[] = Array.isArray(data) ? data : (data.results ?? []);
+        all.push(...results);
+        if (!data.next || Array.isArray(data)) break;
+        page++;
+    }
+    return all;
+};
+
+export const contasReceberAllQueryKey = ['contasReceberAll'] as const;
+export const contasPagarAllQueryKey = ['contasPagarAll'] as const;

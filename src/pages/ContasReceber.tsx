@@ -2,7 +2,7 @@ import React from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
 import { SortableHead } from "@/components/SortableHead"
 import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink, AlertCircle } from "lucide-react"
@@ -89,9 +89,10 @@ const ContasReceber = () => {
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [filterCliente, filterDocumento, filterDataInicio, filterDataFim]);
 
+  const filters = { cliente: filterCliente, documento: filterDocumento, dataInicio: filterDataInicio, dataFim: filterDataFim };
   const { data: response, isLoading } = useQuery({
-    queryKey: [...contasReceberQueryKey, page],
-    queryFn: () => fetchContasReceber(page),
+    queryKey: [...contasReceberQueryKey, page, filters],
+    queryFn: () => fetchContasReceber(page, filters),
   });
   const items = response?.results ?? [];
   const serverTotal = response?.count ?? 0;
@@ -128,17 +129,7 @@ const ContasReceber = () => {
     onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
   });
 
-  const filtered = useMemo(() => {
-    return items.filter((conta: Conta) => {
-      const matchCliente = (conta.cliente_nome || "").toLowerCase().includes(filterCliente.toLowerCase())
-      const matchDocumento = (conta.numero_documento || conta.documento || "").toLowerCase().includes(filterDocumento.toLowerCase())
-      const matchDataInicio = filterDataInicio ? (conta.data_de_faturamento || "") >= filterDataInicio : true
-      const matchDataFim = filterDataFim ? (conta.data_de_faturamento || "") <= filterDataFim : true
-      return matchCliente && matchDocumento && matchDataInicio && matchDataFim
-    })
-  }, [items, filterCliente, filterDocumento, filterDataInicio, filterDataFim])
-
-  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(items)
   const paginatedItems = sorted;
   const total = serverTotal;
   const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
@@ -146,7 +137,7 @@ const ContasReceber = () => {
   const hasPrev = page > 1;
   const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
 
-  const getExportData = () => filtered.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Cliente: c.cliente_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
+  const getExportData = () => items.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Cliente: c.cliente_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
   const openEdit = (c: Conta) => {
     setEditItem(c);
@@ -176,8 +167,7 @@ const ContasReceber = () => {
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/financeiro/contas-receber/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Conta</Button>
-          <Button onClick={() => navigate("/financeiro/contas-receber/relatorio")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
-          <ExportButton getData={getExportData} fileName="contas-receber" />
+          <Button onClick={() => navigate("/relatorios")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 
         <FilterSection
@@ -187,7 +177,7 @@ const ContasReceber = () => {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          resultsCount={serverTotal}
         />
 
         <div className="rounded border border-border overflow-hidden">
@@ -201,6 +191,9 @@ const ContasReceber = () => {
               <col className="w-[100px]" />
               <col className="w-[100px]" />
               <col className="w-[90px]" />
+              <col className="w-[60px]" />
+              <col className="w-[100px]" />
+              <col className="w-[70px]" />
               <col className="w-[110px]" />
               <col className="w-[72px]" />
             </colgroup>
@@ -213,14 +206,17 @@ const ContasReceber = () => {
               <SortableHead label="Título" field="valor_do_titulo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Total" field="valor_total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Vencimento" field="data_de_vencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold text-xs">Parcelas</TableHead>
+              <TableHead className="text-center font-semibold text-xs">Próx. Venc.</TableHead>
+              <TableHead className="text-center font-semibold text-xs">Em Atraso</TableHead>
               <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : paginatedItems.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
               ) : (
                 paginatedItems.map((conta: Conta) => {
                   const expanded = expandedIds.has(conta.id)
@@ -246,12 +242,19 @@ const ContasReceber = () => {
                         <TableCell >{formatBRL(conta.valor_do_titulo)}</TableCell>
                         <TableCell >{formatBRL(conta.valor_total)}</TableCell>
                         <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">{conta.total_parcelas ?? "—"}</TableCell>
+                        <TableCell className="text-center text-xs">{conta.proxima_data_vencimento || "—"}</TableCell>
+                        <TableCell className="text-center text-xs">
+                          {(conta.parcelas_em_atraso ?? 0) > 0
+                            ? <span className="text-destructive font-bold">{conta.parcelas_em_atraso}</span>
+                            : <span className="text-muted-foreground">0</span>}
+                        </TableCell>
                         <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
                         <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
                       </TableRow>
                       {expanded && parcelas.length > 0 && (
                         <TableRow className="bg-muted/40">
-                          <TableCell colSpan={10} className="p-0">
+                          <TableCell colSpan={13} className="p-0">
                             <div className="px-6 py-3">
                               <p className="text-xs font-semibold text-muted-foreground mb-2">PARCELAS</p>
                               <Table>
