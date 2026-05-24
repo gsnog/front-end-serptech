@@ -299,7 +299,7 @@ const Patrimonio = () => {
               <InfoRow label="Código de Identificação" value={viewItem.codigo || "—"} />
               <InfoRow label="Item" value={viewItem.item_nome || "—"} />
               <InfoRow label="Unidade" value={viewItem.unidade_nome || "—"} />
-              <InfoRow label="Data de Aquisição" value={viewItem.data_de_aquisicao ? new Date(viewItem.data_de_aquisicao + 'T00:00:00').toLocaleDateString('pt-BR') : "—"} />
+              <InfoRow label="Data de Aquisição" value={fmtDate(viewItem.data_de_aquisicao)} />
               <InfoRow label="Valor" value={viewItem.valor != null ? `R$ ${Number(viewItem.valor).toFixed(2)}` : "—"} />
               <InfoRow label="Descrição" value={viewItem.descricao || "—"} />
             </div>

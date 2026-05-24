@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { fmtDate } from '@/lib/utils'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Search, ShieldCheck, ShieldOff, UserCheck, UserX, ChevronLeft, ChevronRight, KeyRound, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
@@ -122,10 +123,6 @@ export default function AdminUsuarios() {
 
   const totalPages = data ? Math.ceil(data.count / PAGE_SIZE) : 1
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '—'
-    return new Date(dateStr).toLocaleDateString('pt-BR')
-  }
 
   return (
     <div className="space-y-4">
@@ -239,10 +236,10 @@ export default function AdminUsuarios() {
                     </Tooltip>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(user.date_joined)}
+                    {fmtDate(user.date_joined)}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatDate(user.last_login)}
+                    {fmtDate(user.last_login)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">

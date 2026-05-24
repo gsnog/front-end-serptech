@@ -146,7 +146,7 @@ export default function Propostas() {
                 { label: 'Oportunidade', value: getOpTitulo(viewItem.oportunidade) },
                 { label: 'Valor', value: formatCurrency(Number(viewItem.valor)) },
                 { label: 'Status', value: viewItem.status },
-                { label: 'Validade', value: viewItem.validade ? new Date(viewItem.validade).toLocaleDateString('pt-BR') : '-' },
+                { label: 'Validade', value: fmtDate(viewItem.validade) },
                 { label: 'Versão', value: `v${viewItem.versao}` },
                 { label: 'Responsável', value: viewItem.responsavel }
               ].map((item) => (

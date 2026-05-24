@@ -363,10 +363,10 @@ export default function Mapas() {
       </div>
 
       {/* Filters */}
-      <div className="filter-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-        <div className="relative">
+      <div className="filter-card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end overflow-visible">
+        <div className="relative z-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Nome do arquivo…" value={filtroNome}
+          <Input placeholder="Nome do mapa…" value={filtroNome}
             onChange={e => { setFiltroNome(e.target.value); setPage(1); }}
             className="pl-9" />
         </div>
@@ -380,20 +380,22 @@ export default function Mapas() {
           </SelectContent>
         </Select>
         <div className="flex gap-2">
-          <div className="flex-1">
+          <div className="flex-1 relative z-0">
             <Label className="text-xs text-muted-foreground">De</Label>
             <Input type="date" value={filtroDataInicio}
               onChange={e => { setFiltroDataInicio(e.target.value); setPage(1); }} />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 relative z-0">
             <Label className="text-xs text-muted-foreground">Até</Label>
             <Input type="date" value={filtroDataFim}
               onChange={e => { setFiltroDataFim(e.target.value); setPage(1); }} />
           </div>
         </div>
-        <Button variant="ghost" size="sm" onClick={resetFiltros} className="text-muted-foreground">
-          Limpar filtros
-        </Button>
+        <div className="flex items-end">
+          <Button variant="ghost" size="sm" onClick={resetFiltros} className="text-muted-foreground relative z-0">
+            Limpar filtros
+          </Button>
+        </div>
       </div>
 
       {/* Table */}

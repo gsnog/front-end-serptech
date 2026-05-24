@@ -140,7 +140,7 @@ export default function Oportunidades() {
   const getExportData = () => filtered.map((op: any) => {
     const conta = getContaById(op.conta);
     const etapa = etapasFunil.find(e => e.id === op.estagio || e.nome === op.estagio);
-    return { Oportunidade: op.titulo, Conta: conta?.nome_fantasia ?? "", Valor: formatCurrency(parseFloat(op.valor_estimado || "0")), Etapa: etapa?.nome ?? op.estagio, Probabilidade: `${op.probabilidade}%`, Previsão: op.data_fechamento_esperada ? new Date(op.data_fechamento_esperada).toLocaleDateString("pt-BR") : "-" };
+    return { Oportunidade: op.titulo, Conta: conta?.nome_fantasia ?? "", Valor: formatCurrency(parseFloat(op.valor_estimado || "0")), Etapa: etapa?.nome ?? op.estagio, Probabilidade: `${op.probabilidade}%`, Previsão: fmtDate(op.data_fechamento_esperada) };
   });
 
   return (
@@ -324,7 +324,7 @@ export default function Oportunidades() {
       {/* ── Dialogs ───────────────────────────────────────────────────────────── */}
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes da Oportunidade</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Título: viewItem.titulo, Conta: getContaById(viewItem.conta)?.nome_fantasia ?? "", Valor: formatCurrency(parseFloat(viewItem.valor_estimado || "0")), Etapa: etapasFunil.find(e => e.id === viewItem.estagio)?.nome ?? viewItem.estagio, Probabilidade: `${viewItem.probabilidade}%`, Previsão: viewItem.data_fechamento_esperada ? new Date(viewItem.data_fechamento_esperada).toLocaleDateString("pt-BR") : "-" }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v as string}</span></div>))}</div>}
+          {viewItem && <div className="space-y-2">{Object.entries({ Título: viewItem.titulo, Conta: getContaById(viewItem.conta)?.nome_fantasia ?? "", Valor: formatCurrency(parseFloat(viewItem.valor_estimado || "0")), Etapa: etapasFunil.find(e => e.id === viewItem.estagio)?.nome ?? viewItem.estagio, Probabilidade: `${viewItem.probabilidade}%`, Previsão: fmtDate(viewItem.data_fechamento_esperada) }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v as string}</span></div>))}</div>}
         </DialogContent>
       </Dialog>
 

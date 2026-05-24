@@ -30,8 +30,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { fmtDate } from "@/lib/utils";
 
 const isEntrada = (valor: number) => valor >= 0;
 
@@ -189,9 +188,7 @@ const ConciliacaoBancaria = () => {
                   <span className="flex items-center gap-1">
                     <Calendar size={11} />
                     Venc:{" "}
-                    {format(new Date((acc as any).data_de_vencimento), "dd/MM/yyyy", {
-                      locale: ptBR,
-                    })}
+                    {fmtDate((acc as any).data_de_vencimento)}
                   </span>
                 )}
                 {(acc as any).documento && (
@@ -352,7 +349,7 @@ const ConciliacaoBancaria = () => {
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
                                   <Calendar size={11} />
-                                  {format(new Date(c.data), "dd/MM/yyyy", { locale: ptBR })}
+                                  {fmtDate(c.data)}
                                 </span>
                                 {c.numero_conta && (
                                   <span className="italic">Conta: {c.numero_conta}</span>
