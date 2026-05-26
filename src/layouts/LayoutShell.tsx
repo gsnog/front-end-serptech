@@ -96,8 +96,6 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   // Financeiro - Subpáginas
   "/financeiro/contas-receber/nova": { title: "Contas a Receber", description: "Nova Conta a Receber" },
   "/financeiro/contas-pagar/nova": { title: "Contas a Pagar", description: "Nova Conta a Pagar" },
-  "/financeiro/contas-receber/relatorio": { title: "Contas a Receber", description: "Relatório de Contas a Receber" },
-  "/financeiro/contas-pagar/relatorio": { title: "Contas a Pagar", description: "Relatório de Contas a Pagar" },
   "/financeiro/fluxo-caixa/relatorio": { title: "Fluxo de Caixa", description: "Relatório de Fluxo de Caixa" },
   
   // Patrimônio (under Estoque)

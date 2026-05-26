@@ -10,13 +10,12 @@ import { StatusBadge } from "@/components/StatusBadge"
 import { FileText, Download, X } from "lucide-react"
 import { exportData } from "@/lib/exportData"
 import {
-  fetchContasReceberAll, fetchContasPagarAll,
   fetchClientes, fetchContasBancarias, fetchCategoriasFinanceiras,
   fetchClassificacoesFinanceiras, fetchPlanoContas, fetchCentrosCusto,
-  contasReceberAllQueryKey, contasPagarAllQueryKey,
   clientesQueryKey, contasBancariasQueryKey,
   categoriasFinanceirasQueryKey, classificacoesFinanceirasQueryKey,
   planoContasQueryKey, centrosCustoQueryKey,
+  fetchRelatorio, RelatorioParams, RelatorioContaItem, RelatorioFluxoItem,
 } from "@/services/financeiro"
 
 type TipoRelatorio = "contas-receber" | "contas-pagar" | "fluxo-caixa"
@@ -40,7 +39,10 @@ const meses = [
 const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 const fmtDate = (d: string | null | undefined) => {
   if (!d || d === '—') return '—'
-  const [y, m, day] = d.split('T')[0].split('-')
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(d)) return d
+  const parts = d.split('T')[0].split('-')
+  if (parts.length < 3) return d
+  const [y, m, day] = parts
   return `${day}/${m}/${y}`
 }
 
@@ -66,13 +68,12 @@ export default function Relatorios() {
 
   const [showPopup, setShowPopup] = useState(false)
   const [reportPage, setReportPage] = useState(1)
+  const [reportData, setReportData] = useState<RelatorioContaItem[] | RelatorioFluxoItem[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [reportError, setReportError] = useState<string | null>(null)
   const REPORT_PAGE_SIZE = 5
 
-  // Dados principais
-  const { data: contasReceberRaw } = useQuery({ queryKey: contasReceberAllQueryKey, queryFn: fetchContasReceberAll })
-  const { data: contasPagarRaw } = useQuery({ queryKey: contasPagarAllQueryKey, queryFn: fetchContasPagarAll })
-
-  // Dados para dropdowns
+  // Dropdowns
   const { data: clientesRaw } = useQuery({ queryKey: clientesQueryKey, queryFn: fetchClientes })
   const { data: contasBancariasRaw } = useQuery({ queryKey: contasBancariasQueryKey, queryFn: fetchContasBancarias })
   const { data: categoriasRaw } = useQuery({ queryKey: categoriasFinanceirasQueryKey, queryFn: fetchCategoriasFinanceiras })
@@ -80,8 +81,6 @@ export default function Relatorios() {
   const { data: planoContasRaw } = useQuery({ queryKey: planoContasQueryKey, queryFn: fetchPlanoContas })
   const { data: centrosCustoRaw } = useQuery({ queryKey: centrosCustoQueryKey, queryFn: fetchCentrosCusto })
 
-  const contasReceberApi = contasReceberRaw ?? []
-  const contasPagarApi = contasPagarRaw ?? []
   const clientesList = Array.isArray(clientesRaw) ? clientesRaw : (clientesRaw as any)?.results ?? []
   const contasBancariasList = Array.isArray(contasBancariasRaw) ? contasBancariasRaw : (contasBancariasRaw as any)?.results ?? []
   const categoriasList = Array.isArray(categoriasRaw) ? categoriasRaw : (categoriasRaw as any)?.results ?? []
@@ -89,110 +88,64 @@ export default function Relatorios() {
   const planoContasList = Array.isArray(planoContasRaw) ? planoContasRaw : (planoContasRaw as any)?.results ?? []
   const centrosCustoList = Array.isArray(centrosCustoRaw) ? centrosCustoRaw : (centrosCustoRaw as any)?.results ?? []
 
-  const beneficiariosList = useMemo(() => {
-    const seen = new Set<number>()
-    return contasPagarApi
-      .filter((cp: any) => cp.beneficiario && cp.fornecedor_nome && !seen.has(cp.beneficiario) && seen.add(cp.beneficiario))
-      .map((cp: any) => ({ value: String(cp.beneficiario), label: cp.fornecedor_nome }))
-  }, [contasPagarApi])
-
-  // Resolve qual campo de data usar conforme tipoData selecionado (vencimento/faturamento apenas)
-  const getDateField = (item: any): string | null => {
-    if (tipoData === "faturamento") return item.data_de_faturamento ?? null
-    return item.data_de_vencimento ?? null
-  }
-
-  // Verifica se uma data (string YYYY-MM-DD) está dentro do período selecionado
-  const isInPeriod = (dateStr: string | null | undefined): boolean => {
-    if (!dateStr) return false
-    const d = new Date(dateStr)
-    const y = d.getFullYear()
-    const m = d.getMonth() + 1
-
-    if (filtroTempo === "anual") return y === parseInt(ano)
-    if (filtroTempo === "trimestral") {
-      const q = parseInt(trimestre)
-      const startM = (q - 1) * 3 + 1
-      return y === parseInt(ano) && m >= startM && m < startM + 3
+  const handleGerar = async () => {
+    setIsLoading(true)
+    setReportError(null)
+    try {
+      const params: RelatorioParams = {
+        tipo,
+        tipo_data: tipoData,
+        filtro_tempo: filtroTempo,
+        ano: ['anual', 'trimestral', 'mensal'].includes(filtroTempo) ? ano : undefined,
+        trimestre: filtroTempo === 'trimestral' ? trimestre : undefined,
+        mes: filtroTempo === 'mensal' ? mes : undefined,
+        dia: filtroTempo === 'diario' ? dia : undefined,
+        data_inicio: filtroTempo === 'personalizado' ? dataInicio : undefined,
+        data_fim: filtroTempo === 'personalizado' ? dataFim : undefined,
+        cliente_id: clienteId || undefined,
+        beneficiario_id: beneficiarioId || undefined,
+        conta_bancaria_id: contaBancariaId || undefined,
+        classificacao_id: classificacaoId || undefined,
+        categoria_id: categoriaId || undefined,
+        plano_contas_id: planoContasId || undefined,
+        centro_id: centroId || undefined,
+        status: status || undefined,
+      }
+      const data = await fetchRelatorio(params)
+      setReportData(data)
+      setShowPopup(true)
+      setReportPage(1)
+    } catch {
+      setReportError('Erro ao gerar relatório. Tente novamente.')
+    } finally {
+      setIsLoading(false)
     }
-    if (filtroTempo === "mensal") return y === parseInt(ano) && m === parseInt(mes)
-    if (filtroTempo === "diario") return dia ? dateStr.startsWith(dia) : true
-    if (filtroTempo === "personalizado") return (!dataInicio || dateStr >= dataInicio) && (!dataFim || dateStr <= dataFim)
-    return true
   }
 
-  const filteredContasReceber = useMemo(() => {
-    return contasReceberApi.filter((cr: any) => {
-      if (tipoData === "pagamento") {
-        const parcelas: any[] = cr.parcelas ?? []
-        if (!parcelas.some(p => p.data_de_pagamento && isInPeriod(p.data_de_pagamento))) return false
-      } else {
-        if (!isInPeriod(getDateField(cr))) return false
-      }
-      if (clienteId && String(cr.cliente) !== clienteId) return false
-      if (status && cr.status !== status) return false
-      if (planoContasId && String(cr.plano_de_contas) !== planoContasId) return false
-      if (centroId && String(cr.centro_de_receita) !== centroId) return false
-      if (classificacaoId && String(cr.classificacao) !== classificacaoId) return false
-      if (categoriaId && String(cr.categoria) !== categoriaId) return false
-      return true
-    })
-  }, [contasReceberApi, tipoData, filtroTempo, ano, trimestre, mes, dia, dataInicio, dataFim, clienteId, status, planoContasId, centroId, classificacaoId, categoriaId])
+  const contasReceberDisplay = useMemo(() =>
+    (reportData as RelatorioContaItem[]).map(cr => ({
+      codigo: `CR${String(cr.id).padStart(3, '0')}`,
+      cliente: cr.cliente_nome || '—',
+      vencimento: fmtDate(cr.data_de_vencimento),
+      faturamento: fmtDate(cr.data_de_faturamento),
+      valor: fmt(cr.valor_total ?? 0),
+      status: cr.status || '—',
+    })), [reportData])
 
-  const filteredContasPagar = useMemo(() => {
-    return contasPagarApi.filter((cp: any) => {
-      if (tipoData === "pagamento") {
-        const parcelas: any[] = cp.parcelas ?? []
-        if (!parcelas.some(p => p.data_de_pagamento && isInPeriod(p.data_de_pagamento))) return false
-      } else {
-        if (!isInPeriod(getDateField(cp))) return false
-      }
-      if (beneficiarioId && String(cp.beneficiario) !== beneficiarioId) return false
-      if (status && cp.status !== status) return false
-      if (planoContasId && String(cp.plano_de_contas) !== planoContasId) return false
-      if (centroId && String(cp.centro_de_custo) !== centroId) return false
-      if (classificacaoId && String(cp.classificacao) !== classificacaoId) return false
-      if (categoriaId && String(cp.categoria) !== categoriaId) return false
-      return true
-    })
-  }, [contasPagarApi, tipoData, filtroTempo, ano, trimestre, mes, dia, dataInicio, dataFim, beneficiarioId, status, planoContasId, centroId, classificacaoId, categoriaId])
+  const contasPagarDisplay = useMemo(() =>
+    (reportData as RelatorioContaItem[]).map(cp => ({
+      codigo: `CP${String(cp.id).padStart(3, '0')}`,
+      beneficiario: cp.fornecedor_nome || '—',
+      vencimento: fmtDate(cp.data_de_vencimento),
+      faturamento: fmtDate(cp.data_de_faturamento),
+      valor: fmt(cp.valor_total ?? 0),
+      status: cp.status || '—',
+    })), [reportData])
 
-  // Fluxo de caixa como extrato: só parcelas pagas no período, ordenadas por data de pagamento
   const fluxoCaixaDisplay = useMemo(() => {
-    const linhas: { data: string; descricao: string; tipo: 'entrada' | 'saida'; valor: number }[] = []
-
-    contasReceberApi.forEach((cr: any) => {
-      const parcelas: any[] = cr.parcelas ?? []
-      parcelas.forEach(p => {
-        if (!p.data_de_pagamento) return
-        if (!isInPeriod(p.data_de_pagamento)) return
-        linhas.push({
-          data: p.data_de_pagamento,
-          descricao: cr.cliente_nome || String(cr.cliente || '—'),
-          tipo: 'entrada',
-          valor: p.valor ?? 0,
-        })
-      })
-    })
-
-    contasPagarApi.forEach((cp: any) => {
-      const parcelas: any[] = cp.parcelas ?? []
-      parcelas.forEach(p => {
-        if (!p.data_de_pagamento) return
-        if (!isInPeriod(p.data_de_pagamento)) return
-        linhas.push({
-          data: p.data_de_pagamento,
-          descricao: cp.fornecedor_nome || String(cp.beneficiario || '—'),
-          tipo: 'saida',
-          valor: p.valor ?? 0,
-        })
-      })
-    })
-
-    linhas.sort((a, b) => a.data.localeCompare(b.data))
-
+    if (tipo !== 'fluxo-caixa') return []
     let saldoAcc = 0
-    return linhas.map(item => {
+    return (reportData as RelatorioFluxoItem[]).map(item => {
       saldoAcc += item.tipo === 'entrada' ? item.valor : -item.valor
       return {
         data: fmtDate(item.data),
@@ -204,25 +157,7 @@ export default function Relatorios() {
         saida: item.tipo === 'saida' ? fmt(item.valor) : '—',
       }
     })
-  }, [contasReceberApi, contasPagarApi, filtroTempo, ano, trimestre, mes, dia, dataInicio, dataFim])
-
-  const contasReceberDisplay = filteredContasReceber.map(cr => ({
-    codigo: `CR${String(cr.id).padStart(3, '0')}`,
-    cliente: cr.cliente_nome || String(cr.cliente || '—'),
-    vencimento: fmtDate(cr.data_de_vencimento),
-    faturamento: fmtDate(cr.data_de_faturamento),
-    valor: fmt(cr.valor_total ?? 0),
-    status: cr.status || '—',
-  }))
-
-  const contasPagarDisplay = filteredContasPagar.map(cp => ({
-    codigo: `CP${String(cp.id).padStart(3, '0')}`,
-    beneficiario: cp.fornecedor_nome || String(cp.beneficiario || '—'),
-    vencimento: fmtDate(cp.data_de_vencimento),
-    faturamento: fmtDate(cp.data_de_faturamento),
-    valor: fmt(cp.valor_total ?? 0),
-    status: cp.status || '—',
-  }))
+  }, [reportData, tipo])
 
   const getData = () => {
     if (tipo === "contas-receber") return contasReceberDisplay
@@ -337,7 +272,7 @@ export default function Relatorios() {
                     options={clientesList.map((c: any) => ({ value: String(c.id), label: c.nome }))} />
                 ) : (
                   <SelectFilter label="Beneficiário:" value={beneficiarioId} onChange={setBeneficiarioId}
-                    options={beneficiariosList} />
+                    options={clientesList.map((c: any) => ({ value: String(c.id), label: c.nome }))} />
                 )}
                 <SelectFilter label="Conta Bancária:" value={contaBancariaId} onChange={setContaBancariaId}
                   options={contasBancariasList.map((c: any) => ({ value: String(c.id), label: `${c.banco} - ${c.numero_conta}` }))} />
@@ -363,11 +298,13 @@ export default function Relatorios() {
               </div>
             </div>}
 
-            <div className="pt-4">
-              <Button onClick={() => { setShowPopup(true); setReportPage(1) }} className="gap-2">
-                <FileText className="h-4 w-4" />
-                Gerar
+            <div className="pt-4 space-y-2">
+              <Button onClick={handleGerar} className="gap-2" disabled={isLoading}>
+                {isLoading
+                  ? <span>Gerando...</span>
+                  : <><FileText className="h-4 w-4" />Gerar</>}
               </Button>
+              {reportError && <p className="text-sm text-rose-500">{reportError}</p>}
             </div>
           </CardContent>
         </Card>

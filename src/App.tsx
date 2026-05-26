@@ -12,16 +12,12 @@ import FluxoCaixa from "./pages/FluxoCaixa";
 import NovaTransacao from "./pages/financeiro/NovaTransacao";
 import RelatorioFluxoCaixa from "./pages/financeiro/RelatorioFluxoCaixa";
 import NFe from "./pages/NFe";
-import RelatorioNFe from "./pages/financeiro/RelatorioNFe";
 import Patrimonio from "./pages/Patrimonio";
-import Relatorio from "./pages/Relatorio";
 import Relatorios from "./pages/Relatorios";
 import ContasPagar from "./pages/ContasPagar";
 import NovaContaPagar from "./pages/financeiro/NovaContaPagar";
-import RelatorioContasPagar from "./pages/financeiro/RelatorioContasPagar";
 import ContasReceber from "./pages/ContasReceber";
 import NovaContaReceber from "./pages/financeiro/NovaContaReceber";
-import RelatorioContasReceber from "./pages/financeiro/RelatorioContasReceber";
 import ConciliacaoBancaria from "./pages/financeiro/ConciliacaoBancaria";
 import LancamentoSaida from "./pages/LancamentoSaida";
 import NovoNFe from "./pages/NovoNFe";
@@ -48,7 +44,6 @@ import NovaOrdemCompra from "./pages/NovaOrdemCompra";
 import RelatorioOrdemCompra from "./pages/estoque/RelatorioOrdemCompra";
 import OrdemServico from "./pages/OrdemServico";
 import NovaOrdemServico from "./pages/NovaOrdemServico";
-import Cadastro from "./pages/Cadastro";
 import NotFound from "./pages/NotFound";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -105,7 +100,6 @@ import Hierarquia from "./pages/gestao-pessoas/Hierarquia";
 import Acessos from "./pages/gestao-pessoas/Acessos";
 import Auditoria from "./pages/gestao-pessoas/Auditoria";
 import Medicos from "./pages/gestao-pessoas/Medicos";
-import NovoMedico from "./pages/gestao-pessoas/NovoMedico";
 import RelatorioPessoas from "./pages/gestao-pessoas/RelatorioPessoas";
 
 // Módulos Globais (Header)
@@ -155,21 +149,17 @@ const App = () => (
                   <Route path="/financeiro/fluxo-caixa/relatorio" element={<RelatorioFluxoCaixa />} />
                   <Route path="/financeiro/contas-pagar" element={<ContasPagar />} />
                   <Route path="/financeiro/contas-pagar/nova" element={<NovaContaPagar />} />
-                  <Route path="/financeiro/contas-pagar/relatorio" element={<RelatorioContasPagar />} />
                   <Route path="/financeiro/contas-receber" element={<ContasReceber />} />
                   <Route path="/financeiro/contas-receber/nova" element={<NovaContaReceber />} />
-                  <Route path="/financeiro/contas-receber/relatorio" element={<RelatorioContasReceber />} />
                   <Route path="/cadastro/financeiro/conciliacao-bancaria" element={<ConciliacaoBancaria />} />
                   <Route path="/financeiro/lancamento-saida" element={<LancamentoSaida />} />
                   <Route path="/financeiro/saidas-pendentes" element={<SaidasPendentes />} />
                   <Route path="/financeiro/xml" element={<NFe />} />
-                  <Route path="/financeiro/xml/relatorio" element={<RelatorioNFe />} />
                   <Route path="/nfe" element={<NFe />} />
                   <Route path="/nfe/nova" element={<NovoNFe />} />
                   <Route path="/novo-nfe" element={<NovoNFe />} />
                   <Route path="/estoque/xml" element={<NFe />} />
                   <Route path="/patrimonio" element={<Patrimonio />} />
-                  <Route path="/relatorio" element={<Relatorio />} />
                   <Route path="/relatorios" element={<Relatorios />} />
                   <Route path="/estoque/entradas" element={<ErrorBoundary><EstoqueEntradas /></ErrorBoundary>} />
                   <Route path="/estoque/entradas/nova" element={<NovaEntrada />} />

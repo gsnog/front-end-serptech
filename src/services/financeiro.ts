@@ -248,13 +248,14 @@ export const reparcelarContaReceber = async (id: number, parcelas: ParcelaReparc
 
 export const fetchContasPagar = async (
     page = 1,
-    filters: { beneficiario?: string; documento?: string; dataInicio?: string; dataFim?: string } = {}
+    filters: { beneficiario?: string; documento?: string; dataInicio?: string; dataFim?: string; dateType?: string } = {}
 ): Promise<PaginatedResponse<ContaPagar>> => {
     const params: Record<string, string | number> = { page, page_size: 20 };
-    if (filters.beneficiario) params['fornecedor_nome__icontains'] = filters.beneficiario;
-    if (filters.documento) params['numero_documento__icontains'] = filters.documento;
-    if (filters.dataInicio) params['data_de_faturamento__gte'] = filters.dataInicio;
-    if (filters.dataFim) params['data_de_faturamento__lte'] = filters.dataFim;
+    if (filters.beneficiario) params['fornecedor_nome'] = filters.beneficiario;
+    if (filters.documento) params['numero_documento'] = filters.documento;
+    if (filters.dateType) params['date_type'] = filters.dateType;
+    if (filters.dataInicio) params['date_from'] = filters.dataInicio;
+    if (filters.dataFim) params['date_to'] = filters.dataFim;
     const res = await api.get('/api/financial/contas_pagar/', { params });
     return res.data;
 };
@@ -293,13 +294,14 @@ export const fetchContasPagarEstatisticas = async (): Promise<ContasPagarEstatis
 
 export const fetchContasReceber = async (
     page = 1,
-    filters: { cliente?: string; documento?: string; dataInicio?: string; dataFim?: string } = {}
+    filters: { cliente?: string; documento?: string; dataInicio?: string; dataFim?: string; dateType?: string } = {}
 ): Promise<PaginatedResponse<ContaReceber>> => {
     const params: Record<string, string | number> = { page, page_size: 20 };
-    if (filters.cliente) params['cliente_nome__icontains'] = filters.cliente;
-    if (filters.documento) params['numero_documento__icontains'] = filters.documento;
-    if (filters.dataInicio) params['data_de_faturamento__gte'] = filters.dataInicio;
-    if (filters.dataFim) params['data_de_faturamento__lte'] = filters.dataFim;
+    if (filters.cliente) params['cliente_nome'] = filters.cliente;
+    if (filters.documento) params['numero_documento'] = filters.documento;
+    if (filters.dateType) params['date_type'] = filters.dateType;
+    if (filters.dataInicio) params['date_from'] = filters.dataInicio;
+    if (filters.dataFim) params['date_to'] = filters.dataFim;
     const res = await api.get('/api/financial/contas_receber/', { params });
     return res.data;
 };
@@ -540,37 +542,6 @@ export const deleteSubcategoria = async (id: number): Promise<void> => {
 };
 export const subcategoriasQueryKey = ['subcategorias'] as const;
 
-// ─── Lançamento Contábil ─────────────────────────────────────────────────────
-
-export interface LancamentoContabil {
-    id: number;
-    data: string;
-    plano_de_contas: number;
-    plano_de_contas_nome?: string;
-    descricao: string;
-    valor: number;
-    tipo: 'debito' | 'credito';
-    unidade: number;
-    unidade_nome?: string;
-}
-
-export const fetchLancamentosContabeis = async (): Promise<LancamentoContabil[] | PaginatedResponse<LancamentoContabil>> => {
-    const res = await api.get('/api/financial/contabil/');
-    return res.data;
-};
-export const createLancamentoContabil = async (data: Partial<LancamentoContabil>): Promise<LancamentoContabil> => {
-    const res = await api.post('/api/financial/contabil/', data);
-    return res.data;
-};
-export const updateLancamentoContabil = async (id: number, data: Partial<LancamentoContabil>): Promise<LancamentoContabil> => {
-    const res = await api.put(`/api/financial/contabil/${id}/`, data);
-    return res.data;
-};
-export const deleteLancamentoContabil = async (id: number): Promise<void> => {
-    await api.delete(`/api/financial/contabil/${id}/`);
-};
-export const lancamentosContabeisQueryKey = ['lancamentosContabeis'] as const;
-
 // ─── Clientes (lab) ───────────────────────────────────────────────────────────
 
 export interface Cliente {
@@ -647,3 +618,48 @@ export const fetchContasPagarAll = async (): Promise<ContaPagar[]> => {
 
 export const contasReceberAllQueryKey = ['contasReceberAll'] as const;
 export const contasPagarAllQueryKey = ['contasPagarAll'] as const;
+
+export interface RelatorioParams {
+  tipo: 'contas-receber' | 'contas-pagar' | 'fluxo-caixa'
+  tipo_data?: 'vencimento' | 'faturamento' | 'pagamento'
+  filtro_tempo?: 'anual' | 'trimestral' | 'mensal' | 'diario' | 'personalizado'
+  ano?: string
+  trimestre?: string
+  mes?: string
+  dia?: string
+  data_inicio?: string
+  data_fim?: string
+  cliente_id?: string
+  beneficiario_id?: string
+  conta_bancaria_id?: string
+  classificacao_id?: string
+  categoria_id?: string
+  plano_contas_id?: string
+  centro_id?: string
+  status?: string
+}
+
+export interface RelatorioContaItem {
+  id: number
+  cliente_nome?: string
+  fornecedor_nome?: string
+  data_de_vencimento: string | null
+  data_de_faturamento: string | null
+  valor_total: number
+  status: string
+}
+
+export interface RelatorioFluxoItem {
+  data: string
+  descricao: string
+  tipo: 'entrada' | 'saida'
+  valor: number
+}
+
+export const fetchRelatorio = async (params: RelatorioParams): Promise<RelatorioContaItem[] | RelatorioFluxoItem[]> => {
+  const cleanParams = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null)
+  )
+  const res = await api.get('/api/financial/relatorios/', { params: cleanParams })
+  return res.data
+}

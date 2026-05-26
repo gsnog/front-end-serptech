@@ -60,7 +60,6 @@ const NFe = () => {
       <div className="space-y-6">
         <div className="flex flex-wrap gap-3 items-center">
           <Button className="gap-2" onClick={() => navigate("/nfe/nova")}><Plus className="w-4 h-4" />Nova NF-e</Button>
-          <Button onClick={() => navigate("/financeiro/xml/relatorio")} variant="outline" className="gap-2 border-border"><FileUp className="w-4 h-4" />Importar XML</Button>
           <ExportButton getData={getExportData} fileName="nfe" />
         </div>
 

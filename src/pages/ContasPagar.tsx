@@ -38,6 +38,7 @@ const ContasPagar = () => {
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [filterDateType, setFilterDateType] = useState("faturamento")
   const [filterBeneficiario, setFilterBeneficiario] = useState("")
   const [filterDocumento, setFilterDocumento] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
@@ -64,9 +65,9 @@ const ContasPagar = () => {
   useRealtimeUpdates([[...contasPagarQueryKey]]);
 
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim]);
+  useEffect(() => { setPage(1); }, [filterDateType, filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim]);
 
-  const filters = { beneficiario: filterBeneficiario, documento: filterDocumento, dataInicio: filterDataInicio, dataFim: filterDataFim };
+  const filters = { dateType: filterDateType, beneficiario: filterBeneficiario, documento: filterDocumento, dataInicio: filterDataInicio, dataFim: filterDataFim };
   const { data: response, isLoading } = useQuery({
     queryKey: [...contasPagarQueryKey, page, filters],
     queryFn: () => fetchContasPagar(page, filters),
@@ -404,6 +405,13 @@ const ContasPagar = () => {
 
         <FilterSection
           fields={[
+            { type: "select", label: "Tipo de Data", value: filterDateType, onChange: setFilterDateType, width: "min-w-[200px]",
+              options: [
+                { value: "faturamento", label: "Faturamento" },
+                { value: "vencimento", label: "Vencimento (Parcela)" },
+                { value: "pagamento", label: "Pagamento (Parcela)" },
+              ]
+            },
             { type: "text", label: "Beneficiário", placeholder: "Buscar beneficiário...", value: filterBeneficiario, onChange: setFilterBeneficiario, width: "flex-1 min-w-[180px]" },
             { type: "text", label: "Documento", placeholder: "Número do documento...", value: filterDocumento, onChange: setFilterDocumento, width: "min-w-[160px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
