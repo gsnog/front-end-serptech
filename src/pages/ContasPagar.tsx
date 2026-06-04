@@ -61,6 +61,7 @@ const ContasPagar = () => {
   interface ParcelaEditRow { numero: number; data_de_vencimento: string; valor: string; }
   const [parcelasEdit, setParcelasEdit] = useState<ParcelaEditRow[]>([])
   const [showReparcelar, setShowReparcelar] = useState(false)
+  const [numParcelasClassificar, setNumParcelasClassificar] = useState<string>("1")
 
   useRealtimeUpdates([[...contasPagarQueryKey]]);
 
@@ -107,6 +108,8 @@ const ContasPagar = () => {
     const existentes = (c.parcelas ?? [])
       .filter(p => p.status !== 'Pago' && p.status !== 'Adiantamento')
       .map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento ?? "", valor: String(p.valor) }));
+    const initialN = existentes.length > 0 ? existentes.length : 1;
+    setNumParcelasClassificar(String(initialN));
     setParcelasEdit(existentes.length > 0 ? existentes : [{ numero: 1, data_de_vencimento: c.data_de_vencimento?.slice(0, 10) ?? "", valor: String(c.valor_total ?? "") }]);
   };
 
@@ -846,18 +849,27 @@ const ContasPagar = () => {
                     <Label className="text-xs whitespace-nowrap">Nº de parcelas:</Label>
                     <Input
                       type="number" min="1" className="h-7 w-20 text-xs"
-                      value={parcelasEdit.length}
+                      value={numParcelasClassificar}
                       onChange={e => {
+                        const raw = e.target.value;
+                        setNumParcelasClassificar(raw);
+                        const parsed = parseInt(raw);
+                        if (!isNaN(parsed) && parsed >= 1) {
+                          const n = parsed;
+                          const total = parseFloat(String(classificarItem?.valor_total || "0")) || 0;
+                          const base = total > 0 ? Math.floor((total / n) * 100) / 100 : 0;
+                          const remainder = total > 0 ? parseFloat((total - base * n).toFixed(2)) : 0;
+                          const firstDate = classificarForm.data_de_vencimento || parcelasEdit[0]?.data_de_vencimento || "";
+                          setParcelasEdit(Array.from({ length: n }, (_, i) => ({
+                            numero: i + 1,
+                            data_de_vencimento: addMonthsEdit(firstDate, i),
+                            valor: (i === n - 1 ? base + remainder : base).toFixed(2),
+                          })));
+                        }
+                      }}
+                      onBlur={e => {
                         const n = Math.max(1, parseInt(e.target.value) || 1);
-                        const total = parseFloat(String(classificarItem?.valor_total || "0")) || 0;
-                        const base = total > 0 ? Math.floor((total / n) * 100) / 100 : 0;
-                        const remainder = total > 0 ? parseFloat((total - base * n).toFixed(2)) : 0;
-                        const firstDate = parcelasEdit[0]?.data_de_vencimento || classificarForm.data_de_vencimento || "";
-                        setParcelasEdit(Array.from({ length: n }, (_, i) => ({
-                          numero: i + 1,
-                          data_de_vencimento: addMonthsEdit(firstDate, i),
-                          valor: (i === n - 1 ? base + remainder : base).toFixed(2),
-                        })));
+                        setNumParcelasClassificar(String(n));
                       }}
                     />
                   </div>

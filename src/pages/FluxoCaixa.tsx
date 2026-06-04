@@ -3,7 +3,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
-import { SortableHead } from "@/components/SortableHead"
 import { Plus, FileText, ArrowUpRight, ArrowDownRight, Wallet } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
@@ -16,7 +15,6 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { fetchParcelas, fetchFluxoCaixaEstatisticas, parcelasQueryKey, deleteParcela, updateParcelaReceber } from "@/services/financeiro"
-import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Loader2 } from "lucide-react"
 
@@ -27,10 +25,19 @@ const FluxoCaixa = () => {
   useRealtimeUpdates([[...parcelasQueryKey]]);
 
   const [page, setPage] = useState(1);
+  const [filterTipo, setFilterTipo] = useState("")
+  const [filterBeneficiario, setFilterBeneficiario] = useState("")
+  // display state (inputs) — updates immediately
+  const [filterDataInicio, setFilterDataInicio] = useState("")
+  const [filterDataFim, setFilterDataFim] = useState("")
+  const [filterPeriodo, setFilterPeriodo] = useState("")
+  // applied state (sent to API) — updates only on Filtrar or period preset
+  const [appliedDataInicio, setAppliedDataInicio] = useState("")
+  const [appliedDataFim, setAppliedDataFim] = useState("")
 
   const { data: response, isLoading: isLoadingParcelas } = useQuery({
-    queryKey: [...parcelasQueryKey, page],
-    queryFn: () => fetchParcelas(page, 'Pago'),
+    queryKey: [...parcelasQueryKey, page, appliedDataInicio, appliedDataFim],
+    queryFn: () => fetchParcelas(page, 'Pago', appliedDataInicio || undefined, appliedDataFim || undefined, 'pagamento'),
   })
   const parcelas = response?.results ?? [];
   const serverTotal = response?.count ?? 0;
@@ -40,41 +47,49 @@ const FluxoCaixa = () => {
     queryFn: fetchFluxoCaixaEstatisticas
   })
 
-  const [filterTipo, setFilterTipo] = useState("")
-  const [filterBeneficiario, setFilterBeneficiario] = useState("")
-  const [filterDataInicio, setFilterDataInicio] = useState("")
-  const [filterDataFim, setFilterDataFim] = useState("")
-  const [filterPeriodo, setFilterPeriodo] = useState("")
-
   const handlePeriodoChange = (periodo: string) => {
     setFilterPeriodo(periodo)
     const hoje = new Date()
+    let ini = ""
+    let fim = hoje.toISOString().split("T")[0]
     if (periodo === "hoje") {
-      const d = hoje.toISOString().split("T")[0]
-      setFilterDataInicio(d); setFilterDataFim(d)
+      ini = fim
     } else if (periodo === "semana") {
-      const ini = new Date(hoje); ini.setDate(hoje.getDate() - hoje.getDay())
-      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+      const d = new Date(hoje); d.setDate(hoje.getDate() - hoje.getDay())
+      ini = d.toISOString().split("T")[0]
     } else if (periodo === "mes") {
-      const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+      ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0]
     } else if (periodo === "trimestre") {
-      const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 3)
-      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+      const d = new Date(hoje); d.setMonth(hoje.getMonth() - 3)
+      ini = d.toISOString().split("T")[0]
     } else if (periodo === "semestre") {
-      const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 6)
-      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+      const d = new Date(hoje); d.setMonth(hoje.getMonth() - 6)
+      ini = d.toISOString().split("T")[0]
     } else if (periodo === "ano") {
-      const ini = new Date(hoje); ini.setMonth(hoje.getMonth() - 12)
-      setFilterDataInicio(ini.toISOString().split("T")[0]); setFilterDataFim(hoje.toISOString().split("T")[0])
+      const d = new Date(hoje); d.setMonth(hoje.getMonth() - 12)
+      ini = d.toISOString().split("T")[0]
     } else {
-      setFilterDataInicio(""); setFilterDataFim("")
+      ini = ""; fim = ""
     }
+    setFilterDataInicio(ini)
+    setFilterDataFim(fim)
+    // period presets apply immediately (no need to click Filtrar)
+    setAppliedDataInicio(ini)
+    setAppliedDataFim(fim)
+  }
+
+  const handleFilter = () => {
+    setPage(1)
+    setAppliedDataInicio(filterDataInicio)
+    setAppliedDataFim(filterDataFim)
   }
   const [viewItem, setViewItem] = useState<any>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<any>(null)
   const [editData, setEditData] = useState({ beneficiario: "", tipo: "", valorTotal: "" })
+
+  const formatBRL = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
 
   const items = useMemo(() => {
     return (parcelas || []).map(p => ({
@@ -84,8 +99,9 @@ const FluxoCaixa = () => {
       beneficiario: p.conta_receber_nome || p.conta_pagar_nome || "N/A",
       tipo: p.conta_receber ? "Entrada" : "Saída",
       status: p.status,
-      valorTotal: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(p.valor),
-      saldo: "-"
+      _valor: p.valor_efetivo ?? p.valor ?? 0,
+      valorTotal: formatBRL(p.valor_efetivo ?? p.valor ?? 0),
+      saldo: p.saldo != null ? formatBRL(p.saldo) : "-",
     }))
   }, [parcelas])
 
@@ -93,15 +109,13 @@ const FluxoCaixa = () => {
     return items.filter(trans => {
       const matchTipo = filterTipo && filterTipo !== "todos" ? trans.tipo.toLowerCase() === filterTipo : true
       const matchBeneficiario = trans.beneficiario.toLowerCase().includes(filterBeneficiario.toLowerCase())
-      const matchDataInicio = filterDataInicio ? trans.dataVencimento >= filterDataInicio : true
-      const matchDataFim = filterDataFim ? trans.dataVencimento <= filterDataFim : true
-      return matchTipo && matchBeneficiario && matchDataInicio && matchDataFim
+      return matchTipo && matchBeneficiario
     })
-  }, [items, filterTipo, filterBeneficiario, filterDataInicio, filterDataFim])
+  }, [items, filterTipo, filterBeneficiario])
 
-  useEffect(() => { setPage(1); }, [filterTipo, filterBeneficiario, filterDataInicio, filterDataFim]);
-  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
-  const paginatedItems = sorted;
+  useEffect(() => { setPage(1); }, [filterTipo, filterBeneficiario, appliedDataInicio, appliedDataFim]);
+
+  const paginatedItems = filtered
   const total = serverTotal;
   const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
   const hasNext = page < totalPages;
@@ -143,15 +157,13 @@ const FluxoCaixa = () => {
     return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
   }
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <GradientCard title="Total de Entradas" value={formatCurrency(stats?.entradas || 0)} icon={ArrowUpRight} variant="success" />
-          <GradientCard title="Total de Saídas" value={formatCurrency(stats?.saidas || 0)} icon={ArrowDownRight} variant="danger" />
-          <GradientCard title="Saldo Atual" value={formatCurrency(stats?.saldo || 0)} icon={Wallet} variant="orange" />
+          <GradientCard title="Total de Entradas" value={formatBRL(stats?.entradas || 0)} icon={ArrowUpRight} variant="success" />
+          <GradientCard title="Total de Saídas" value={formatBRL(stats?.saidas || 0)} icon={ArrowDownRight} variant="danger" />
+          <GradientCard title="Saldo Atual" value={formatBRL(stats?.saldo || 0)} icon={Wallet} variant="orange" />
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
@@ -166,20 +178,26 @@ const FluxoCaixa = () => {
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: (v) => { setFilterDataInicio(v); setFilterPeriodo("") }, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: (v) => { setFilterDataFim(v); setFilterPeriodo("") }, width: "min-w-[160px]" }
           ]}
+          onFilter={handleFilter}
+          onClear={() => {
+            setFilterDataInicio(""); setFilterDataFim(""); setFilterPeriodo("")
+            setAppliedDataInicio(""); setAppliedDataFim("")
+            setPage(1)
+          }}
           resultsCount={filtered.length}
         />
 
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <SortableHead label="Vencimento" field="dataVencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Pagamento" field="dataPagamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Tipo" field="tipo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Beneficiário" field="beneficiario" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <SortableHead label="Valor" field="valorTotal" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-              <TableHead className="text-right font-semibold">Saldo</TableHead>
-              <TableHead className="text-center font-semibold">Ações</TableHead>
+              <TableHead className="font-semibold">Vencimento</TableHead>
+              <TableHead className="font-semibold">Pagamento</TableHead>
+              <TableHead className="font-semibold">Tipo</TableHead>
+              <TableHead className="font-semibold">Beneficiário</TableHead>
+              <TableHead className="font-semibold text-center">Status</TableHead>
+              <TableHead className="font-semibold">Valor</TableHead>
+              <TableHead className="font-semibold text-right">Saldo</TableHead>
+              <TableHead className="font-semibold text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma transação encontrada.</TableCell></TableRow>) : (

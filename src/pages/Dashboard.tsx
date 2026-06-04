@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
-  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, Label
+  XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid, Label, LabelList
 } from "recharts"
 import VisaoGeralComercial from "@/pages/comercial/VisaoGeral"
 import VisaoGeralRH from "@/pages/gestao-pessoas/VisaoGeralRH"
@@ -314,6 +314,15 @@ const DashboardGeral = () => {
 
   const patrimonioTotal = patrimonioTipoData.reduce((s, d) => s + d.value, 0)
 
+  const estatisticasParams = periodo === 'custom' && dateFrom && dateTo
+    ? { date_from: dateFrom, date_to: dateTo }
+    : { periodo }
+
+  const { data: estatisticasFinanceiras } = useQuery({
+    queryKey: ['estatisticasFinanceiras', periodo, dateFrom, dateTo],
+    queryFn: () => fetchEstatisticasFinanceiras(estatisticasParams),
+  })
+
   return (
     <div className="space-y-6">
       <FilterBar>
@@ -350,11 +359,13 @@ const DashboardGeral = () => {
         <>
           <FadeIn delay={1}>
             <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Financeiro</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <GradientCard title="Total a Receber" value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.receber || 0)} icon={ArrowUpRight} variant="success" delay={1} />
-              <GradientCard title="Total a Pagar" value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.pagar || 0)} icon={ArrowDownRight} variant="danger" delay={2} />
-              <GradientCard title="Resultado do Período" value={formatCurrency(dash.evolutionData?.[dash.evolutionData.length - 1]?.saldo || 0)} icon={TrendingUp} variant="success" delay={3} />
-              <GradientCard title="Saldo Atual em Caixa" value={formatCurrency(dash.evolutionData?.[dash.evolutionData.length - 1]?.saldo || 0)} icon={Wallet} variant="info" delay={4} />
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <GradientCard title="Total a Receber"     value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.receber || 0)} icon={ArrowUpRight}  variant="success"  helpText="Total de contas a receber em aberto" delay={1} />
+              <GradientCard title="Total a Pagar"       value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.pagar   || 0)} icon={ArrowDownRight} variant="danger"   helpText="Total de contas a pagar em aberto" delay={2} />
+              <GradientCard title="Entradas"            value={formatCurrency(estatisticasFinanceiras?.entradas ?? 0)}                                                                icon={TrendingUp}  variant="info"   helpText="Total de receitas no período selecionado" delay={3} />
+              <GradientCard title="Saídas"              value={formatCurrency(estatisticasFinanceiras?.saidas   ?? 0)}                                                                icon={TrendingDown} variant="warning" helpText="Total de despesas no período selecionado" delay={4} />
+              <GradientCard title="Resultado do Período" value={formatCurrency((estatisticasFinanceiras?.entradas ?? 0) - (estatisticasFinanceiras?.saidas ?? 0))}                   icon={TrendingUp}  variant="success" helpText="Entradas menos saídas no período selecionado" delay={5} />
+              <GradientCard title="Saldo Atual em Caixa" value={formatCurrency(estatisticasFinanceiras?.saldo ?? 0)}                                                                 icon={Wallet}      variant="info"    helpText="Total das contas bancárias, independe do filtro de período" delay={6} />
             </div>
           </FadeIn>
 
@@ -444,9 +455,9 @@ const DashboardGeral = () => {
           <FadeIn delay={8}>
             <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Estoque</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <GradientCard title="Entradas no Período" value={formatCurrency(dash.evolutionData?.[dash.evolutionData.length - 1]?.entradas || 0)} icon={ArrowUpRight} variant="success" delay={3} />
-              <GradientCard title="Saídas no Período" value={formatCurrency(dash.evolutionData?.[dash.evolutionData.length - 1]?.saidas || 0)} icon={ArrowDownRight} variant="warning" delay={4} />
-              <GradientCard title="Valor Total em Estoque" value={formatCurrency(dash.inventarioData?.reduce((s: number, i: any) => s + (parseFloat(i.valor.replace(/[^\d,]/g, '').replace(',', '.')) || 0), 0) || 0)} icon={Package} variant="info" delay={5} />
+              <GradientCard title="Entradas no Período" value={formatCurrency(dash.stats?.estoque_entradas_periodo || 0)} icon={ArrowUpRight} variant="success" helpText="Soma do custo total das entradas de estoque aprovadas no período" delay={3} />
+              <GradientCard title="Saídas no Período" value={formatCurrency(dash.stats?.estoque_saidas_periodo || 0)} icon={ArrowDownRight} variant="warning" helpText="Quantidade consumida × custo médio unitário de cada item no período" delay={4} />
+              <GradientCard title="Valor Total em Estoque" value={formatCurrency(dash.stats?.valor_total_estoque || 0)} icon={Package} variant="info" helpText="Quantidade disponível × custo médio unitário, somado para todos os itens do estoque" delay={5} />
               <GradientCard title="Quantidade de Itens" value={dash.stats?.total_itens_estoque?.toString() || "0"} icon={Package} variant="neutral" delay={6} />
             </div>
           </FadeIn>
@@ -599,16 +610,19 @@ const DashboardFinanceiro = () => {
     return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
   }
 
+  const estatisticasParams = periodo === 'custom' && dateFrom && dateTo
+    ? { date_from: dateFrom, date_to: dateTo }
+    : { periodo }
+
   const { data: estatisticasFinanceiras, isLoading: isLoadingFin } = useQuery({
-    queryKey: ['estatisticasFinanceiras'],
-    queryFn: fetchEstatisticasFinanceiras
+    queryKey: ['estatisticasFinanceiras', periodo, dateFrom, dateTo],
+    queryFn: () => fetchEstatisticasFinanceiras(estatisticasParams),
   })
 
-  // Placeholder data mapping for cards
   const summaryCards = [
-    { title: "Saldo Atual", value: estatisticasFinanceiras ? formatCurrency(estatisticasFinanceiras.saldo) : "R$ 0,00", icon: DollarSign, trend: { value: "+12.5%", positive: true }, variant: "success" as const },
-    { title: "Receitas Confirmadas", value: estatisticasFinanceiras ? formatCurrency(estatisticasFinanceiras.entradas) : "R$ 0,00", icon: TrendingUp, trend: { value: "+8%", positive: true }, variant: "info" as const },
-    { title: "Despesas Pagas", value: estatisticasFinanceiras ? formatCurrency(estatisticasFinanceiras.saidas) : "R$ 0,00", icon: TrendingDown, trend: { value: "-3%", positive: true }, variant: "warning" as const },
+    { title: "Saldo Atual",          value: estatisticasFinanceiras ? formatCurrency(estatisticasFinanceiras.saldo)    : "R$ 0,00", icon: DollarSign,  variant: "success" as const },
+    { title: "Receitas Confirmadas", value: estatisticasFinanceiras ? formatCurrency(estatisticasFinanceiras.entradas) : "R$ 0,00", icon: TrendingUp,  variant: "info"    as const },
+    { title: "Despesas Pagas",       value: estatisticasFinanceiras ? formatCurrency(estatisticasFinanceiras.saidas)   : "R$ 0,00", icon: TrendingDown, variant: "warning" as const },
   ]
 
   const tipoDocTotal = tipoDocumentoData.reduce((s, d) => s + d.value, 0)
@@ -651,7 +665,6 @@ const DashboardFinanceiro = () => {
             title={card.title}
             value={isLoadingFin ? "Carregando..." : card.value}
             icon={card.icon}
-            trend={card.trend}
             variant={card.variant}
             delay={1 + i}
           />
@@ -737,7 +750,7 @@ const DashboardFinanceiro = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Distribuição por Tipo de Documento" delay={5}>
+        <ChartCard title="Status dos Lançamentos a Receber" delay={5}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie data={tipoDocumentoData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={4} dataKey="value" cornerRadius={6}
@@ -960,7 +973,7 @@ const DashboardEstoque = () => {
 
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <GradientCard title="Entradas no Período" value={formatCurrency(dash.stats?.estoque_entradas_periodo || 0)} icon={ArrowUpRight} variant="success" delay={1} />
+        <GradientCard title="Entradas no Período" value={formatCurrency(dash.stats?.estoque_entradas_periodo || 0)} icon={ArrowUpRight} variant="success" helpText="Soma do custo total das entradas de estoque aprovadas no período" delay={1} />
         <GradientCard title="Itens em Estoque" value={dash.stats?.total_itens_estoque?.toString() || "0"} icon={Package} variant="info" delay={2} />
         <GradientCard title="Itens Críticos" value={dash.stats?.total_estoque_critico?.toString() || "0"} icon={AlertTriangle} variant="danger" delay={3} />
       </div>

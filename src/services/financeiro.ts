@@ -20,6 +20,8 @@ export interface Parcela {
     valor_pago: number;
     data_de_pagamento: string | null;
     status: string;
+    saldo?: number | null;
+    valor_efetivo?: number | null;
 }
 
 export interface ContaPagar {
@@ -182,8 +184,10 @@ export interface TransacaoBancaria {
 
 // ─── Estatísticas ────────────────────────────────────────────────────────────
 
-export const fetchEstatisticasFinanceiras = async (): Promise<EstatisticasFinanceiras> => {
-    const res = await api.get('/api/financial/estatisticas/');
+export const fetchEstatisticasFinanceiras = async (
+    params?: { periodo?: string; date_from?: string; date_to?: string }
+): Promise<EstatisticasFinanceiras> => {
+    const res = await api.get('/api/financial/estatisticas/', { params });
     return res.data;
 };
 
@@ -212,9 +216,12 @@ export const fetchDashboardFull = async (params: DashboardParams = {}): Promise<
 
 // ─── Parcelas ─────────────────────────────────────────────────────────────────
 
-export const fetchParcelas = async (page = 1, status?: string): Promise<PaginatedResponse<Parcela>> => {
+export const fetchParcelas = async (page = 1, status?: string, dateFrom?: string, dateTo?: string, dateField?: string): Promise<PaginatedResponse<Parcela>> => {
     const params: any = { page, page_size: 20 };
     if (status) params.status = status;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    if (dateField) params.date_field = dateField;
     const res = await api.get('/api/financial/parcelas/', { params });
     return res.data;
 };
