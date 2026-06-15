@@ -9,6 +9,7 @@ import { fetchOportunidades, fetchMetas, fetchAtividades, etapasFunil } from "@/
 import { useQuery } from "@tanstack/react-query";
 import { fetchMeuTime } from "@/services/pessoas";
 import { useDashboardData, getPeriodCutoff, PERIODO_LABELS } from "@/pages/Dashboard";
+import { todayStr } from "@/lib/utils";
 
 import { motion } from "framer-motion";
 
@@ -69,7 +70,7 @@ export default function DashboardComercial() {
   }), [oportunidades, cutoff, vendedorFilter])
 
   const filteredAtividades = useMemo(() => atividades.filter(a => {
-    const matchPeriodo = a.data ? new Date(a.data) >= cutoff : true
+    const matchPeriodo = a.data ? new Date(a.data + 'T00:00:00') >= cutoff : true
     const matchVendedor = vendedorFilter === "__all__" || String(a.responsavel) === vendedorFilter
     return matchPeriodo && matchVendedor
   }), [atividades, cutoff, vendedorFilter])
@@ -93,7 +94,7 @@ export default function DashboardComercial() {
 
   const metaTotal = filteredMetas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_meta), 0);
   const realizadoTotal = filteredMetas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_realizado), 0);
-  const atividadesVencidas = filteredAtividades.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
+  const atividadesVencidas = filteredAtividades.filter(a => a.status === 'pendente' && a.data < todayStr()).length;
 
   const funilData = etapasFunil.filter(e => !['ganho', 'perdido'].includes(e.id)).map(etapa => ({
     name: etapa.nome,

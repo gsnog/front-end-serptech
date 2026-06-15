@@ -18,17 +18,30 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import {
-  fetchContasPagar, updateContaPagar, deleteContaPagar, patchContaPagar,
+  fetchContasPagar, updateContaPagar, deleteContaPagar, patchContaPagar, anexarNotaFiscal,
   fetchContasPagarPendentes, fetchCentrosCusto, fetchPlanoContas,
   type ContaPagar as Conta, type ParcelaReceber,
   fetchContasPagarEstatisticas, contasPagarQueryKey,
   fetchContasBancarias, contasBancariasQueryKey,
-  updateParcelaReceber, uploadComprovante,
+  updateParcelaReceber, uploadComprovante, uploadBoletoParcela,
   centrosCustoQueryKey, planoContasQueryKey,
   reparcelarContaPagar,
 } from "@/services/financeiro"
+import { fetchFornecedores, fetchUnidades, fornecedoresQueryKey, unidadesQueryKey } from "@/services/estoque"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
+import { todayStr } from "@/lib/utils"
+
+// 'dd/mm/yyyy' (formato da API) → 'yyyy-mm-dd' (input date)
+const brToIso = (s?: string | null): string => {
+  if (!s) return "";
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s.slice(0, 10);
+};
+
+const FORMAS_PAGAMENTO = ["Dinheiro", "Débito", "Cartão de Crédito", "Cartão de Débito", "Boleto", "PIX", "TED", "DOC", "Cheque"];
+const STATUS_PARCELA = ["Pendente", "Pago", "Vencido", "Adiantamento"];
 
 const ContasPagar = () => {
   const formatBRL = (value?: number | null) =>
@@ -39,15 +52,21 @@ const ContasPagar = () => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [filterDateType, setFilterDateType] = useState("faturamento")
+  const [filterStatus, setFilterStatus] = useState("todos")
   const [filterBeneficiario, setFilterBeneficiario] = useState("")
   const [filterDocumento, setFilterDocumento] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
   const [filterDataFim, setFilterDataFim] = useState("")
+  // applied state (sent to API) — atualiza apenas ao clicar "Filtrar"
+  const [appliedDataInicio, setAppliedDataInicio] = useState("")
+  const [appliedDataFim, setAppliedDataFim] = useState("")
 
   const [viewItem, setViewItem] = useState<Conta | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<Conta | null>(null)
   const [editData, setEditData] = useState<Partial<Conta>>({})
+  const [editNfPdf, setEditNfPdf] = useState<File | null>(null)
+  const [editNfXml, setEditNfXml] = useState<File | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
 
   const [pagamentoModal, setPagamentoModal] = useState<{ parcela: ParcelaReceber; contaId: number } | null>(null)
@@ -63,12 +82,28 @@ const ContasPagar = () => {
   const [showReparcelar, setShowReparcelar] = useState(false)
   const [numParcelasClassificar, setNumParcelasClassificar] = useState<string>("1")
 
+  // Edição in-place das parcelas existentes (todos os campos)
+  interface ParcelaEditFull {
+    id: number; numero: number; data_de_vencimento: string; valor: string; valor_pago: string;
+    status: string; forma_de_pagamento: string; conta_bancaria: string; data_de_pagamento: string;
+    boletoFile: File | null; boletoUrl: string | null;
+  }
+  const [parcelasFull, setParcelasFull] = useState<ParcelaEditFull[]>([])
+  const setParcelaFull = (i: number, patch: Partial<ParcelaEditFull>) =>
+    setParcelasFull(prev => prev.map((p, j) => j === i ? { ...p, ...patch } : p))
+
   useRealtimeUpdates([[...contasPagarQueryKey]]);
 
   const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [filterDateType, filterBeneficiario, filterDocumento, filterDataInicio, filterDataFim]);
+  useEffect(() => { setPage(1); }, [filterDateType, filterStatus, filterBeneficiario, filterDocumento, appliedDataInicio, appliedDataFim]);
 
-  const filters = { dateType: filterDateType, beneficiario: filterBeneficiario, documento: filterDocumento, dataInicio: filterDataInicio, dataFim: filterDataFim };
+  const handleFilter = () => {
+    setPage(1)
+    setAppliedDataInicio(filterDataInicio)
+    setAppliedDataFim(filterDataFim)
+  }
+
+  const filters = { dateType: filterDateType, status: filterStatus === "todos" ? "" : filterStatus, beneficiario: filterBeneficiario, documento: filterDocumento, dataInicio: appliedDataInicio, dataFim: appliedDataFim };
   const { data: response, isLoading } = useQuery({
     queryKey: [...contasPagarQueryKey, page, filters],
     queryFn: () => fetchContasPagar(page, filters),
@@ -93,6 +128,11 @@ const ContasPagar = () => {
 
   const { data: planoContasRaw } = useQuery({ queryKey: planoContasQueryKey, queryFn: fetchPlanoContas });
   const planoContas = Array.isArray(planoContasRaw) ? planoContasRaw : (planoContasRaw as any)?.results ?? [];
+
+  const { data: fornecedoresRaw } = useQuery({ queryKey: [...fornecedoresQueryKey], queryFn: fetchFornecedores });
+  const fornecedores: any[] = Array.isArray(fornecedoresRaw) ? fornecedoresRaw : (fornecedoresRaw as any)?.results ?? [];
+  const { data: unidadesRaw } = useQuery({ queryKey: [...unidadesQueryKey], queryFn: fetchUnidades });
+  const unidades: any[] = Array.isArray(unidadesRaw) ? unidadesRaw : (unidadesRaw as any)?.results ?? [];
 
   const [classificarSaving, setClassificarSaving] = useState(false);
 
@@ -159,11 +199,29 @@ const ContasPagar = () => {
   };
 
   const updateMutation = useMutation({
-    mutationFn: (data: { id: number; payload: Partial<Conta> }) => updateContaPagar(data.id, data.payload),
+    mutationFn: async (data: { id: number; payload: Partial<Conta>; nfPdf?: File | null; nfXml?: File | null; parcelas?: ParcelaEditFull[] }) => {
+      await updateContaPagar(data.id, data.payload);
+      if (data.nfPdf) await anexarNotaFiscal('pagar', data.id, data.nfPdf, data.nfXml);
+      // PATCH in-place de cada parcela (sequencial; o signal ajusta o saldo). conta_bancaria_id é gravável.
+      for (const p of data.parcelas ?? []) {
+        await updateParcelaReceber(p.id, {
+          data_de_vencimento: p.data_de_vencimento || null,
+          valor: parseFloat(p.valor) || 0,
+          valor_pago: p.valor_pago === "" ? 0 : (parseFloat(p.valor_pago) || 0),
+          status: p.status,
+          forma_de_pagamento: p.forma_de_pagamento || null,
+          conta_bancaria_id: p.conta_bancaria ? Number(p.conta_bancaria) : null,
+          data_de_pagamento: p.data_de_pagamento || null,
+        } as any);
+        if (p.boletoFile) await uploadBoletoParcela(p.id, p.boletoFile);
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
       setEditItem(null);
-      toast({ title: "Salvo", description: "Conta atualizada com sucesso." });
+      setEditNfPdf(null);
+      setEditNfXml(null);
+      toast({ title: "Salvo", description: "Conta e parcelas atualizadas." });
     },
     onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
   });
@@ -226,7 +284,7 @@ const ContasPagar = () => {
     setPagamentoModal({ parcela, contaId });
     setPagamentoForm({
       valor_pago: String(parcela.valor ?? ""),
-      data_de_pagamento: new Date().toISOString().slice(0, 10),
+      data_de_pagamento: todayStr(),
       forma_de_pagamento: "",
       conta_bancaria: "",
     });
@@ -248,30 +306,62 @@ const ContasPagar = () => {
         valor_pago: parseFloat(pagamentoForm.valor_pago) || pagamentoModal.parcela.valor,
         data_de_pagamento: pagamentoForm.data_de_pagamento,
         forma_de_pagamento: pagamentoForm.forma_de_pagamento,
-        conta_bancaria: parseInt(pagamentoForm.conta_bancaria),
+        conta_bancaria_id: parseInt(pagamentoForm.conta_bancaria),
       },
       file: comprovanteFile,
     });
   };
 
-  const getExportData = () => items.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Beneficiário: c.fornecedor_nome, Documento: c.numero_documento || c.documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
+  const getExportData = () => items.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Beneficiário: c.fornecedor_nome, Documento: c.numero_documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
   const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
   const openEdit = (c: Conta) => {
     setEditItem(c);
     setEditData({ ...c });
+    setEditNfPdf(null);
+    setEditNfXml(null);
     setShowReparcelar(false);
     const existentes = (c.parcelas ?? [])
       .filter(p => p.status !== 'Pago' && p.status !== 'Adiantamento')
       .map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento ?? "", valor: String(p.valor) }));
     setParcelasEdit(existentes.length > 0 ? existentes : [{ numero: 1, data_de_vencimento: c.data_de_vencimento?.slice(0, 10) ?? "", valor: String(c.valor_total ?? "") }]);
+    // Edição in-place: snapshot completo das parcelas existentes
+    setParcelasFull((c.parcelas ?? []).map(p => ({
+      id: p.id,
+      numero: p.numero,
+      data_de_vencimento: brToIso(p.data_de_vencimento),
+      valor: String(p.valor ?? ""),
+      valor_pago: p.valor_pago != null ? String(p.valor_pago) : "",
+      status: p.status ?? "Pendente",
+      forma_de_pagamento: p.forma_de_pagamento ?? "",
+      conta_bancaria: p.conta_bancaria != null ? String(p.conta_bancaria) : "",
+      data_de_pagamento: brToIso(p.data_de_pagamento),
+      boletoFile: null,
+      boletoUrl: p.boleto ?? null,
+    })));
   };
-  const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: editData }); } };
+  const handleSaveEdit = () => {
+    if (!editItem) return;
+    // `documento`/`nf_detalhe` são URLs (read-only) no editData; não vão no PUT.
+    // A NF é tratada à parte via anexarNotaFiscal.
+    const { documento, nf_detalhe, ...payload } = editData as any;
+    updateMutation.mutate({ id: editItem.id, payload, nfPdf: editNfPdf, nfXml: editNfXml, parcelas: parcelasFull });
+  };
   const deleteItemData = items.find((i: Conta) => i.id === deleteId);
 
   const { data: stats } = useQuery({
     queryKey: ["contas_pagar_estatisticas"],
     queryFn: fetchContasPagarEstatisticas,
   });
+
+
+  // Página principal: boleto é somente leitura. A troca é feita no modal de edição.
+  const BoletoCell = ({ parcela }: { parcela: ParcelaReceber }) => (
+    parcela.boleto ? (
+      <a href={parcela.boleto} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+        <ExternalLink className="w-3 h-3" />Ver
+      </a>
+    ) : <span className="text-muted-foreground">—</span>
+  );
 
   const ParcelasTable = ({ conta }: { conta: Conta }) => (
     <div className="rounded border border-border overflow-hidden">
@@ -283,6 +373,8 @@ const ContasPagar = () => {
             <TableHead className="text-right text-xs h-8">Valor</TableHead>
             <TableHead className="text-xs h-8">Pago</TableHead>
             <TableHead className="text-center text-xs h-8">Status</TableHead>
+            <TableHead className="text-center text-xs h-8">Conta</TableHead>
+            <TableHead className="text-center text-xs h-8">Boleto</TableHead>
             <TableHead className="text-center text-xs h-8">Comprovante</TableHead>
             {conta.status !== 'Pago' && <TableHead className="w-16 h-8" />}
           </TableRow>
@@ -295,6 +387,8 @@ const ContasPagar = () => {
               <TableCell className="py-2">{formatBRL(p.valor)}</TableCell>
               <TableCell className="py-2">{p.valor_pago != null ? formatBRL(p.valor_pago) : "—"}</TableCell>
               <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
+              <TableCell className="text-center py-2 text-muted-foreground">{p.conta_bancaria_nome || "—"}</TableCell>
+              <TableCell className="text-center py-2"><BoletoCell parcela={p} /></TableCell>
               <TableCell className="text-center py-2">
                 {p.comprovante ? (
                   <a href={p.comprovante} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
@@ -316,7 +410,7 @@ const ContasPagar = () => {
             </TableRow>
           ))}
           {(conta.parcelas || []).length === 0 && (
-            <TableRow><TableCell colSpan={7} className="text-center text-xs py-3 text-muted-foreground">Nenhuma parcela.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={9} className="text-center text-xs py-3 text-muted-foreground">Nenhuma parcela.</TableCell></TableRow>
           )}
         </TableBody>
       </Table>
@@ -366,7 +460,16 @@ const ContasPagar = () => {
                       {pendentes.map((c: Conta) => (
                         <TableRow key={c.id} className="text-xs hover:bg-muted/30">
                           <TableCell className="py-2 font-medium">{c.fornecedor_nome || "—"}</TableCell>
-                          <TableCell className="py-2">{c.numero_documento || c.documento || "—"}</TableCell>
+                          <TableCell className="py-2">
+                            <span className="flex items-center gap-1">
+                              {c.numero_documento || "—"}
+                              {c.documento && (
+                                <a href={c.documento} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/80" title="Abrir documento">
+                                  <Paperclip className="w-3 h-3" />
+                                </a>
+                              )}
+                            </span>
+                          </TableCell>
                           <TableCell className="py-2">{c.data_de_lancamento || "—"}</TableCell>
                           <TableCell className="py-2 text-right">{formatBRL(c.valor_total)}</TableCell>
                           <TableCell className="py-2 text-center">
@@ -415,11 +518,26 @@ const ContasPagar = () => {
                 { value: "pagamento", label: "Pagamento (Parcela)" },
               ]
             },
+            { type: "select", label: "Status", value: filterStatus, onChange: setFilterStatus, width: "min-w-[160px]",
+              options: [
+                { value: "todos", label: "Todos" },
+                { value: "Pendente", label: "Pendente" },
+                { value: "Pago", label: "Pago" },
+                { value: "Vencido", label: "Vencido" },
+                { value: "Adiantamento", label: "Adiantamento" },
+              ]
+            },
             { type: "text", label: "Beneficiário", placeholder: "Buscar beneficiário...", value: filterBeneficiario, onChange: setFilterBeneficiario, width: "flex-1 min-w-[180px]" },
             { type: "text", label: "Documento", placeholder: "Número do documento...", value: filterDocumento, onChange: setFilterDocumento, width: "min-w-[160px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
+          onFilter={handleFilter}
+          onClear={() => {
+            setFilterStatus("todos")
+            setFilterDataInicio(""); setFilterDataFim("")
+            setAppliedDataInicio(""); setAppliedDataFim("")
+          }}
           resultsCount={serverTotal}
         />
 
@@ -475,8 +593,18 @@ const ContasPagar = () => {
                       <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
                       <TableCell >{conta.fornecedor_nome || "—"}</TableCell>
                       <TableCell >
-                        <span className="block truncate max-w-full" title={conta.numero_documento || ""}>
-                          {conta.numero_documento || conta.documento || "—"}
+                        <span className="flex items-center gap-1 truncate max-w-full" title={conta.numero_documento || ""}>
+                          <span className="truncate">{conta.numero_documento || "—"}</span>
+                          {(conta.documento || conta.nf_detalhe?.pdf_url) && (
+                            <a href={(conta.documento || conta.nf_detalhe?.pdf_url) as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/80" title="Abrir documento">
+                              <Paperclip className="w-3 h-3" />
+                            </a>
+                          )}
+                          {conta.nf_detalhe?.xml_url && (
+                            <a href={conta.nf_detalhe.xml_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/80" title={`Abrir XML da NF ${conta.nf_detalhe.numero}`}>
+                              <FileText className="w-3 h-3" />
+                            </a>
+                          )}
                         </span>
                       </TableCell>
                       <TableCell >{formatBRL(conta.valor_do_titulo)}</TableCell>
@@ -521,7 +649,7 @@ const ContasPagar = () => {
 
       {/* View Modal */}
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+        <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col gap-0 p-0">
           {viewItem && (
             <>
               <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
@@ -529,7 +657,19 @@ const ContasPagar = () => {
                   <DialogHeader>
                     <DialogTitle className="text-base font-semibold truncate">{viewItem.fornecedor_nome || "—"}</DialogTitle>
                   </DialogHeader>
-                  <p className="text-xs text-muted-foreground mt-1">Nº Documento: {viewItem.numero_documento || viewItem.documento || "—"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Nº Documento: {viewItem.numero_documento || "—"}</p>
+                  <div className="flex items-center gap-3 flex-wrap mt-1">
+                    {(viewItem.documento || viewItem.nf_detalhe?.pdf_url) && (
+                      <a href={(viewItem.documento || viewItem.nf_detalhe?.pdf_url) as string} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        <ExternalLink className="h-3 w-3" />Ver documento{!viewItem.documento && viewItem.nf_detalhe ? ` (NF ${viewItem.nf_detalhe.numero})` : ""}
+                      </a>
+                    )}
+                    {viewItem.nf_detalhe?.xml_url && (
+                      <a href={viewItem.nf_detalhe.xml_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        <FileText className="h-3 w-3" />NF XML{viewItem.nf_detalhe.numero ? ` ${viewItem.nf_detalhe.numero}` : ""}
+                      </a>
+                    )}
+                  </div>
                 </div>
                 <StatusBadge status={viewItem.status || "Em Aberto"} />
               </div>
@@ -540,7 +680,7 @@ const ContasPagar = () => {
                 <div className="grid grid-cols-2 gap-x-8 gap-y-0">
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Datas</p>
-                    {[["Lançamento", viewItem.data_de_lancamento], ["Faturamento", viewItem.data_de_faturamento], ["Vencimento", viewItem.data_de_vencimento]].map(([l, v]) => (
+                    {[["Lançamento", viewItem.data_de_lancamento], ["Faturamento", viewItem.data_de_faturamento]].map(([l, v]) => (
                       <div key={l} className="flex justify-between items-baseline py-1.5 border-b border-border/50 last:border-0">
                         <span className="text-xs text-muted-foreground">{l}</span>
                         <span className="text-xs font-medium">{v || "—"}</span>
@@ -609,18 +749,86 @@ const ContasPagar = () => {
       </Dialog>
 
       {/* Edit Modal */}
-      <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setShowReparcelar(false); }}>
-        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+      <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setShowReparcelar(false); setEditNfPdf(null); setEditNfXml(null); }}>
+        <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col gap-0 p-0">
           <div className="px-6 pt-6 pb-4">
             <DialogHeader><DialogTitle>Editar Conta a Pagar</DialogTitle></DialogHeader>
           </div>
           <Separator />
           <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Beneficiário</Label>
+                <Select value={editData.beneficiario != null ? String(editData.beneficiario) : ""} onValueChange={v => setEditData({ ...editData, beneficiario: Number(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{fornecedores.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.nome}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Unidade</Label>
+                <Select value={(editData as any).unidade != null ? String((editData as any).unidade) : ""} onValueChange={v => setEditData({ ...editData, unidade: Number(v) } as any)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{unidades.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.unidade}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Centro de Custo</Label>
+                <Select value={editData.centro_de_custo != null ? String(editData.centro_de_custo) : ""} onValueChange={v => setEditData({ ...editData, centro_de_custo: Number(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{centrosCusto.map((cc: any) => <SelectItem key={cc.id} value={String(cc.id)}>{cc.centro_id ?? `Centro ${cc.id}`}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Plano de Contas</Label>
+                <Select value={editData.plano_de_contas != null ? String(editData.plano_de_contas) : ""} onValueChange={v => setEditData({ ...editData, plano_de_contas: Number(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{planoContas.map((pc: any) => <SelectItem key={pc.id} value={String(pc.id)}>{[pc.id_plano, pc.classificacao_nome, pc.categoria_nome].filter(Boolean).join(" - ")}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
-              <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo || ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
-              <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total || ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
-              <div><Label>Vencimento</Label><Input type="date" value={editData.data_de_vencimento?.slice(0, 10) || ""} onChange={e => setEditData({ ...editData, data_de_vencimento: e.target.value })} /></div>
+              <div><Label>Data de Faturamento</Label><Input type="date" value={brToIso(editData.data_de_faturamento)} onChange={e => setEditData({ ...editData, data_de_faturamento: e.target.value })} /></div>
+              <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo ?? ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
+              <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total ?? ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
+              <div><Label>Multa</Label><Input type="number" step="0.01" value={(editData as any).multa ?? ""} onChange={e => setEditData({ ...editData, multa: parseFloat(e.target.value) } as any)} /></div>
+              <div><Label>Juros</Label><Input type="number" step="0.01" value={(editData as any).juros ?? ""} onChange={e => setEditData({ ...editData, juros: parseFloat(e.target.value) } as any)} /></div>
+              <div><Label>Encargos</Label><Input type="number" step="0.01" value={(editData as any).encargos ?? ""} onChange={e => setEditData({ ...editData, encargos: parseFloat(e.target.value) } as any)} /></div>
+              <div><Label>Desconto</Label><Input type="number" step="0.01" value={(editData as any).desconto ?? ""} onChange={e => setEditData({ ...editData, desconto: parseFloat(e.target.value) } as any)} /></div>
+              <div className="col-span-2"><Label>Descrição</Label><Input value={editData.descricao || ""} onChange={e => setEditData({ ...editData, descricao: e.target.value })} /></div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Nota Fiscal</Label>
+                <div className="flex items-center gap-3">
+                  {editItem?.nf_detalhe?.pdf_url && (
+                    <a href={editItem.nf_detalhe.pdf_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <ExternalLink className="h-3 w-3" />NF atual (PDF)
+                    </a>
+                  )}
+                  {editItem?.nf_detalhe?.xml_url && (
+                    <a href={editItem.nf_detalhe.xml_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <FileText className="h-3 w-3" />XML
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">PDF</Label>
+                  <Input type="file" accept=".pdf"
+                    onChange={e => setEditNfPdf(e.target.files?.[0] ?? null)}
+                    className="file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">XML (opcional)</Label>
+                  <Input type="file" accept=".xml"
+                    onChange={e => setEditNfXml(e.target.files?.[0] ?? null)}
+                    className="file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                </div>
+              </div>
+              {editNfPdf
+                ? <p className="text-xs text-muted-foreground truncate">Nova NF: {editNfPdf.name}{editNfXml ? ` + ${editNfXml.name}` : ""}</p>
+                : editItem?.nf_detalhe && <p className="text-xs text-muted-foreground">Envie um PDF para substituir a nota fiscal atual.</p>}
             </div>
 
             <Separator />
@@ -635,29 +843,57 @@ const ContasPagar = () => {
                 </button>
               </div>
 
-              {!showReparcelar && editItem && (
-                <div className="rounded border border-border overflow-hidden text-xs">
-                  <Table>
-                    <TableHeader><TableRow className="bg-muted/50">
-                      <TableHead className="h-7 text-xs">Nº</TableHead>
-                      <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
-                      <TableHead className="h-7 text-xs text-right">Valor</TableHead>
-                      <TableHead className="h-7 text-xs text-center">Status</TableHead>
-                    </TableRow></TableHeader>
-                    <TableBody>
-                      {(editItem.parcelas ?? []).length === 0
-                        ? <TableRow><TableCell colSpan={4} className="text-center py-3 text-muted-foreground">Sem parcelas.</TableCell></TableRow>
-                        : (editItem.parcelas ?? []).map(p => (
-                          <TableRow key={p.id}>
-                            <TableCell className="py-1.5">{p.numero}</TableCell>
-                            <TableCell className="py-1.5 text-center">{p.data_de_vencimento || "—"}</TableCell>
-                            <TableCell className="py-1.5 text-right">{formatBRL(p.valor)}</TableCell>
-                            <TableCell className="py-1.5 text-center"><StatusBadge status={p.status} /></TableCell>
-                          </TableRow>
-                        ))
-                      }
-                    </TableBody>
-                  </Table>
+              {!showReparcelar && (
+                <div className="space-y-2">
+                  {parcelasFull.length === 0
+                    ? <p className="text-xs text-muted-foreground">Sem parcelas.</p>
+                    : parcelasFull.map((p, i) => (
+                      <div key={p.id} className="rounded border border-border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold">Parcela {p.numero}</span>
+                          <div className="inline-flex items-center gap-3 text-xs">
+                            {p.boletoUrl && (
+                              <a href={p.boletoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                <ExternalLink className="h-3 w-3" />Boleto
+                              </a>
+                            )}
+                            <label className="inline-flex items-center gap-1 cursor-pointer text-muted-foreground hover:text-primary">
+                              <Paperclip className="h-3 w-3" />{p.boletoFile ? p.boletoFile.name : (p.boletoUrl ? "Trocar boleto" : "Anexar boleto")}
+                              <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+                                onChange={e => setParcelaFull(i, { boletoFile: e.target.files?.[0] ?? null })} />
+                            </label>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Vencimento</Label><Input type="date" className="h-8 text-xs" value={p.data_de_vencimento} onChange={e => setParcelaFull(i, { data_de_vencimento: e.target.value })} /></div>
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Valor</Label><Input type="number" step="0.01" className="h-8 text-xs" value={p.valor} onChange={e => setParcelaFull(i, { valor: e.target.value })} /></div>
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Valor Pago</Label><Input type="number" step="0.01" className="h-8 text-xs" value={p.valor_pago} onChange={e => setParcelaFull(i, { valor_pago: e.target.value })} /></div>
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Pagamento</Label><Input type="date" className="h-8 text-xs" value={p.data_de_pagamento} onChange={e => setParcelaFull(i, { data_de_pagamento: e.target.value })} /></div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Status</Label>
+                            <Select value={p.status} onValueChange={v => setParcelaFull(i, { status: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>{STATUS_PARCELA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Forma</Label>
+                            <Select value={p.forma_de_pagamento || undefined} onValueChange={v => setParcelaFull(i, { forma_de_pagamento: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>{FORMAS_PAGAMENTO.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1 col-span-2">
+                            <Label className="text-[10px] text-muted-foreground">Conta Bancária</Label>
+                            <Select value={p.conta_bancaria || undefined} onValueChange={v => setParcelaFull(i, { conta_bancaria: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>{contasBancarias.map((cb: any) => <SelectItem key={cb.id} value={String(cb.id)}>{cb.banco} ({cb.numero_conta})</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
                 </div>
               )}
 
@@ -740,7 +976,7 @@ const ContasPagar = () => {
           <Separator />
           <div className="px-6 py-4">
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setEditItem(null); setShowReparcelar(false); }}>Cancelar</Button>
+              <Button variant="outline" onClick={() => { setEditItem(null); setShowReparcelar(false); setEditNfPdf(null); setEditNfXml(null); }}>Cancelar</Button>
               <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar Dados"}</Button>
             </DialogFooter>
           </div>
@@ -749,7 +985,7 @@ const ContasPagar = () => {
 
       {/* Classificar Modal */}
       <Dialog open={!!classificarItem} onOpenChange={() => { setClassificarItem(null); setShowReparcelar(false); }}>
-        <DialogContent className="max-w-2xl max-h-[88vh] flex flex-col gap-0 p-0">
+        <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col gap-0 p-0">
           <div className="px-6 pt-6 pb-4">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -762,7 +998,7 @@ const ContasPagar = () => {
             {classificarItem && (
               <div className="space-y-1 p-3 rounded bg-muted/40 border border-border">
                 <p className="text-sm font-medium">{classificarItem.fornecedor_nome || "—"}</p>
-                <p className="text-xs text-muted-foreground">Doc: {classificarItem.numero_documento || classificarItem.documento || "—"} · {formatBRL(classificarItem.valor_total)}</p>
+                <p className="text-xs text-muted-foreground">Doc: {classificarItem.numero_documento || "—"} · {formatBRL(classificarItem.valor_total)}</p>
               </div>
             )}
             <div className="space-y-4">
@@ -933,7 +1169,7 @@ const ContasPagar = () => {
 
       {/* Payment Modal */}
       <Dialog open={!!pagamentoModal} onOpenChange={() => setPagamentoModal(null)}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Registrar Pagamento — Parcela {pagamentoModal?.parcela.numero}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div>
@@ -960,7 +1196,7 @@ const ContasPagar = () => {
               <Select value={pagamentoForm.conta_bancaria} onValueChange={v => setPagamentoForm(f => ({ ...f, conta_bancaria: v }))}>
                 <SelectTrigger><SelectValue placeholder="Selecionar conta..." /></SelectTrigger>
                 <SelectContent>
-                  {(Array.isArray(contasBancarias) ? contasBancarias : (contasBancarias as any).results || []).map((cb: any) => (
+                  {(Array.isArray(contasBancarias) ? contasBancarias : (contasBancarias as any).results || []).slice().sort((a: any, b: any) => a.id - b.id).map((cb: any) => (
                     <SelectItem key={cb.id} value={String(cb.id)}>
                       {cb.numero_conta || `${cb.agencia}/${cb.conta}`}
                       {cb.unidade_nome ? ` — ${cb.unidade_nome}` : ""}

@@ -23,9 +23,10 @@ const NovaContaBancaria = () => {
   const unidades = Array.isArray(unidadesRaw) ? unidadesRaw : (unidadesRaw as any)?.results ?? [];
 
   const [tipo, setTipo] = useState("");
+  // Os valores precisam casar EXATAMENTE com TIPOS_DE_CONTAS no model (inclui acentuação).
   const [tipoOptions, setTipoOptions] = useState([
     { value: "Corrente", label: "Corrente" },
-    { value: "Poupanca", label: "Poupança" },
+    { value: "Poupança", label: "Poupança" },
     { value: "Investimento", label: "Investimento" },
     { value: "Caixa Pequeno", label: "Caixa Pequeno" },
   ]);

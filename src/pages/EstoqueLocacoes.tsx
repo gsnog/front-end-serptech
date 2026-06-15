@@ -1,4 +1,4 @@
-import { fmtDate } from "@/lib/utils"
+import { fmtDate, todayStr } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
@@ -58,7 +58,7 @@ export default function EstoqueLocacoes() {
     mutationFn: ({ id, adicional }: { id: number; adicional: number }) =>
       api.patch(`/api/estoque/locacoes/${id}/`, {
         status: "Finalizado",
-        data_fim: new Date().toISOString().split("T")[0],
+        data_fim: todayStr(),
         adicional,
       }).then(r => r.data),
     onSuccess: () => {

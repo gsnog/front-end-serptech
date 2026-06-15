@@ -10,6 +10,7 @@ import { FilterSection } from "@/components/FilterSection";
 import { TableActions } from "@/components/TableActions";
 import { ExportButton } from "@/components/ExportButton";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { todayStr } from "@/lib/utils";
 import { Plus, ShieldAlert } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -65,7 +66,7 @@ const emptyForm = (): Partial<Software> => ({
   nome: "",
   fornecedor: undefined,
   licenca: "",
-  data_aquisicao: new Date().toISOString().split("T")[0],
+  data_aquisicao: todayStr(),
   data_vencimento: "",
   valor: 0,
 });

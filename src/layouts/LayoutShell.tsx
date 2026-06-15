@@ -26,18 +26,15 @@ const ROUTE_PERMISSIONS: Array<{ prefix: string; module: string }> = [
 const pageTitles: Record<string, { title: string; description?: string }> = {
   "/": { title: "Dashboard", description: "Visão geral do sistema" },
   "/relatorios": { title: "Relatórios", description: "Gere e exporte relatórios financeiros e operacionais" },
-  "/cadastro": { title: "Cadastro", description: "Gerenciamento de cadastros" },
   "/novo-usuario": { title: "Novo Usuário", description: "Cadastro de novo usuário" },
   
   // Cadastro Estoque - Páginas principais
-  "/cadastro/estoque/formas-apresentacao": { title: "Formas de Apresentação", description: "Cadastro de formas de apresentação do estoque" },
   "/cadastro/estoque/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores do estoque" },
   "/cadastro/estoque/itens": { title: "Itens", description: "Cadastro de itens do estoque" },
   "/cadastro/estoque/setores": { title: "Setores", description: "Cadastro de setores do estoque" },
   "/cadastro/estoque/unidades": { title: "Unidades", description: "Cadastro de unidades do estoque" },
   
   // Cadastro Estoque - Subpáginas
-  "/cadastro/estoque/formas-apresentacao/nova": { title: "Formas de Apresentação", description: "Nova Forma de Apresentação" },
   "/cadastro/estoque/fornecedores/novo": { title: "Fornecedores", description: "Novo Fornecedor" },
   "/cadastro/estoque/itens/novo": { title: "Itens", description: "Novo Item" },
   "/cadastro/estoque/setores/novo": { title: "Setores", description: "Novo Setor" },
@@ -52,8 +49,8 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/cadastro/financeiro/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores" },
   "/cadastro/financeiro/subcategorias": { title: "Subcategorias", description: "Cadastro de subcategorias" },
   "/cadastro/financeiro/plano-contas": { title: "Plano de Contas", description: "Cadastro do plano de contas" },
-  "/cadastro/financeiro/conciliacao-bancaria": { title: "Conciliação Bancária", description: "Conciliação de contas bancárias" },
-  "/cadastro/financeiro/transferencias": { title: "Transferências", description: "Cadastro de transferências" },
+  "/financeiro/conciliacao-bancaria": { title: "Conciliação Bancária", description: "Conciliação de contas bancárias" },
+  "/financeiro/transferencias": { title: "Transferências", description: "Cadastro de transferências" },
   
   // Cadastro Financeiro - Subpáginas
   "/cadastro/financeiro/conta-bancaria/nova": { title: "Conta Bancária", description: "Nova Conta Bancária" },
@@ -64,8 +61,7 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/cadastro/financeiro/fornecedores/novo": { title: "Fornecedores", description: "Novo Fornecedor" },
   "/cadastro/financeiro/subcategorias/nova": { title: "Subcategorias", description: "Nova Subcategoria" },
   "/cadastro/financeiro/plano-contas/novo": { title: "Plano de Contas", description: "Novo Plano de Contas" },
-  "/cadastro/financeiro/transferencias/nova": { title: "Transferências", description: "Nova Transferência" },
-  
+
   // Estoque - Páginas principais
   "/estoque/entradas": { title: "Entradas de Estoque", description: "Controle de entrada de materiais" },
   "/estoque/saidas": { title: "Saídas de Estoque", description: "Controle de saída de materiais" },
@@ -112,15 +108,12 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   // Usuário
   "/notificacoes": { title: "Notificações", description: "Central de notificações do sistema" },
   "/usuario/visualizar": { title: "Meu Perfil", description: "Visualizar informações do perfil" },
-  "/usuario/editar": { title: "Editar Perfil", description: "Alterar informações do perfil" },
-  "/usuario/excluir": { title: "Excluir Conta", description: "Remover conta permanentemente" },
-  
+
   // Cadastro - Pessoas
   "/cadastro/pessoas/pessoas": { title: "Pessoas", description: "Cadastro de colaboradores" },
   "/cadastro/pessoas/pessoas/nova": { title: "Pessoas", description: "Nova Pessoa" },
   
   // Gestão de Pessoas
-  "/gestao-pessoas/visao-geral": { title: "Visão Geral RH", description: "Dashboard de Recursos Humanos" },
   "/gestao-pessoas/pessoas": { title: "Pessoas (360º)", description: "Visão completa dos colaboradores" },
   "/gestao-pessoas/hierarquia": { title: "Hierarquia", description: "Organograma da empresa" },
   "/gestao-pessoas/acessos": { title: "Acessos do Sistema", description: "Gerenciamento de permissões" },
@@ -134,26 +127,15 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/kanban": { title: "Kanban", description: "Gestão de tarefas e projetos" },
   
   // Comercial
-  "/comercial/visao-geral": { title: "Comercial", description: "Visão Geral" },
   "/comercial/leads": { title: "Comercial", description: "Leads" },
   "/comercial/contas": { title: "Comercial", description: "Contas (Empresas)" },
   "/comercial/contatos": { title: "Comercial", description: "Contatos" },
   "/comercial/oportunidades": { title: "Comercial", description: "Oportunidades (Pipeline)" },
   "/comercial/propostas": { title: "Comercial", description: "Propostas" },
   "/comercial/atividades": { title: "Comercial", description: "Atividades" },
-  "/comercial/metas": { title: "Comercial", description: "Metas e Forecast" },
-  "/comercial/comissoes": { title: "Comercial", description: "Comissões" },
-  
-  // Marketing
-  "/marketing/visao-geral": { title: "Marketing", description: "Visão Geral" },
-  "/marketing/campanhas": { title: "Marketing", description: "Campanhas" },
-  "/marketing/canais": { title: "Marketing", description: "Canais" },
-  "/marketing/leads": { title: "Marketing", description: "Leads (MQL/SQL)" },
-  "/marketing/atribuicao": { title: "Marketing", description: "Atribuição e ROI" },
-  
+
   // Dashboards
   "/dashboards/comercial": { title: "Dashboard Comercial", description: "Métricas de vendas" },
-  "/dashboards/marketing": { title: "Dashboard Marketing", description: "Métricas de marketing" },
 
   // Admin Panel
   "/admin-panel": { title: "Administração", description: "Painel de administração do sistema" },

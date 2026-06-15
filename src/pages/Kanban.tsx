@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { todayStr } from '@/lib/utils';
 import {
   LayoutGrid,
   Search,
@@ -805,7 +806,7 @@ function KanbanCardItem({
     (acc, cl) => acc + cl.items.filter((i) => i.completed).length,
     0
   );
-  const isOverdue = card.due_date && new Date(card.due_date) < new Date();
+  const isOverdue = card.due_date && card.due_date < todayStr();
 
   return (
     <Card
@@ -830,7 +831,7 @@ function KanbanCardItem({
               ) : (
                 <Calendar className="h-3 w-3" />
               )}
-              {new Date(card.due_date).toLocaleDateString('pt-BR', {
+              {new Date(card.due_date + 'T00:00:00').toLocaleDateString('pt-BR', {
                 day: '2-digit',
                 month: 'short',
               })}
@@ -891,7 +892,7 @@ function CardDetailModal({
   const assignee = card.assignee
     ? boardMembers.find((p) => p.id === String(card.assignee))
     : null;
-  const isOverdue = card.due_date && new Date(card.due_date) < new Date();
+  const isOverdue = card.due_date && card.due_date < todayStr();
 
   const updateField = (field: keyof KanbanCard, value: any) => {
     onUpdate({ ...card, [field]: value });

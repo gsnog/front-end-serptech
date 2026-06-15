@@ -48,7 +48,7 @@ export default function DashboardMarketing() {
   ), [leads, cutoff])
 
   const filteredCampanhas = useMemo(() => campanhas.filter(c =>
-    c.data_inicio ? new Date(c.data_inicio) >= cutoff : true
+    c.data_inicio ? new Date(c.data_inicio + 'T00:00:00') >= cutoff : true
   ), [campanhas, cutoff])
 
   const conversoes = filteredLeads.filter(l => l.status === 'convertido').length;

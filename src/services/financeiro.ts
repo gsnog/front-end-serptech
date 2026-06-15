@@ -29,6 +29,7 @@ export interface ContaPagar {
     beneficiario?: number;
     fornecedor_nome?: string;
     documento?: string;
+    nf_detalhe?: { numero: string; pdf_url: string | null; xml_url: string | null } | null;
     numero_documento?: string;
     valor_do_titulo?: number;
     valor_total?: number;
@@ -56,7 +57,10 @@ export interface ParcelaReceber {
     data_de_pagamento: string | null;
     forma_de_pagamento: string | null;
     conta_bancaria: number | null;
-    comprovante?: string | null;
+    conta_bancaria_id?: number | null;  // write-only: usado para gravar a conta bancária na baixa
+    conta_bancaria_nome?: string | null;
+    boleto?: string | null;        // boleto a pagar (URL)
+    comprovante?: string | null;   // comprovante de pagamento (URL)
 }
 
 export const updateParcelaReceber = async (id: number, data: Partial<ParcelaReceber>): Promise<ParcelaReceber> => {
@@ -73,11 +77,42 @@ export const uploadComprovante = async (parcelaId: number, file: File): Promise<
     return res.data;
 };
 
+// Anexa/substitui o boleto (a pagar) de uma parcela.
+export const uploadBoletoParcela = async (parcelaId: number, file: File): Promise<{ boleto: string }> => {
+    const formData = new FormData();
+    formData.append('boleto', file);
+    const res = await api.patch(`/api/financial/parcelas/${parcelaId}/boleto/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+};
+
+export interface NotaFiscalDetalhe {
+    numero: string;
+    pdf_url: string | null;
+    xml_url: string | null;
+}
+
+// Cria/vincula uma NotaFiscal (PDF + XML opcional) a uma conta a pagar/receber.
+export const anexarNotaFiscal = async (
+    tipo: 'pagar' | 'receber', contaId: number, pdf: File, xml?: File | null
+): Promise<{ nf_detalhe: NotaFiscalDetalhe }> => {
+    const fd = new FormData();
+    fd.append('pdf_arquivo', pdf);
+    if (xml) fd.append('xml_arquivo', xml);
+    const path = tipo === 'pagar' ? 'contas_pagar' : 'contas_receber';
+    const res = await api.post(`/api/financial/${path}/${contaId}/nota-fiscal/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data;
+};
+
 export interface ContaReceber {
     id: number;
     cliente?: number;
     cliente_nome?: string;
     documento?: string;
+    nf_detalhe?: { numero: string; pdf_url: string | null; xml_url: string | null } | null;
     numero_documento?: string;
     valor_do_titulo?: number;
     valor_total?: number;
@@ -255,7 +290,7 @@ export const reparcelarContaReceber = async (id: number, parcelas: ParcelaReparc
 
 export const fetchContasPagar = async (
     page = 1,
-    filters: { beneficiario?: string; documento?: string; dataInicio?: string; dataFim?: string; dateType?: string } = {}
+    filters: { beneficiario?: string; documento?: string; dataInicio?: string; dataFim?: string; dateType?: string; status?: string } = {}
 ): Promise<PaginatedResponse<ContaPagar>> => {
     const params: Record<string, string | number> = { page, page_size: 20 };
     if (filters.beneficiario) params['fornecedor_nome'] = filters.beneficiario;
@@ -263,13 +298,18 @@ export const fetchContasPagar = async (
     if (filters.dateType) params['date_type'] = filters.dateType;
     if (filters.dataInicio) params['date_from'] = filters.dataInicio;
     if (filters.dataFim) params['date_to'] = filters.dataFim;
+    if (filters.status) params['status'] = filters.status;
     const res = await api.get('/api/financial/contas_pagar/', { params });
     return res.data;
 };
-export const createContaPagar = async (data: Partial<ContaPagar>): Promise<ContaPagar> => {
-    const res = await api.post('/api/financial/contas_pagar/', data);
+export const createContaPagar = async (data: Partial<ContaPagar> | FormData): Promise<ContaPagar> => {
+    // FormData → envia como multipart (necessário para anexar o documento PDF).
+    const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
+    const res = await api.post('/api/financial/contas_pagar/', data,
+        isForm ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined);
     return res.data;
 };
+// Anexa/substitui o documento PDF de uma conta a pagar existente (multipart PATCH).
 export const updateContaPagar = async (id: number, data: Partial<ContaPagar>): Promise<ContaPagar> => {
     const res = await api.put(`/api/financial/contas_pagar/${id}/`, data);
     return res.data;
@@ -301,7 +341,7 @@ export const fetchContasPagarEstatisticas = async (): Promise<ContasPagarEstatis
 
 export const fetchContasReceber = async (
     page = 1,
-    filters: { cliente?: string; documento?: string; dataInicio?: string; dataFim?: string; dateType?: string } = {}
+    filters: { cliente?: string; documento?: string; dataInicio?: string; dataFim?: string; dateType?: string; status?: string } = {}
 ): Promise<PaginatedResponse<ContaReceber>> => {
     const params: Record<string, string | number> = { page, page_size: 20 };
     if (filters.cliente) params['cliente_nome'] = filters.cliente;
@@ -309,11 +349,15 @@ export const fetchContasReceber = async (
     if (filters.dateType) params['date_type'] = filters.dateType;
     if (filters.dataInicio) params['date_from'] = filters.dataInicio;
     if (filters.dataFim) params['date_to'] = filters.dataFim;
+    if (filters.status) params['status'] = filters.status;
     const res = await api.get('/api/financial/contas_receber/', { params });
     return res.data;
 };
-export const createContaReceber = async (data: Partial<ContaReceber>): Promise<ContaReceber> => {
-    const res = await api.post('/api/financial/contas_receber/', data);
+export const createContaReceber = async (data: Partial<ContaReceber> | FormData): Promise<ContaReceber> => {
+    // FormData → envia como multipart (necessário para anexar o documento PDF).
+    const isForm = typeof FormData !== 'undefined' && data instanceof FormData;
+    const res = await api.post('/api/financial/contas_receber/', data,
+        isForm ? { headers: { 'Content-Type': 'multipart/form-data' } } : undefined);
     return res.data;
 };
 export const updateContaReceber = async (id: number, data: Partial<ContaReceber>): Promise<ContaReceber> => {
@@ -452,11 +496,50 @@ export const deletePlanoContas = async (id: number): Promise<void> => {
 
 // ─── Conciliações ─────────────────────────────────────────────────────────────
 
+// Parcela enriquecida com dados da conta a pagar/receber (item conciliável).
+export interface ParcelaConciliacao {
+    id: number;
+    numero: number;
+    tipo: 'receber' | 'pagar';
+    conta_id: number;
+    favorecido: string | null;        // cliente (receber) ou fornecedor (pagar)
+    numero_documento: string | null;
+    descricao: string | null;
+    data_de_vencimento: string | null;
+    data_de_pagamento: string | null;
+    valor: number;
+    valor_pago: number | null;
+    valor_exibido: number;            // valor_pago se quitada, senão valor
+    status: string;
+    status_conciliacao: string;
+}
+
+// Transferência (Transacao) exibida na conciliação. `perna` indica qual lado casa.
+export interface TransacaoConciliacao {
+    id: number;
+    data_de_lancamento: string;
+    valor: number;
+    descricao: string | null;
+    conta_origem: number;
+    conta_destino: number;
+    conta_origem_nome: string | null;
+    conta_destino_nome: string | null;
+    conciliado_origem: boolean;
+    conciliado_destino: boolean;
+    perna: 'origem' | 'destino';
+}
+
 export interface ConciliacaoParaConciliar {
     conciliacao: Conciliacao;
-    contas_a_receber: ContaReceber[];
-    contas_a_pagar: ContaPagar[];
+    parcelas_a_receber: ParcelaConciliacao[];
+    parcelas_a_pagar: ParcelaConciliacao[];
+    transacoes: TransacaoConciliacao[];
 }
+
+// Item selecionado para efetivar: uma parcela ou uma perna de transferência.
+export type ConciliacaoEfetivarPayload =
+    | { tipo: 'parcela'; parcela_id: number }
+    | { tipo: 'transacao'; transacao_id: number };
 
 export const fetchConciliacoes = async (): Promise<Conciliacao[]> => {
     const res = await api.get('/api/financial/conciliacoes/');
@@ -470,7 +553,7 @@ export const fetchConciliacaoParaConciliar = async (id: number): Promise<Concili
 
 export const efetivarConciliacaoBancaria = async (
     conciliacaoId: number,
-    payload: { conta_tipo: 'receber' | 'pagar'; conta_id: number }
+    payload: ConciliacaoEfetivarPayload
 ): Promise<any> => {
     const res = await api.post(`/api/financial/conciliacoes/${conciliacaoId}/conciliar/efetivar/`, payload);
     return res.data;

@@ -1,4 +1,4 @@
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, todayStr } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -70,7 +70,7 @@ export default function VisaoGeralComercial() {
   const pipelineTotal = oportunidades.filter(o => !['ganho', 'perdido'].includes(o.estagio)).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0);
   const forecastMes = pipelineTotal * 0.7; // Simples forecast ponderado de 70%
   const atividadesVencidas = atividades.filter(a =>
-    a.status === 'pendente' && new Date(a.data) < new Date()
+    a.status === 'pendente' && a.data < todayStr()
   ).length;
 
   // Dados do funil
@@ -164,7 +164,7 @@ export default function VisaoGeralComercial() {
                 </div>
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold">Atividades Hoje</p>
-                  <p className="text-3xl font-bold mt-1">{atividades.filter(a => a.data === new Date().toISOString().split('T')[0]).length}</p>
+                  <p className="text-3xl font-bold mt-1">{atividades.filter(a => a.data === todayStr()).length}</p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground" />

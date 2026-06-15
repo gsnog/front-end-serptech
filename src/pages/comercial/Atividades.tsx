@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, todayStr } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +49,7 @@ export default function Atividades() {
   const [editItem, setEditItem] = useState<any | null>(null);
   const [editData, setEditData] = useState({ titulo: "", tipo: "", data: "", hora: "" });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayStr();
 
   const handleStatusChange = (id: number, newStatus: string) => {
     toast({ title: "Informaçao", description: "Alteração de status via API ainda não implementada." });
@@ -107,14 +107,14 @@ export default function Atividades() {
   };
 
   const getStatusIcon = (status: string, data: string) => {
-    const isOverdue = status === 'pendente' && new Date(data) < new Date();
+    const isOverdue = status === 'pendente' && data < todayStr();
     if (status === 'concluida') return <CheckCircle className="h-4 w-4 text-success" />;
     if (isOverdue) return <AlertTriangle className="h-4 w-4 text-destructive" />;
     return <Clock className="h-4 w-4 text-warning" />;
   };
 
-  const atividadesVencidas = atividades.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
-  const atividadesHoje = atividades.filter(a => a.data === today || a.data === '2026-02-04').length;
+  const atividadesVencidas = atividades.filter(a => a.status === 'pendente' && a.data < todayStr()).length;
+  const atividadesHoje = atividades.filter(a => a.data === today).length;
 
   const getExportData = () => filteredAtividades.map(a => ({ Título: a.titulo, Tipo: a.tipo, Status: a.status, Data: a.data, Hora: a.hora || '-', Responsável: a.responsavel }));
 

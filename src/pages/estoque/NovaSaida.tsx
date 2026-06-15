@@ -10,6 +10,7 @@ import { FormActionBar } from "@/components/FormActionBar";
 import { PackageMinus, Trash2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { todayStr } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -29,7 +30,7 @@ export default function NovaSaida() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const [dataOperacao, setDataOperacao] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dataOperacao, setDataOperacao] = useState(() => todayStr());
   const [estoqueOrigem, setEstoqueOrigem] = useState("");
   const [setorDestino, setSetorDestino] = useState("");
   const [observacao, setObservacao] = useState("");

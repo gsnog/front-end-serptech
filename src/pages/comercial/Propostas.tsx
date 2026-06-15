@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, todayStr } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +103,7 @@ export default function Propostas() {
           </TableRow></TableHeader>
           <TableBody>
             {filteredPropostas.map((proposta) => {
-              const isExpired = proposta.validade && new Date(proposta.validade) < new Date() && proposta.status === 'enviada';
+              const isExpired = proposta.validade && proposta.validade < todayStr() && proposta.status === 'enviada';
               return (
                 <TableRow key={proposta.id} className="hover:bg-muted/50 cursor-pointer">
                   <TableCell><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-primary" /><span className="font-medium">{proposta.numero}</span></div></TableCell>

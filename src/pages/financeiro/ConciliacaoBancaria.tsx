@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   fetchConciliacoes,
@@ -8,8 +8,9 @@ import {
   conciliacoesQueryKey,
   Conciliacao,
   ConciliacaoParaConciliar,
-  ContaPagar,
-  ContaReceber,
+  ConciliacaoEfetivarPayload,
+  ParcelaConciliacao,
+  TransacaoConciliacao,
 } from "@/services/financeiro";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -38,10 +39,7 @@ const ConciliacaoBancaria = () => {
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detalhes, setDetalhes] = useState<ConciliacaoParaConciliar | null>(null);
-  const [selectedConta, setSelectedConta] = useState<{
-    tipo: "receber" | "pagar";
-    id: number;
-  } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<ConciliacaoEfetivarPayload | null>(null);
 
   const [loadingDetalhes, setLoadingDetalhes] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -58,13 +56,13 @@ const ConciliacaoBancaria = () => {
     if (selectedId === id) {
       setSelectedId(null);
       setDetalhes(null);
-      setSelectedConta(null);
+      setSelectedItem(null);
       return;
     }
 
     setSelectedId(id);
     setDetalhes(null);
-    setSelectedConta(null);
+    setSelectedItem(null);
     setLoadingDetalhes(true);
 
     try {
@@ -104,21 +102,28 @@ const ConciliacaoBancaria = () => {
   };
 
   const efetivarMutation = useMutation({
-    mutationFn: ({ id, conta }: { id: number; conta: { tipo: "receber" | "pagar"; id: number } }) =>
-      efetivarConciliacaoBancaria(id, { conta_tipo: conta.tipo, conta_id: conta.id }),
-    onSuccess: () => {
+    mutationFn: ({ id, payload }: { id: number; payload: ConciliacaoEfetivarPayload }) =>
+      efetivarConciliacaoBancaria(id, payload),
+    onSuccess: (_data, variables) => {
+      // Remoção otimista: tira a conciliação efetivada da lista imediatamente,
+      // sem depender do timing do refetch. Como a query key é estática
+      // (['conciliacoes']), efetivações em sequência poderiam deixar a lista
+      // uma atualização atrás; o setQueryData garante consistência na hora.
+      queryClient.setQueryData<Conciliacao[]>([...conciliacoesQueryKey], (old) =>
+        old ? old.filter((c) => c.id !== variables.id) : old
+      );
       queryClient.invalidateQueries({ queryKey: [...conciliacoesQueryKey] });
       toast({ title: "Conciliação efetivada com sucesso!" });
       setSelectedId(null);
       setDetalhes(null);
-      setSelectedConta(null);
+      setSelectedItem(null);
     },
     onError: () => toast({ title: "Erro ao efetivar conciliação", variant: "destructive" }),
   });
 
   const handleEfetivar = async () => {
-    if (!selectedId || !selectedConta) return;
-    efetivarMutation.mutate({ id: selectedId, conta: selectedConta });
+    if (!selectedId || !selectedItem) return;
+    efetivarMutation.mutate({ id: selectedId, payload: selectedItem });
   };
 
   const formatCurrency = (value: number) =>
@@ -126,19 +131,18 @@ const ConciliacaoBancaria = () => {
       Math.abs(value)
     );
 
-  const renderContaItem = (
-    acc: ContaReceber | ContaPagar,
-    tipo: "receber" | "pagar",
-    label: string
-  ) => {
-    const isSelected = selectedConta?.tipo === tipo && selectedConta?.id === acc.id;
-    const entrada = tipo === "receber";
-    const valor = Number((acc as any).valor_total ?? (acc as any).valor_do_titulo ?? 0);
+  // ── Item de parcela (a receber ou a pagar) ────────────────────────────────
+  const renderParcelaItem = (p: ParcelaConciliacao) => {
+    const entrada = p.tipo === "receber";
+    const isSelected = selectedItem?.tipo === "parcela" && selectedItem.parcela_id === p.id;
+    const label = p.favorecido || (entrada ? `Cliente #${p.conta_id}` : `Fornecedor #${p.conta_id}`);
 
     return (
       <div
-        key={`${tipo}-${acc.id}`}
-        onClick={() => setSelectedConta(isSelected ? null : { tipo, id: acc.id })}
+        key={`parcela-${p.id}`}
+        onClick={() =>
+          setSelectedItem(isSelected ? null : { tipo: "parcela", parcela_id: p.id })
+        }
         className={`group p-4 rounded-lg border transition-all cursor-pointer bg-card ${
           isSelected
             ? entrada
@@ -151,7 +155,6 @@ const ConciliacaoBancaria = () => {
       >
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
-            {/* Checkbox */}
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
                 isSelected
@@ -164,51 +167,122 @@ const ConciliacaoBancaria = () => {
               <Check size={14} className={isSelected ? "opacity-100" : "opacity-0"} />
             </div>
 
-            {/* Ícone de tipo + info */}
             <div>
               <div className="flex items-center gap-2 mb-0.5">
                 <span
                   className={`flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
-                    entrada
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
+                    entrada ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
                   }`}
                 >
-                  {entrada ? (
-                    <ArrowUpRight size={11} />
-                  ) : (
-                    <ArrowDownLeft size={11} />
-                  )}
-                  {entrada ? "Entrada" : "Saída"}
+                  {entrada ? <ArrowUpRight size={11} /> : <ArrowDownLeft size={11} />}
+                  Parcela {p.numero}
                 </span>
                 <span className="font-semibold text-sm">{label}</span>
               </div>
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                {(acc as any).data_de_vencimento && (
+
+              {p.descricao && (
+                <p className="text-xs text-muted-foreground truncate max-w-[260px] mb-0.5">
+                  {p.descricao}
+                </p>
+              )}
+
+              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                {p.data_de_vencimento && (
                   <span className="flex items-center gap-1">
-                    <Calendar size={11} />
-                    Venc:{" "}
-                    {fmtDate((acc as any).data_de_vencimento)}
+                    <Calendar size={11} /> Venc: {fmtDate(p.data_de_vencimento)}
                   </span>
                 )}
-                {(acc as any).documento && (
-                  <span className="italic">Doc: {(acc as any).documento}</span>
+                {p.data_de_pagamento && (
+                  <span className="flex items-center gap-1 text-emerald-600">
+                    <Check size={11} /> Pago: {fmtDate(p.data_de_pagamento)}
+                  </span>
+                )}
+                {p.numero_documento && (
+                  <span className="italic">Doc: {p.numero_documento}</span>
                 )}
               </div>
             </div>
           </div>
 
           <span
-            className={`font-bold text-sm ml-2 ${
+            className={`font-bold text-sm ml-2 flex-shrink-0 ${
               entrada ? "text-green-600" : "text-red-600"
             }`}
           >
-            {entrada ? "+" : "-"} {formatCurrency(valor)}
+            {entrada ? "+" : "-"} {formatCurrency(p.valor_exibido)}
           </span>
         </div>
       </div>
     );
   };
+
+  // ── Item de transferência (perna origem = saída, destino = entrada) ────────
+  const renderTransacaoItem = (t: TransacaoConciliacao) => {
+    const entrada = t.perna === "destino";
+    const isSelected = selectedItem?.tipo === "transacao" && selectedItem.transacao_id === t.id;
+
+    return (
+      <div
+        key={`transacao-${t.id}`}
+        onClick={() =>
+          setSelectedItem(isSelected ? null : { tipo: "transacao", transacao_id: t.id })
+        }
+        className={`group p-4 rounded-lg border transition-all cursor-pointer bg-card ${
+          isSelected ? "border-blue-500" : "border-border hover:border-blue-400"
+        }`}
+      >
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
+                isSelected ? "bg-blue-500 border-blue-500 text-white" : "bg-background border-border"
+              }`}
+            >
+              <Check size={14} className={isSelected ? "opacity-100" : "opacity-0"} />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <span className="flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                  <ArrowRightLeft size={11} /> Transferência
+                </span>
+                <span className="font-semibold text-sm">
+                  {t.conta_origem_nome} → {t.conta_destino_nome}
+                </span>
+              </div>
+
+              {t.descricao && (
+                <p className="text-xs text-muted-foreground truncate max-w-[260px] mb-0.5">
+                  {t.descricao}
+                </p>
+              )}
+
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Calendar size={11} /> {fmtDate(t.data_de_lancamento)}
+                </span>
+                <span className="italic">{entrada ? "Entrada (destino)" : "Saída (origem)"}</span>
+              </div>
+            </div>
+          </div>
+
+          <span
+            className={`font-bold text-sm ml-2 flex-shrink-0 ${
+              entrada ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {entrada ? "+" : "-"} {formatCurrency(t.valor)}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
+  const semCorrespondencia =
+    detalhes &&
+    detalhes.parcelas_a_receber.length === 0 &&
+    detalhes.parcelas_a_pagar.length === 0 &&
+    detalhes.transacoes.length === 0;
 
   return (
     <div className="flex flex-col h-screen bg-background overflow-hidden p-6 gap-6">
@@ -245,7 +319,7 @@ const ConciliacaoBancaria = () => {
 
           <Button
             onClick={handleEfetivar}
-            disabled={!selectedId || !selectedConta || efetivarMutation.isPending}
+            disabled={!selectedId || !selectedItem || efetivarMutation.isPending}
             className="gap-2"
           >
             {efetivarMutation.isPending ? (
@@ -307,7 +381,6 @@ const ConciliacaoBancaria = () => {
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex items-center gap-3">
-                            {/* Checkbox */}
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
                                 isSelected
@@ -324,7 +397,6 @@ const ConciliacaoBancaria = () => {
                             </div>
 
                             <div>
-                              {/* Badge Entrada / Saída */}
                               <div className="flex items-center gap-2 mb-0.5">
                                 <span
                                   className={`flex items-center gap-1 text-xs font-semibold px-1.5 py-0.5 rounded ${
@@ -345,7 +417,6 @@ const ConciliacaoBancaria = () => {
                                 </span>
                               </div>
 
-                              {/* Meta info */}
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
                                   <Calendar size={11} />
@@ -358,7 +429,6 @@ const ConciliacaoBancaria = () => {
                             </div>
                           </div>
 
-                          {/* Valor colorido */}
                           <span
                             className={`font-bold text-sm ml-2 flex-shrink-0 ${
                               entrada ? "text-green-600" : "text-red-600"
@@ -386,7 +456,7 @@ const ConciliacaoBancaria = () => {
               </CardTitle>
               <CardDescription>
                 {detalhes
-                  ? "Selecione a conta correspondente e clique em Efetivar"
+                  ? "Selecione a parcela ou transferência correspondente e clique em Efetivar"
                   : "Selecione uma conciliação ao lado para ver as sugestões"}
               </CardDescription>
             </div>
@@ -405,68 +475,73 @@ const ConciliacaoBancaria = () => {
                   </div>
                 ) : (
                   <>
-                    {/* Contas a Receber sugeridas */}
-                    {detalhes.contas_a_receber.length > 0 && (
+                    {/* Parcelas a Receber */}
+                    {detalhes.parcelas_a_receber.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 border-b pb-2">
                           <ArrowUpRight size={14} className="text-green-600" />
                           <h3 className="text-xs font-bold uppercase tracking-wider text-green-600">
-                            Entradas — Contas a Receber
+                            Entradas — Parcelas a Receber
                           </h3>
                           <Badge
                             variant="outline"
                             className="text-[10px] py-0 border-green-200 text-green-600"
                           >
-                            {detalhes.contas_a_receber.length}
+                            {detalhes.parcelas_a_receber.length}
                           </Badge>
                         </div>
-                        {detalhes.contas_a_receber.map((acc) =>
-                          renderContaItem(
-                            acc,
-                            "receber",
-                            (acc as any).cliente_nome || `Cliente #${(acc as any).cliente}`
-                          )
-                        )}
+                        {detalhes.parcelas_a_receber.map(renderParcelaItem)}
                       </div>
                     )}
 
-                    {/* Contas a Pagar sugeridas */}
-                    {detalhes.contas_a_pagar.length > 0 && (
+                    {/* Parcelas a Pagar */}
+                    {detalhes.parcelas_a_pagar.length > 0 && (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 border-b pb-2">
                           <ArrowDownLeft size={14} className="text-red-600" />
                           <h3 className="text-xs font-bold uppercase tracking-wider text-red-600">
-                            Saídas — Contas a Pagar
+                            Saídas — Parcelas a Pagar
                           </h3>
                           <Badge
                             variant="outline"
                             className="text-[10px] py-0 border-red-200 text-red-600"
                           >
-                            {detalhes.contas_a_pagar.length}
+                            {detalhes.parcelas_a_pagar.length}
                           </Badge>
                         </div>
-                        {detalhes.contas_a_pagar.map((acc) =>
-                          renderContaItem(
-                            acc,
-                            "pagar",
-                            (acc as any).fornecedor_nome ||
-                              `Fornecedor #${(acc as any).beneficiario}`
-                          )
-                        )}
+                        {detalhes.parcelas_a_pagar.map(renderParcelaItem)}
                       </div>
                     )}
 
-                    {detalhes.contas_a_receber.length === 0 &&
-                      detalhes.contas_a_pagar.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground italic">
-                          <AlertCircle className="h-6 w-6 mb-2 opacity-30" />
-                          <p className="text-sm text-center">
-                            Nenhuma conta sugerida para esta conciliação.
-                            <br />
-                            Verifique se há lançamentos compatíveis no sistema.
-                          </p>
+                    {/* Transferências */}
+                    {detalhes.transacoes.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 border-b pb-2">
+                          <ArrowRightLeft size={14} className="text-blue-600" />
+                          <h3 className="text-xs font-bold uppercase tracking-wider text-blue-600">
+                            Transferências entre Contas
+                          </h3>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] py-0 border-blue-200 text-blue-600"
+                          >
+                            {detalhes.transacoes.length}
+                          </Badge>
                         </div>
-                      )}
+                        {detalhes.transacoes.map(renderTransacaoItem)}
+                      </div>
+                    )}
+
+                    {semCorrespondencia && (
+                      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground italic">
+                        <AlertCircle className="h-6 w-6 mb-2 opacity-30" />
+                        <p className="text-sm text-center">
+                          Nenhuma parcela ou transferência sugerida para esta conciliação.
+                          <br />
+                          Verifique se há lançamentos compatíveis no sistema.
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
               </div>

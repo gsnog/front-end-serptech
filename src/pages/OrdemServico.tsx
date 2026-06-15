@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FilterSection } from "@/components/FilterSection";
 import { TableActions } from "@/components/TableActions";
+import { todayStr } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -210,7 +211,7 @@ const OrdemServicoPage = () => {
                           variant="outline"
                           size="sm"
                           className="gap-1.5 text-xs"
-                          onClick={() => { setAnalisarItem(o); setFeedbackText(""); setDataResolucao(new Date().toISOString().split("T")[0]); setFornecedorId(""); }}
+                          onClick={() => { setAnalisarItem(o); setFeedbackText(""); setDataResolucao(todayStr()); setFornecedorId(""); }}
                         >
                           <ClipboardCheck className="w-3.5 h-3.5" /> Analisar
                         </Button>

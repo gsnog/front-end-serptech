@@ -30,7 +30,7 @@ const Transferencias = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<Transacao | null>(null);
   const [editItem, setEditItem] = useState<Transacao | null>(null);
-  const [editForm, setEditForm] = useState({ valor: 0, descricao: "", conta_origem: 0, conta_destino: 0 });
+  const [editForm, setEditForm] = useState({ valor: "", descricao: "", conta_origem: 0, conta_destino: 0 });
 
   const [currentPage, setCurrentPage] = useState(1);
   const { data: response, isLoading } = useQuery({ queryKey: [...transferenciasQueryKey, currentPage], queryFn: () => fetchTransferencias(currentPage) });
@@ -58,12 +58,12 @@ const Transferencias = () => {
   const getExportData = () => filtered.map(t => ({ Data: t.data_de_lancamento, "Conta Origem": t.conta_origem_nome, "Conta Destino": t.conta_destino_nome, Valor: t.valor }));
   const deleteItemObj = items.find(i => i.id === deleteId);
 
-  const openEdit = (t: Transacao) => { setEditItem(t); setEditForm({ valor: t.valor, descricao: t.descricao || "", conta_origem: t.conta_origem, conta_destino: t.conta_destino }); };
+  const openEdit = (t: Transacao) => { setEditItem(t); setEditForm({ valor: String(t.valor ?? ""), descricao: t.descricao || "", conta_origem: t.conta_origem, conta_destino: t.conta_destino }); };
 
   return (
     <div className="flex flex-col h-full bg-background"><div className="space-y-6">
       <div className="flex flex-wrap gap-3 items-center">
-        <Button onClick={() => { setEditItem({ id: 0, data_de_lancamento: "", valor: 0, conta_origem: 0, conta_destino: 0 }); setEditForm({ valor: 0, descricao: "", conta_origem: 0, conta_destino: 0 }); }} className="gap-2"><Plus className="w-4 h-4" />Nova Transferência</Button>
+        <Button onClick={() => { setEditItem({ id: 0, data_de_lancamento: "", valor: 0, conta_origem: 0, conta_destino: 0 }); setEditForm({ valor: "", descricao: "", conta_origem: 0, conta_destino: 0 }); }} className="gap-2"><Plus className="w-4 h-4" />Nova Transferência</Button>
         <ExportButton getData={getExportData} fileName="transferencias" />
       </div>
       <FilterSection fields={[
@@ -111,18 +111,17 @@ const Transferencias = () => {
                 {contas.map((c: any) => <option key={c.id} value={c.id}>{contaLabel(c)}</option>)}
               </select>
             </div>
-            <div className="space-y-2"><Label>Valor (R$)</Label><Input type="number" value={editForm.valor} onChange={e => setEditForm(p => ({ ...p, valor: Number(e.target.value) }))} /></div>
+            <div className="space-y-2"><Label>Valor (R$)</Label><Input type="text" inputMode="decimal" placeholder="0,00" value={editForm.valor} onChange={e => setEditForm(p => ({ ...p, valor: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Descrição</Label><Input value={editForm.descricao} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
             <Button onClick={() => {
-              const origem = contas.find((c: any) => c.id === editForm.conta_origem);
-              if (origem && editForm.valor > (origem.saldo ?? Infinity)) {
-                toast({ title: "Saldo insuficiente", description: `Saldo disponível: R$ ${Number(origem.saldo).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, variant: "destructive" });
-                return;
+              const valorNum = Number(editForm.valor.replace(/\s/g, "").replace(",", "."));
+              if (!editForm.valor || Number.isNaN(valorNum) || valorNum <= 0) {
+                toast({ title: "Informe um valor válido.", variant: "destructive" }); return;
               }
-              saveMutation.mutate({ id: editItem?.id || undefined, ...editForm });
+              saveMutation.mutate({ id: editItem?.id || undefined, ...editForm, valor: valorNum });
             }} disabled={saveMutation.isPending}>Salvar</Button>
           </DialogFooter>
         </DialogContent>

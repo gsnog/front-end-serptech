@@ -61,8 +61,7 @@ import SoftwarePage from "./pages/cadastro/estoque/Software";
 // Cadastro - Financeiro
 import ContaBancaria from "./pages/cadastro/financeiro/ContaBancaria";
 import NovaContaBancaria from "./pages/cadastro/financeiro/NovaContaBancaria";
-import Transferencias from "./pages/cadastro/financeiro/Transferencias";
-import NovaTransferencia from "./pages/cadastro/financeiro/NovaTransferencia";
+import Transferencias from "./pages/financeiro/Transferencias";
 import Clientes from "./pages/cadastro/financeiro/Clientes";
 import NovoCliente from "./pages/cadastro/financeiro/NovoCliente";
 import CentroCusto from "./pages/cadastro/financeiro/CentroCusto";
@@ -151,7 +150,7 @@ const App = () => (
                   <Route path="/financeiro/contas-pagar/nova" element={<NovaContaPagar />} />
                   <Route path="/financeiro/contas-receber" element={<ContasReceber />} />
                   <Route path="/financeiro/contas-receber/nova" element={<NovaContaReceber />} />
-                  <Route path="/cadastro/financeiro/conciliacao-bancaria" element={<ConciliacaoBancaria />} />
+                  <Route path="/financeiro/conciliacao-bancaria" element={<ConciliacaoBancaria />} />
                   <Route path="/financeiro/lancamento-saida" element={<LancamentoSaida />} />
                   <Route path="/financeiro/saidas-pendentes" element={<SaidasPendentes />} />
                   <Route path="/financeiro/xml" element={<NFe />} />
@@ -203,8 +202,7 @@ const App = () => (
                   {/* Cadastro - Financeiro */}
                   <Route path="/cadastro/financeiro/conta-bancaria" element={<ContaBancaria />} />
                   <Route path="/cadastro/financeiro/conta-bancaria/nova" element={<NovaContaBancaria />} />
-                  <Route path="/cadastro/financeiro/transferencias" element={<Transferencias />} />
-                  <Route path="/cadastro/financeiro/transferencias/nova" element={<NovaTransferencia />} />
+                  <Route path="/financeiro/transferencias" element={<Transferencias />} />
                   <Route path="/cadastro/financeiro/clientes" element={<Clientes />} />
                   <Route path="/cadastro/financeiro/clientes/novo" element={<NovoCliente />} />
                   <Route path="/cadastro/financeiro/centro-custo" element={<CentroCusto />} />

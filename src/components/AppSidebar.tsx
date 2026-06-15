@@ -48,8 +48,6 @@ const menuItems = [
       {
         title: "Financeiro", module: "cadastro_financeiro", help: "Cadastros financeiros: contas, centros de custo e planos de contas.", subItems: [
           { title: "Conta Bancária", url: "/cadastro/financeiro/conta-bancaria" },
-          { title: "Conciliação Bancária", url: "/cadastro/financeiro/conciliacao-bancaria" },
-          { title: "Transferências", url: "/cadastro/financeiro/transferencias" },
           { title: "Clientes", url: "/cadastro/financeiro/clientes" },
           { title: "Centro de Custo", url: "/cadastro/financeiro/centro-custo" },
           { title: "Centro de Receita", url: "/cadastro/financeiro/centro-receita" },
@@ -108,10 +106,12 @@ const menuItems = [
     module: "financeiro",
     help: "Módulo financeiro: contas a pagar/receber, fluxo de caixa e XML.",
     subItems: [
+      { title: "Conciliação Bancária", url: "/financeiro/conciliacao-bancaria" },
       { title: "Contas a Receber", url: "/financeiro/contas-receber" },
       { title: "Contas a Pagar", url: "/financeiro/contas-pagar" },
       { title: "Fluxo de Caixa", url: "/financeiro/fluxo-caixa" },
       { title: "Notas Fiscais", url: "/financeiro/xml" },
+      { title: "Transferências", url: "/financeiro/transferencias" },
     ]
   },
   {

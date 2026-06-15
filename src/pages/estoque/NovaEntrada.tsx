@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableSelect } from "@/components/SearchableSelect";
+import { todayStr } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -463,7 +464,7 @@ export default function NovaEntrada() {
 
       const payload = {
         tipo: "producao_local",
-        data: dataEntrada || new Date().toISOString().split("T")[0],
+        data: dataEntrada || todayStr(),
         estoque_destino: parseInt(estoqueDestinoId),
         custo_total: 0,
         observacao: observacao || "",
@@ -506,7 +507,7 @@ export default function NovaEntrada() {
 
     const payload: any = {
       tipo: "compra",
-      data: dataEntrada || new Date().toISOString().split("T")[0],
+      data: dataEntrada || todayStr(),
       estoque_destino: parseInt(estoqueDestinoId),
       custo_total: valorTotal,
       observacao: observacao || "",
@@ -516,7 +517,7 @@ export default function NovaEntrada() {
     if (fornecedorId) payload.fornecedor = parseInt(fornecedorId);
     if (nfNumero) {
       payload.nota_fiscal_numero = nfNumero;
-      payload.nota_fiscal_data_emissao = dataEmissao || dataEntrada || new Date().toISOString().split("T")[0];
+      payload.nota_fiscal_data_emissao = dataEmissao || dataEntrada || todayStr();
       if (dataVencimento) payload.nota_fiscal_data_vencimento = dataVencimento;
     }
 

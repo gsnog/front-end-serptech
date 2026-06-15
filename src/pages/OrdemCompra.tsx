@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { usePermissions } from "@/contexts/PermissionsContext";
 import { FilterSection } from "@/components/FilterSection";
 import { SortableHead } from "@/components/SortableHead";
+import { todayStr } from "@/lib/utils";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -57,7 +58,7 @@ const OrdemCompraPage = () => {
   const [entregaTarget, setEntregaTarget] = useState<OrdemCompra | null>(null);
   const [entregaFornecedorId, setEntregaFornecedorId] = useState("");
   const [entregaDestinoId, setEntregaDestinoId] = useState("");
-  const [entregaData, setEntregaData] = useState(new Date().toISOString().split("T")[0]);
+  const [entregaData, setEntregaData] = useState(todayStr());
   const [entregaNfNumero, setEntregaNfNumero] = useState("");
   const [entregaDataEmissao, setEntregaDataEmissao] = useState("");
   const [entregaObservacao, setEntregaObservacao] = useState("");
@@ -156,7 +157,7 @@ const OrdemCompraPage = () => {
 
   const openEntregaDialog = (o: OrdemCompra) => {
     setEntregaTarget(o);
-    setEntregaData(new Date().toISOString().split("T")[0]);
+    setEntregaData(todayStr());
     setEntregaFornecedorId("");
     setEntregaDestinoId(o.unidade ? String(o.unidade) : "");
     setEntregaNfNumero("");
@@ -219,7 +220,7 @@ const OrdemCompraPage = () => {
     );
 
     const payload: any = {
-      data: entregaData || new Date().toISOString().split("T")[0],
+      data: entregaData || todayStr(),
       estoque_destino: parseInt(entregaDestinoId),
       custo_total: valorTotal,
       observacao: entregaObservacao || "",
@@ -231,7 +232,7 @@ const OrdemCompraPage = () => {
     if (entregaFornecedorId) payload.fornecedor = parseInt(entregaFornecedorId);
     if (entregaNfNumero) {
       payload.nota_fiscal_numero = entregaNfNumero;
-      payload.nota_fiscal_data_emissao = entregaDataEmissao || entregaData || new Date().toISOString().split("T")[0];
+      payload.nota_fiscal_data_emissao = entregaDataEmissao || entregaData || todayStr();
     }
 
     criarEntradaMutation.mutate(payload);

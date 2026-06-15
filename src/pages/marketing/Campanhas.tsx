@@ -182,8 +182,8 @@ export default function Campanhas() {
                   <TableCell className="text-center text-sm">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Calendar className="h-3 w-3" />
-                      {campanha.data_inicio ? new Date(campanha.data_inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'} -
-                      {campanha.data_fim ? new Date(campanha.data_fim).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'}
+                      {campanha.data_inicio ? new Date(campanha.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'} -
+                      {campanha.data_fim ? new Date(campanha.data_fim + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'}
                     </div>
                   </TableCell>
                   <TableCell>{formatCurrency(orcamentoNum)}</TableCell>

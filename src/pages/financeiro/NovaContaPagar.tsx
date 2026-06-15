@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "@/hooks/use-toast";
 import {
-  fetchCentrosCusto, fetchPlanoContas, createContaPagar, createParcela, deleteContaPagar,
+  fetchCentrosCusto, fetchPlanoContas, createContaPagar, createParcela, deleteContaPagar, anexarNotaFiscal, uploadBoletoParcela,
   centrosCustoQueryKey, planoContasQueryKey,
   type CentroCusto, type PlanoContas,
 } from "@/services/financeiro";
@@ -24,6 +24,7 @@ interface ParcelaRow {
   numero: number;
   data_de_vencimento: string;
   valor: string;
+  boleto: File | null;
 }
 
 const validationFields = [
@@ -45,6 +46,8 @@ export default function NovaContaPagar() {
   const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
   const [parcelasData, setParcelasData] = useState<ParcelaRow[]>([]);
+  const [nfPdfFile, setNfPdfFile] = useState<File | null>(null);
+  const [nfXmlFile, setNfXmlFile] = useState<File | null>(null);
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { beneficiario: "", unidade: "", centroCusto: "", planoContas: "", documento: "", valor: "", multa: "0", encargos: "0", juros: "0", desconto: "0", valorTotal: "", dataFaturamento: "", dataVencimento: "", parcelas: "1", descricao: "" },
@@ -71,6 +74,7 @@ export default function NovaContaPagar() {
         numero: i + 1,
         data_de_vencimento: addMonths(formData.dataVencimento, i),
         valor: "",
+        boleto: null,
       })));
       return;
     }
@@ -80,6 +84,7 @@ export default function NovaContaPagar() {
       numero: i + 1,
       data_de_vencimento: addMonths(formData.dataVencimento, i),
       valor: (i === n - 1 ? base + remainder : base).toFixed(2),
+      boleto: null,
     })));
   // valorTotal intencionalmente excluído: mudança de valor não deve sobrescrever edições manuais
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,8 +94,11 @@ export default function NovaContaPagar() {
   const totalEsperado = parseFloat(formData.valorTotal) || 0;
   const somaOk = totalEsperado > 0 && Math.abs(somaParcelас - totalEsperado) < 0.01;
 
-  const updateParcela = (index: number, field: keyof ParcelaRow, value: string) => {
+  const updateParcela = (index: number, field: "data_de_vencimento" | "valor", value: string) => {
     setParcelasData(prev => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+  };
+  const setParcelaBoleto = (index: number, file: File | null) => {
+    setParcelasData(prev => prev.map((p, i) => i === index ? { ...p, boleto: file } : p));
   };
 
   const { data: unidadesResponse } = useQuery({
@@ -138,7 +146,7 @@ export default function NovaContaPagar() {
     setIsSaving(true);
     let contaId: number | null = null;
     try {
-      const conta = await createContaPagar({
+      const payload: Record<string, any> = {
         beneficiario: Number(formData.beneficiario),
         ...(formData.unidade ? { unidade: Number(formData.unidade) } : {}),
         ...(formData.centroCusto ? { centro_de_custo: Number(formData.centroCusto) } : {}),
@@ -151,11 +159,12 @@ export default function NovaContaPagar() {
         desconto: Number(formData.desconto),
         valor_total: Number(formData.valorTotal),
         data_de_faturamento: formData.dataFaturamento,
-        data_de_vencimento: formData.dataVencimento,
         descricao: formData.descricao,
-      } as any);
+      };
+
+      const conta = await createContaPagar(payload as any);
       contaId = (conta as any).id;
-      await Promise.all(parcelasData.map(p =>
+      const criadas = await Promise.all(parcelasData.map(p =>
         createParcela({
           conta_pagar: contaId!,
           numero: p.numero,
@@ -163,6 +172,21 @@ export default function NovaContaPagar() {
           valor: parseFloat(p.valor) || 0,
         })
       ));
+      // Anexa o boleto de cada parcela que tiver arquivo (após criadas, para ter os ids).
+      await Promise.all(criadas.map((parc, i) =>
+        parcelasData[i].boleto ? uploadBoletoParcela((parc as any).id, parcelasData[i].boleto as File) : Promise.resolve()
+      ));
+      // Conta + parcelas OK. A NF é complementar: uma falha aqui não deve
+      // disparar o compensating delete da conta já criada.
+      if (nfPdfFile) {
+        try {
+          await anexarNotaFiscal("pagar", contaId!, nfPdfFile, nfXmlFile);
+        } catch {
+          toast({ title: "Conta criada, mas falhou ao anexar a NF.", description: "Anexe a nota fiscal depois pela edição.", variant: "destructive" });
+          navigate("/financeiro/contas-pagar");
+          return;
+        }
+      }
       toast({ title: "Conta a pagar salva com sucesso!" });
       navigate("/financeiro/contas-pagar");
     } catch {
@@ -283,8 +307,18 @@ export default function NovaContaPagar() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Documento PDF</Label>
-                <Input type="file" accept=".pdf" className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                <Label className="text-sm font-medium">Nota Fiscal — PDF</Label>
+                <Input type="file" accept=".pdf"
+                  onChange={(e) => setNfPdfFile(e.target.files?.[0] ?? null)}
+                  className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                {nfPdfFile && <p className="text-xs text-muted-foreground truncate">{nfPdfFile.name}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Nota Fiscal — XML <span className="text-muted-foreground font-normal">(opcional)</span></Label>
+                <Input type="file" accept=".xml"
+                  onChange={(e) => setNfXmlFile(e.target.files?.[0] ?? null)}
+                  className="form-input file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                {nfXmlFile && <p className="text-xs text-muted-foreground truncate">{nfXmlFile.name}</p>}
               </div>
               <ValidatedInput label="Número de Parcelas" type="number" value={formData.parcelas}
                 onChange={(e) => setFieldValue("parcelas", String(Math.max(1, parseInt(e.target.value) || 1)))}
@@ -311,6 +345,7 @@ export default function NovaContaPagar() {
                         <TableHead className="font-semibold w-16">Nº</TableHead>
                         <TableHead className="text-center font-semibold">Vencimento</TableHead>
                         <TableHead className="text-right font-semibold">Valor (R$)</TableHead>
+                        <TableHead className="text-center font-semibold">Boleto (PDF)</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -334,6 +369,15 @@ export default function NovaContaPagar() {
                               onChange={e => updateParcela(i, "valor", e.target.value)}
                               className={`h-8 text-sm text-center ${!somaOk && totalEsperado > 0 ? "border-destructive" : ""}`}
                             />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Input
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg"
+                              onChange={e => setParcelaBoleto(i, e.target.files?.[0] ?? null)}
+                              className="h-8 text-xs file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-xs file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+                            />
+                            {p.boleto && <p className="text-[10px] text-muted-foreground truncate max-w-[140px] mx-auto">{p.boleto.name}</p>}
                           </TableCell>
                         </TableRow>
                       ))}

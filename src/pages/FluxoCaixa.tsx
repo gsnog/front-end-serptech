@@ -17,6 +17,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { fetchParcelas, fetchFluxoCaixaEstatisticas, parcelasQueryKey, deleteParcela, updateParcelaReceber } from "@/services/financeiro"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Loader2 } from "lucide-react"
+import { todayStr, localDateStr } from "@/lib/utils"
 
 const FluxoCaixa = () => {
   const navigate = useNavigate()
@@ -51,23 +52,24 @@ const FluxoCaixa = () => {
     setFilterPeriodo(periodo)
     const hoje = new Date()
     let ini = ""
-    let fim = hoje.toISOString().split("T")[0]
+    let fim = todayStr()
     if (periodo === "hoje") {
       ini = fim
     } else if (periodo === "semana") {
-      const d = new Date(hoje); d.setDate(hoje.getDate() - hoje.getDay())
-      ini = d.toISOString().split("T")[0]
+      // Semana começa na segunda-feira (padrão brasileiro). getDay() retorna 0=domingo.
+      const d = new Date(hoje); d.setDate(hoje.getDate() - ((hoje.getDay() + 6) % 7))
+      ini = localDateStr(d)
     } else if (periodo === "mes") {
-      ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0]
+      ini = localDateStr(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
     } else if (periodo === "trimestre") {
       const d = new Date(hoje); d.setMonth(hoje.getMonth() - 3)
-      ini = d.toISOString().split("T")[0]
+      ini = localDateStr(d)
     } else if (periodo === "semestre") {
       const d = new Date(hoje); d.setMonth(hoje.getMonth() - 6)
-      ini = d.toISOString().split("T")[0]
+      ini = localDateStr(d)
     } else if (periodo === "ano") {
       const d = new Date(hoje); d.setMonth(hoje.getMonth() - 12)
-      ini = d.toISOString().split("T")[0]
+      ini = localDateStr(d)
     } else {
       ini = ""; fim = ""
     }
@@ -167,7 +169,6 @@ const FluxoCaixa = () => {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <Button onClick={() => navigate("/financeiro/fluxo-caixa/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Transação</Button>
           <Button onClick={() => navigate("/relatorios")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 

@@ -700,10 +700,10 @@ export default function Calendario() {
                   <div className="flex items-start gap-4">
                     <div className="text-center min-w-[60px]">
                       <div className="text-2xl font-bold text-foreground">
-                        {new Date(evento.dataInicio).getDate()}
+                        {new Date(evento.dataInicio + 'T00:00:00').getDate()}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {meses[new Date(evento.dataInicio).getMonth()].slice(0, 3)}
+                        {meses[new Date(evento.dataInicio + 'T00:00:00').getMonth()].slice(0, 3)}
                       </div>
                     </div>
                     <div
@@ -787,7 +787,7 @@ export default function Calendario() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CalendarIcon className="h-4 w-4" />
-                  {new Date(selectedEvent.dataInicio).toLocaleDateString('pt-BR', {
+                  {new Date(selectedEvent.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR', {
                     weekday: 'long',
                     day: 'numeric',
                     month: 'long',
