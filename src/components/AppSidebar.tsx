@@ -49,9 +49,11 @@ const menuItems = [
         title: "Financeiro", module: "cadastro_financeiro", help: "Cadastros financeiros: contas, centros de custo e planos de contas.", subItems: [
           { title: "Conta Bancária", url: "/cadastro/financeiro/conta-bancaria" },
           { title: "Clientes", url: "/cadastro/financeiro/clientes" },
+          { title: "Áreas", url: "/cadastro/financeiro/areas" },
           { title: "Centro de Custo", url: "/cadastro/financeiro/centro-custo" },
           { title: "Centro de Receita", url: "/cadastro/financeiro/centro-receita" },
           { title: "Categorias", url: "/cadastro/financeiro/categorias" },
+          { title: "Classificações", url: "/cadastro/financeiro/classificacoes" },
           { title: "Fornecedores", url: "/cadastro/estoque/fornecedores" },
           { title: "Subcategorias", url: "/cadastro/financeiro/subcategorias" },
           { title: "Plano de Contas", url: "/cadastro/financeiro/plano-contas" },

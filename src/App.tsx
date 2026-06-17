@@ -69,6 +69,8 @@ import NovoCentroCusto from "./pages/cadastro/financeiro/NovoCentroCusto";
 import CentroReceita from "./pages/cadastro/financeiro/CentroReceita";
 import NovoCentroReceita from "./pages/cadastro/financeiro/NovoCentroReceita";
 import Categorias from "./pages/cadastro/financeiro/Categorias";
+import Areas from "./pages/cadastro/financeiro/Areas";
+import Classificacoes from "./pages/cadastro/financeiro/Classificacoes";
 import NovaCategoria from "./pages/cadastro/financeiro/NovaCategoria";
 import Subcategorias from "./pages/cadastro/financeiro/Subcategorias";
 import NovaSubcategoria from "./pages/cadastro/financeiro/NovaSubcategoria";
@@ -209,6 +211,8 @@ const App = () => (
                   <Route path="/cadastro/financeiro/centro-custo/novo" element={<NovoCentroCusto />} />
                   <Route path="/cadastro/financeiro/centro-receita" element={<CentroReceita />} />
                   <Route path="/cadastro/financeiro/centro-receita/novo" element={<NovoCentroReceita />} />
+                  <Route path="/cadastro/financeiro/areas" element={<Areas />} />
+                  <Route path="/cadastro/financeiro/classificacoes" element={<Classificacoes />} />
                   <Route path="/cadastro/financeiro/categorias" element={<Categorias />} />
                   <Route path="/cadastro/financeiro/categorias/nova" element={<NovaCategoria />} />
                   <Route path="/cadastro/financeiro/fornecedores" element={<Navigate to="/cadastro/estoque/fornecedores" replace />} />

@@ -439,6 +439,17 @@ export const fetchAreas = async (): Promise<Area[]> => {
     const res = await api.get('/api/financial/areas/');
     return res.data;
 };
+export const createArea = async (data: Partial<Area>): Promise<Area> => {
+    const res = await api.post('/api/financial/areas/', data);
+    return res.data;
+};
+export const updateArea = async (id: number, data: Partial<Area>): Promise<Area> => {
+    const res = await api.put(`/api/financial/areas/${id}/`, data);
+    return res.data;
+};
+export const deleteArea = async (id: number): Promise<void> => {
+    await api.delete(`/api/financial/areas/${id}/`);
+};
 
 // ─── Categorias Financeiras ───────────────────────────────────────────────────
 

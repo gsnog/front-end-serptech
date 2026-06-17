@@ -44,6 +44,15 @@ const ContasReceber = () => {
       : '—';
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  // Invalida lista + indicadores (estatísticas da página, KPIs do dashboard e saldos bancários),
+  // garantindo que nenhum card continue exibindo dados de uma conta alterada/excluída.
+  const invalidateContasReceber = () => {
+    queryClient.invalidateQueries({ queryKey: contasReceberQueryKey })
+    queryClient.invalidateQueries({ queryKey: ["contas_receber_estatisticas"] })
+    queryClient.invalidateQueries({ queryKey: ["estatisticasFinanceiras"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard_full"] })
+    queryClient.invalidateQueries({ queryKey: contasBancariasQueryKey })
+  }
   const [filterDateType, setFilterDateType] = useState("faturamento")
   const [filterStatus, setFilterStatus] = useState("todos")
   const [filterCliente, setFilterCliente] = useState("")
@@ -104,7 +113,7 @@ const ContasReceber = () => {
       if (file) await uploadComprovante(id, file)
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasReceberQueryKey })
+      invalidateContasReceber()
       setPagamentoModal(null)
       setComprovanteFile(null)
       toast({ title: "Pagamento registrado!", description: "Parcela marcada como paga." })
@@ -163,7 +172,7 @@ const ContasReceber = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasReceberQueryKey });
+      invalidateContasReceber();
       setEditItem(null);
       setEditNfPdf(null);
       setEditNfXml(null);
@@ -176,7 +185,7 @@ const ContasReceber = () => {
     mutationFn: (data: { id: number; parcelas: { numero: number; data_de_vencimento: string | null; valor: number }[] }) =>
       reparcelarContaReceber(data.id, data.parcelas),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasReceberQueryKey });
+      invalidateContasReceber();
       setEditItem(null);
       setShowReparcelar(false);
       toast({ title: "Parcelas atualizadas com sucesso." });
@@ -187,7 +196,7 @@ const ContasReceber = () => {
   const deleteMutation = useMutation({
     mutationFn: deleteContaReceber,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasReceberQueryKey });
+      invalidateContasReceber();
       setDeleteId(null);
       toast({ title: "Removida", description: "Conta a receber excluída." });
     },

@@ -51,6 +51,15 @@ const ContasPagar = () => {
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  // Invalida lista + indicadores (estatísticas da página, KPIs do dashboard e saldos bancários),
+  // garantindo que nenhum card continue exibindo dados de uma conta alterada/excluída.
+  const invalidateContasPagar = () => {
+    queryClient.invalidateQueries({ queryKey: contasPagarQueryKey })
+    queryClient.invalidateQueries({ queryKey: ["contas_pagar_estatisticas"] })
+    queryClient.invalidateQueries({ queryKey: ["estatisticasFinanceiras"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard_full"] })
+    queryClient.invalidateQueries({ queryKey: contasBancariasQueryKey })
+  }
   const [filterDateType, setFilterDateType] = useState("faturamento")
   const [filterStatus, setFilterStatus] = useState("todos")
   const [filterBeneficiario, setFilterBeneficiario] = useState("")
@@ -180,7 +189,7 @@ const ContasPagar = () => {
           valor: parseFloat(p.valor) || 0,
         })));
       }
-      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      invalidateContasPagar();
       setClassificarItem(null);
       setShowReparcelar(false);
       toast({ title: "Salvo", description: "Conta classificada com sucesso." });
@@ -217,7 +226,7 @@ const ContasPagar = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      invalidateContasPagar();
       setEditItem(null);
       setEditNfPdf(null);
       setEditNfXml(null);
@@ -230,7 +239,7 @@ const ContasPagar = () => {
     mutationFn: (data: { id: number; parcelas: { numero: number; data_de_vencimento: string | null; valor: number }[] }) =>
       reparcelarContaPagar(data.id, data.parcelas),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      invalidateContasPagar();
       setEditItem(null);
       setShowReparcelar(false);
       toast({ title: "Parcelas atualizadas com sucesso." });
@@ -241,7 +250,7 @@ const ContasPagar = () => {
   const deleteMutation = useMutation({
     mutationFn: deleteContaPagar,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
+      invalidateContasPagar();
       setDeleteId(null);
       toast({ title: "Removida", description: "Conta excluída com sucesso." });
     },
@@ -254,9 +263,7 @@ const ContasPagar = () => {
       if (file) await uploadComprovante(id, file);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: contasPagarQueryKey });
-      queryClient.invalidateQueries({ queryKey: ["financeiro_estatisticas"] });
-      queryClient.invalidateQueries({ queryKey: contasBancariasQueryKey });
+      invalidateContasPagar();
       setPagamentoModal(null);
       setComprovanteFile(null);
       toast({ title: "Pago", description: "Parcela marcada como paga." });

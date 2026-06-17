@@ -7,7 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
-import { PackagePlus, Trash2, Upload, FileText, Lock, UserPlus, Factory } from "lucide-react";
+import { PackagePlus, Trash2, Upload, FileText, Lock, UserPlus, Factory, Loader2 } from "lucide-react";
+import { useCnpjLookup, formatCnpj } from "@/hooks/useCnpjLookup";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -125,9 +126,23 @@ export default function NovaEntrada() {
   const [fornecedorDialogNome, setFornecedorDialogNome] = useState("");
   const [fornecedorDialogCnpj, setFornecedorDialogCnpj] = useState("");
   const [fornecedorDialogRazaoSocial, setFornecedorDialogRazaoSocial] = useState("");
+  const [fornecedorDialogEndereco, setFornecedorDialogEndereco] = useState("");
+  const [fornecedorDialogVendedor, setFornecedorDialogVendedor] = useState("");
   const [fornecedorDialogEmail, setFornecedorDialogEmail] = useState("");
   const [fornecedorDialogTelefone, setFornecedorDialogTelefone] = useState("");
   const [isSavingFornecedor, setIsSavingFornecedor] = useState(false);
+
+  // Consulta de CNPJ (BrasilAPI) para preencher o dialog de fornecedor
+  const { consultarCnpj, isSearching: isSearchingCnpj } = useCnpjLookup((field, value) => {
+    switch (field) {
+      case "nome": setFornecedorDialogNome(value); break;
+      case "razaoSocial": setFornecedorDialogRazaoSocial(value); break;
+      case "endereco": setFornecedorDialogEndereco(value); break;
+      case "vendedor": setFornecedorDialogVendedor(value); break;
+      case "email": setFornecedorDialogEmail(value); break;
+      case "telefone": setFornecedorDialogTelefone(value); break;
+    }
+  });
 
   // Items (itens produzidos / itens da nota)
   const [itens, setItens] = useState<ItemEntrada[]>([]);
@@ -257,10 +272,12 @@ export default function NovaEntrada() {
       const novo = await createFornecedor({
         nome: fornecedorDialogNome,
         cnpj: fornecedorDialogCnpj || undefined,
-        razao_social: fornecedorDialogRazaoSocial || undefined,
+        razao_social: fornecedorDialogRazaoSocial || "",
+        endereco: fornecedorDialogEndereco || "",
+        vendedor: fornecedorDialogVendedor || undefined,
         email: fornecedorDialogEmail || undefined,
         telefone: fornecedorDialogTelefone || undefined,
-      });
+      } as any);
       setFornecedorId(String(novo.id));
       queryClient.invalidateQueries({ queryKey: fornecedoresQueryKey });
       toast({ title: "Fornecedor cadastrado", description: `"${fornecedorDialogNome}" adicionado com sucesso.` });
@@ -336,6 +353,8 @@ export default function NovaEntrada() {
               setFornecedorDialogNome(xNome);
               setFornecedorDialogCnpj(cnpjFmt);
               setFornecedorDialogRazaoSocial(xNome);
+              setFornecedorDialogEndereco("");
+              setFornecedorDialogVendedor("");
               setFornecedorDialogEmail("");
               setFornecedorDialogTelefone("");
               setXmlFornecedorNotFound(true);
@@ -1020,12 +1039,24 @@ export default function NovaEntrada() {
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium">CNPJ</Label>
-              <Input
-                value={fornecedorDialogCnpj}
-                onChange={(e) => setFornecedorDialogCnpj(e.target.value)}
-                placeholder="00.000.000/0000-00"
-                className="form-input"
-              />
+              <div className="flex gap-2 items-center">
+                <Input
+                  value={fornecedorDialogCnpj}
+                  onChange={(e) => setFornecedorDialogCnpj(formatCnpj(e.target.value))}
+                  placeholder="00.000.000/0000-00"
+                  className="form-input"
+                  maxLength={18}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => consultarCnpj(fornecedorDialogCnpj)}
+                  disabled={isSearchingCnpj}
+                >
+                  {isSearchingCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : "Consultar"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Consulta os dados na BrasilAPI e preenche os campos.</p>
             </div>
             <div className="space-y-1">
               <Label className="text-sm font-medium">Razão Social</Label>
@@ -1033,6 +1064,25 @@ export default function NovaEntrada() {
                 value={fornecedorDialogRazaoSocial}
                 onChange={(e) => setFornecedorDialogRazaoSocial(e.target.value)}
                 placeholder="Razão social"
+                className="form-input"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Endereço</Label>
+              <Textarea
+                value={fornecedorDialogEndereco}
+                onChange={(e) => setFornecedorDialogEndereco(e.target.value)}
+                placeholder="Logradouro, número, bairro, cidade, UF, CEP"
+                className="form-input"
+                rows={2}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Vendedor</Label>
+              <Input
+                value={fornecedorDialogVendedor}
+                onChange={(e) => setFornecedorDialogVendedor(e.target.value)}
+                placeholder="Nome do vendedor"
                 className="form-input"
               />
             </div>

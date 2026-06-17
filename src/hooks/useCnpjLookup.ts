@@ -32,10 +32,9 @@ export const useCnpjLookup = (
       const response = await api.get(`/api/estoque/consulta-cnpj/${digits}/`);
       const data = response.data;
 
-      if (data.nome) {
-        setFieldValue("nome", data.nome);
-        setFieldValue("razaoSocial", data.nome);
-      }
+      if (data.nome) setFieldValue("nome", data.nome);
+      if (data.razao_social || data.nome)
+        setFieldValue("razaoSocial", data.razao_social || data.nome);
 
       const enderecoParts = [
         data.logradouro,
