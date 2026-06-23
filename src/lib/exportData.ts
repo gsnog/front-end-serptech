@@ -51,9 +51,9 @@ export function exportData(
     const columns = Object.keys(data[0]);
     const rows = data.map(row => columns.map(col => String(row[col] ?? '')));
 
-    // Brand identity: Preto Grafite #0B0D0F and Verde Lima #C6F000
-    const primaryColor: [number, number, number] = [198, 240, 0]; // Verde Lima
-    const darkColor: [number, number, number] = [11, 13, 15]; // Preto Grafite
+    // Brand identity DLC: Azul escuro #1A2D60 e Azul claro #65A3C6
+    const primaryColor: [number, number, number] = [101, 163, 198]; // Azul claro
+    const darkColor: [number, number, number] = [26, 45, 96]; // Azul escuro
 
     // Header bar
     doc.setFillColor(...darkColor);

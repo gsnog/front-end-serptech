@@ -17,6 +17,7 @@ export interface Fornecedor {
 export interface ItemEstoque {
     id: number;
     itens_do_estoque: string;
+    unidade_medida?: string;
 }
 
 export interface InventarioItem {
@@ -25,6 +26,7 @@ export interface InventarioItem {
     item_nome: string;
     unidade: number;
     unidade_nome: string;
+    unidade_medida?: string;
     quantidade_disponivel: number;
 }
 
@@ -234,6 +236,13 @@ export const fetchItensEstoque = async (page?: number): Promise<ItemEstoque[] | 
     const params = page !== undefined ? { page } : {};
     const res = await api.get('/api/estoque/itens/', { params });
     return res.data;
+};
+export const updateItemEstoque = async (id: number, data: Partial<ItemEstoque>): Promise<ItemEstoque> => {
+    const res = await api.patch(`/api/estoque/itens/${id}/`, data);
+    return res.data;
+};
+export const deleteItemEstoque = async (id: number): Promise<void> => {
+    await api.delete(`/api/estoque/itens/${id}/`);
 };
 
 // ─── Inventário ───────────────────────────────────────────────────────────────

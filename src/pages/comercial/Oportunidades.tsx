@@ -127,7 +127,7 @@ export default function Oportunidades() {
     const colors: Record<string, string> = {
       prospeccao: "bg-slate-100 dark:bg-slate-800", qualificacao: "bg-blue-50 dark:bg-blue-900/30",
       diagnostico: "bg-indigo-50 dark:bg-indigo-900/30", proposta: "bg-purple-50 dark:bg-purple-900/30",
-      negociacao: "bg-amber-50 dark:bg-amber-900/30", aprovacao: "bg-lime-50 dark:bg-lime-900/30",
+      negociacao: "bg-amber-50 dark:bg-amber-900/30", aprovacao: "bg-sky-50 dark:bg-sky-900/30",
     };
     return colors[etapaId] || "bg-muted";
   };
@@ -238,7 +238,7 @@ export default function Oportunidades() {
             );
           })}
           <div className="flex-shrink-0 w-[300px]">
-            <div className="rounded p-3 bg-lime-50 dark:bg-lime-900/30">
+            <div className="rounded p-3 bg-emerald-50 dark:bg-emerald-900/30">
               <div className="flex items-center justify-between mb-3">
                 <div><h3 className="font-semibold text-sm text-success">Fechado Ganho</h3><p className="text-xs text-muted-foreground">{filtered.filter((op: any) => op.estagio === "ganho").length} ops</p></div>
                 <Badge variant="outline" className="text-xs bg-success/10 text-success border-success">100%</Badge>

@@ -172,10 +172,14 @@ export interface Medico {
     user?: number;
 }
 
-export const fetchMedicos = async (page = 1, search = ''): Promise<PaginatedResponse<Medico>> => {
-    const params: Record<string, string | number> = { page };
+export const fetchMedicos = async (page = 1, search = '', pageSize = 20): Promise<PaginatedResponse<Medico>> => {
+    const params: Record<string, string | number> = { page, page_size: pageSize };
     if (search) params.search = search;
     const res = await api.get('/api/medicos/', { params });
+    // Normaliza: backend pode retornar lista quando não há '?page='
+    if (Array.isArray(res.data)) {
+        return { count: res.data.length, next: null, previous: null, results: res.data };
+    }
     return res.data;
 };
 

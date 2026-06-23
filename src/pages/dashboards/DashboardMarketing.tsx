@@ -104,12 +104,12 @@ export default function DashboardMarketing() {
       {/* Hero Dark Accent Card */}
       <FadeIn delay={1}>
         <div className="relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br from-[#0B0D0F] via-[#131619] to-[#0B0D0F] shadow-xl shadow-black/20">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-lime-400/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-400/5 rounded-full blur-3xl pointer-events-none" />
           <div className="relative z-10">
             <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-2">Leads Captados no Período</p>
             <div className="flex items-baseline gap-4">
               <span className="text-5xl font-bold tracking-tight text-white">{metricas.leads}</span>
-              <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-lime-400/15 text-lime-400 border border-lime-400/20">+15% vs período anterior</span>
+              <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-sky-400/15 text-sky-400 border border-sky-400/20">+15% vs período anterior</span>
             </div>
             <div className="flex gap-8 mt-6">
               <div>
@@ -126,7 +126,7 @@ export default function DashboardMarketing() {
               </div>
               <div>
                 <p className="text-[10px] text-white/30 uppercase tracking-widest">ROI Médio</p>
-                <p className="text-xl font-bold text-lime-400 mt-1">{metricas.roi.toFixed(0)}%</p>
+                <p className="text-xl font-bold text-sky-400 mt-1">{metricas.roi.toFixed(0)}%</p>
               </div>
             </div>
           </div>
@@ -173,8 +173,8 @@ export default function DashboardMarketing() {
                 <BarChart data={leadsPorCanalData.slice(0, 5)}>
                   <defs>
                     <linearGradient id="mktCanalGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(72 100% 55%)" />
-                      <stop offset="100%" stopColor="hsl(72 100% 40%)" />
+                      <stop offset="0%" stopColor="hsl(202 46% 59%)" />
+                      <stop offset="100%" stopColor="hsl(224 57% 24%)" />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="canal" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -199,7 +199,7 @@ export default function DashboardMarketing() {
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted-foreground">{formatCurrency(c.gasto)} investido</span>
                   <span className={`font-bold text-sm px-3 py-1 rounded-full ${c.roi >= 0
-                      ? 'bg-lime-400/10 text-lime-600 dark:bg-lime-400/15 dark:text-lime-400'
+                      ? 'bg-sky-400/10 text-sky-600 dark:bg-sky-400/15 dark:text-sky-400'
                       : 'bg-rose-400/10 text-rose-600 dark:bg-rose-400/15 dark:text-rose-400'
                     }`}>
                     {c.roi > 0 ? '+' : ''}{c.roi.toFixed(0)}%

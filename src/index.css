@@ -12,49 +12,49 @@
     --system-lighter: 210 8% 25%;
     --system-dark: 210 15% 3%;
     
-    /* Primary accent: #C6F000 = HSL 72 100% 47% (Lime) */
+    /* Paleta DLC — Azul escuro #1A2D60 (224 57% 24%), Azul claro #65A3C6 (202 46% 59%), branco e preto */
     --background: 210 20% 98%;
     --foreground: 210 15% 5%;
     --card: 0 0% 100%;
     --card-foreground: 210 15% 5%;
     --popover: 0 0% 100%;
     --popover-foreground: 210 15% 5%;
-    --primary: 72 100% 47%;
-    --primary-foreground: 0 0% 0%;
+    --primary: 224 57% 24%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 210 14% 96%;
     --secondary-foreground: 210 15% 5%;
     --muted: 210 14% 96%;
     --muted-foreground: 210 10% 46%;
-    --accent: 72 100% 47%;
+    --accent: 202 46% 59%;
     --accent-foreground: 0 0% 0%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --success: 72 100% 47%;
-    --success-foreground: 0 0% 0%;
+    --success: 142 64% 40%;
+    --success-foreground: 0 0% 100%;
     --warning: 45 93% 47%;
     --warning-foreground: 0 0% 0%;
     --border: 210 13% 91%;
     --input: 210 13% 91%;
-    --ring: 72 100% 47%;
+    --ring: 202 46% 59%;
     --radius: 0.75rem;
 
     /* Sidebar colors - light mode: matches header/topbar */
     --sidebar-bg: 210 20% 98%;
     --sidebar-foreground: 210 15% 15%;
-    --sidebar-accent: 72 100% 47%;
+    --sidebar-accent: 224 57% 24%;
     --sidebar-hover: 210 14% 93%;
     --sidebar-active: 210 14% 91%;
     --sidebar-background: 210 20% 98%;
-    --sidebar-primary: 72 100% 47%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-primary: 224 57% 24%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 210 13% 88%;
-    --sidebar-ring: 72 100% 47%;
+    --sidebar-ring: 202 46% 59%;
     --sidebar-muted: 210 10% 46%;
 
     /* Status colors */
-    --status-progress: 72 100% 47%;
-    --status-done: 72 100% 47%;
+    --status-progress: 202 46% 59%;
+    --status-done: 142 64% 40%;
     --status-pending: 45 93% 47%;
 
     /* Table colors - light mode */
@@ -66,9 +66,9 @@
     --table-border: 220 20% 92%;
 
     /* Chart colors */
-    --chart-1: 72 100% 47%;
+    --chart-1: 224 57% 24%;
     --chart-2: 210 15% 5%;
-    --chart-3: 197 71% 45%;
+    --chart-3: 202 46% 59%;
     --chart-4: 210 8% 55%;
     --chart-5: 0 84% 60%;
 
@@ -92,9 +92,9 @@
     --popover: 220 8% 10%;
     --popover-foreground: 0 0% 93%;
 
-    /* Primary stays lime, foreground black for contrast */
-    --primary: 72 100% 47%;
-    --primary-foreground: 0 0% 0%;
+    /* Primary: azul claro para contraste no fundo escuro */
+    --primary: 202 46% 59%;
+    --primary-foreground: 222 47% 11%;
 
     /* Secondary & muted: subtle elevated surfaces */
     --secondary: 220 8% 14%;
@@ -103,15 +103,15 @@
     --muted-foreground: 220 5% 55%;
 
     /* Accent = primary for consistency */
-    --accent: 72 100% 47%;
-    --accent-foreground: 0 0% 0%;
+    --accent: 202 46% 59%;
+    --accent-foreground: 222 47% 11%;
 
     /* Destructive: softer red for dark backgrounds */
     --destructive: 0 65% 55%;
     --destructive-foreground: 0 0% 100%;
 
     /* Success & warning */
-    --success: 72 100% 50%;
+    --success: 142 60% 48%;
     --success-foreground: 0 0% 0%;
     --warning: 45 90% 55%;
     --warning-foreground: 0 0% 0%;
@@ -119,7 +119,7 @@
     /* Borders & inputs: subtle separation */
     --border: 220 6% 18%;
     --input: 220 6% 16%;
-    --ring: 72 100% 47%;
+    --ring: 202 46% 59%;
 
     /* Sidebar - consistent graphite */
     --sidebar-bg: 220 10% 5%;
@@ -129,15 +129,15 @@
     --sidebar-active: 220 8% 14%;
     --sidebar-border: 220 6% 14%;
     --sidebar-muted: 0 0% 55%;
-    --sidebar-accent: 72 100% 47%;
-    --sidebar-primary: 72 100% 47%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent-foreground: 0 0% 0%;
-    --sidebar-ring: 72 100% 47%;
+    --sidebar-accent: 202 46% 59%;
+    --sidebar-primary: 202 46% 59%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-ring: 202 46% 59%;
 
     /* Status */
-    --status-progress: 72 100% 50%;
-    --status-done: 72 100% 50%;
+    --status-progress: 202 46% 59%;
+    --status-done: 142 60% 48%;
     --status-pending: 45 90% 55%;
 
     /* Table colors - cells match card/filter bg for consistency */
@@ -149,7 +149,7 @@
     --table-border: 220 6% 18%;
 
     /* Chart colors - brighter for dark bg readability */
-    --chart-1: 72 100% 52%;
+    --chart-1: 202 46% 59%;
     --chart-2: 220 5% 45%;
     --chart-3: 197 65% 55%;
     --chart-4: 220 5% 60%;

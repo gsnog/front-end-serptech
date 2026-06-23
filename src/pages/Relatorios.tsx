@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react"
+import { useSearchParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -46,8 +47,14 @@ const fmtDate = (d: string | null | undefined) => {
   return `${day}/${m}/${y}`
 }
 
+const TIPOS_VALIDOS: TipoRelatorio[] = ["contas-receber", "contas-pagar", "fluxo-caixa"]
+
 export default function Relatorios() {
-  const [tipo, setTipo] = useState<TipoRelatorio>("contas-receber")
+  const [searchParams] = useSearchParams()
+  const tipoParam = searchParams.get("tipo") as TipoRelatorio | null
+  const tipoInicial: TipoRelatorio = tipoParam && TIPOS_VALIDOS.includes(tipoParam) ? tipoParam : "contas-receber"
+
+  const [tipo, setTipo] = useState<TipoRelatorio>(tipoInicial)
   const [tipoData, setTipoData] = useState<TipoData>("vencimento")
   const [filtroTempo, setFiltroTempo] = useState<FiltroTempo>("anual")
   const [ano, setAno] = useState(String(new Date().getFullYear()))
@@ -354,7 +361,7 @@ export default function Relatorios() {
                   <>
                     <div className="p-4 rounded-xl bg-primary/5 text-center">
                       <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Entradas</p>
-                      <p className="text-xl font-bold text-lime-600 mt-1">
+                      <p className="text-xl font-bold text-emerald-600 mt-1">
                         {fmt(fluxoCaixaDisplay.reduce((s, i) => s + (i._entradaVal ?? 0), 0))}
                       </p>
                     </div>
@@ -409,7 +416,7 @@ export default function Relatorios() {
                         <TableCell>{item.cliente}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
                         <TableCell>{item.faturamento}</TableCell>
-                        <TableCell className="text-right font-semibold text-lime-600">+{item.valor}</TableCell>
+                        <TableCell className="text-right font-semibold text-emerald-600">+{item.valor}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                       </TableRow>
                     ))}
@@ -465,7 +472,7 @@ export default function Relatorios() {
                       <TableRow key={idx}>
                         <TableCell>{item.data}</TableCell>
                         <TableCell>{item.descricao}</TableCell>
-                        <TableCell className={`text-right font-semibold ${item._entradaVal > 0 ? "text-lime-600" : "text-rose-500"}`}>
+                        <TableCell className={`text-right font-semibold ${item._entradaVal > 0 ? "text-emerald-600" : "text-rose-500"}`}>
                           {item._entradaVal > 0 ? `+${item.entrada}` : `-${item.saida}`}
                         </TableCell>
                         <TableCell className="text-right font-bold">{item.saldo}</TableCell>

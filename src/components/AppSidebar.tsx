@@ -21,9 +21,9 @@ import { cn } from "@/lib/utils"
 import { useTheme } from "@/hooks/useTheme"
 import { Badge } from "@/components/ui/badge"
 import { usePermissions } from "@/contexts/PermissionsContext"
-import logoSerpLight from "@/assets/logo-serp-light.png"
-import logoSerpDark from "@/assets/logo-serp-dark.png"
-import logoIcone from "@/assets/Logo_Serp_27.png"
+import logoSerpLight from "@/assets/logo-dlc.png"
+import logoSerpDark from "@/assets/Logo - DLC dark - mode (1).png"
+import logoIcone from "@/assets/logo-dlc.png"
 
 // ── Menu structure ─────────────────────────────────────────────────────────
 
@@ -98,7 +98,7 @@ const menuItems = [
       { title: "Pedidos Internos",  url: "/estoque/pedidos-internos",  module: "estoque",    page: "est_pedidos_internos"  },
       { title: "Saídas",            url: "/estoque/saidas",            module: "estoque",    page: "est_saidas"            },
       { title: "Transferências",    url: "/estoque/transferencias",    module: "estoque",    page: "est_transferencias"    },
-      { title: "Patrimônio",        url: "/patrimonio",                module: "patrimonio", page: "patrimonio"            },
+      { title: "Patrimônio",        url: "/patrimonio",                module: "estoque",    page: "est_patrimonio"        },
     ]
   },
   {
@@ -238,7 +238,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="relative flex h-20 items-center justify-center border-b border-[hsl(var(--sidebar-border))] px-4">
         <div className="relative flex items-center justify-center overflow-hidden w-full h-full">
           <img
-            src={logoIcone}
+            src={theme === "dark" ? logoSerpDark : logoIcone}
             alt="S"
             className={cn(
               "absolute object-contain transition-all duration-300 ease-in-out h-12",

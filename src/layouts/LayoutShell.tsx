@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Outlet, useLocation, Navigate } from "react-router-dom"
 import { AppSidebar } from "@/components/AppSidebar"
 import { Topbar } from "@/components/Topbar"
+import { Footer } from "@/components/Footer"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { cn } from "@/lib/utils"
 import { usePermissions } from "@/contexts/PermissionsContext"
@@ -203,6 +204,9 @@ function LayoutContent() {
         )}>
           <Outlet />
         </main>
+
+        {/* Footer padrão de responsabilidade */}
+        {location.pathname !== "/chat" && <Footer />}
       </div>
     </div>
   )

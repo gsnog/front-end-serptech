@@ -157,7 +157,7 @@ export default function RelatorioFluxoCaixa() {
               <div className="grid grid-cols-3 gap-4 mb-6">
                 <div className="p-4 rounded-xl bg-primary/5 text-center">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Entradas</p>
-                  <p className="text-xl font-bold text-lime-600 mt-1">{fmt(totalEntradas)}</p>
+                  <p className="text-xl font-bold text-emerald-600 mt-1">{fmt(totalEntradas)}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-primary/5 text-center">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Saídas</p>
@@ -165,7 +165,7 @@ export default function RelatorioFluxoCaixa() {
                 </div>
                 <div className="p-4 rounded-xl bg-primary/5 text-center">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Saldo do Período</p>
-                  <p className={`text-xl font-bold mt-1 ${saldoPeriodo >= 0 ? 'text-lime-600' : 'text-rose-500'}`}>{fmt(saldoPeriodo)}</p>
+                  <p className={`text-xl font-bold mt-1 ${saldoPeriodo >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{fmt(saldoPeriodo)}</p>
                 </div>
               </div>
 
@@ -183,7 +183,7 @@ export default function RelatorioFluxoCaixa() {
                     <TableRow key={item.key}>
                       <TableCell>{item.data}</TableCell>
                       <TableCell>{item.descricao}</TableCell>
-                      <TableCell className={`text-right font-semibold ${item.isEntrada ? 'text-lime-600' : 'text-rose-500'}`}>
+                      <TableCell className={`text-right font-semibold ${item.isEntrada ? 'text-emerald-600' : 'text-rose-500'}`}>
                         {item.valor}
                       </TableCell>
                       <TableCell className="text-right font-bold">{item.saldo}</TableCell>

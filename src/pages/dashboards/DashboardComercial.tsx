@@ -47,7 +47,7 @@ const PERDA_COLORS = [
   'hsl(var(--destructive))',
   'hsl(45 90% 55%)',
   'hsl(var(--primary))',
-  'hsl(72 100% 50%)',
+  'hsl(202 46% 59%)',
   'hsl(var(--muted-foreground))',
 ];
 
@@ -146,11 +146,11 @@ export default function DashboardComercial() {
       {/* Hero Dark Accent Card */}
       <FadeIn delay={5}>
         <div className="relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br from-[#0B0D0F] via-[#131619] to-[#0B0D0F] shadow-xl shadow-black/20">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-lime-400/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-400/5 rounded-full blur-3xl pointer-events-none" />
           <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-2">Valor Total no Pipeline</p>
           <div className="flex items-baseline gap-4">
             <span className="text-5xl font-bold tracking-tight text-white">{formatCurrency(pipelineTotal)}</span>
-            <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-lime-400/15 text-lime-400 border border-lime-400/20">+18% vs mês anterior</span>
+            <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-sky-400/15 text-sky-400 border border-sky-400/20">+18% vs mês anterior</span>
           </div>
         </div>
       </FadeIn>

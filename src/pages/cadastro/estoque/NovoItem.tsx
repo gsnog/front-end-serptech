@@ -11,6 +11,7 @@ import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { UNIDADES_MEDIDA } from "@/lib/unidadesMedida";
 import { toast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { fetchFornecedores, fetchNomenclaturas, createNomenclatura, type Fornecedor, type Nomenclatura } from "@/services/estoque";
@@ -43,7 +44,7 @@ const NovoItem = () => {
   const [countdown, setCountdown] = useState(3);
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
-    { nome: "", data: "", apresentacao: "", setor: "", frequenciaCompra: "", frequenciaSaida: "", descricao: "" },
+    { nome: "", data: "", unidadeMedida: "", setor: "", frequenciaCompra: "", frequenciaSaida: "", descricao: "" },
     validationFields
   );
 
@@ -110,6 +111,7 @@ const NovoItem = () => {
           fornecedores: selectedFornecedores,
           nomenclaturas: selectedNomenclaturas,
           descricao: formData.descricao,
+          unidade_medida: formData.unidadeMedida,
           frequencia_compra: formData.frequenciaCompra,
           frequencia_de_saida: formData.frequenciaSaida,
         });
@@ -262,12 +264,12 @@ const NovoItem = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Forma de Apresentação</Label>
-                <Select value={formData.apresentacao} onValueChange={(v) => setFieldValue("apresentacao", v)}>
+                <Label className="text-sm font-medium">Unidade de Medida</Label>
+                <Select value={formData.unidadeMedida} onValueChange={(v) => setFieldValue("unidadeMedida", v)}>
                   <SelectTrigger className="form-input"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {["Caixa", "Unidade", "Pacote", "Litro", "Kg"].map(opt => (
-                      <SelectItem key={opt} value={opt.toLowerCase()}>{opt}</SelectItem>
+                    {UNIDADES_MEDIDA.map(u => (
+                      <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

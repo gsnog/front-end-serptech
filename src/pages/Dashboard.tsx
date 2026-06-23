@@ -375,8 +375,8 @@ const DashboardGeral = () => {
                 <AreaChart data={evolutionData}>
                   <defs>
                     <linearGradient id="gradEntradas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(72 100% 50%)" stopOpacity={0.2} />
-                      <stop offset="100%" stopColor="hsl(72 100% 50%)" stopOpacity={0} />
+                      <stop offset="0%" stopColor="hsl(202 46% 59%)" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="hsl(202 46% 59%)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="gradSaidas" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.15} />
@@ -391,7 +391,7 @@ const DashboardGeral = () => {
                   <YAxis tickFormatter={(v) => `R$ ${(v / 1000).toFixed(0)}k`} tick={axisStyle} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Area type="monotone" dataKey="entradas" name="Entradas" stroke="hsl(72 100% 50%)" fill="url(#gradEntradas)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: "hsl(72 100% 50%)", stroke: "hsl(var(--background))", strokeWidth: 2 }} />
+                  <Area type="monotone" dataKey="entradas" name="Entradas" stroke="hsl(202 46% 59%)" fill="url(#gradEntradas)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, fill: "hsl(202 46% 59%)", stroke: "hsl(var(--background))", strokeWidth: 2 }} />
                   <Area type="monotone" dataKey="saidas" name="Saídas" stroke="hsl(var(--destructive))" fill="url(#gradSaidas)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                   <Area type="monotone" dataKey="saldo" name="Saldo" stroke="hsl(var(--chart-3))" fill="url(#gradSaldo)" strokeWidth={2.5} dot={false} activeDot={{ r: 5 }} />
                 </AreaChart>
@@ -403,8 +403,8 @@ const DashboardGeral = () => {
                 <BarChart data={evolutionData} barGap={8}>
                   <defs>
                     <linearGradient id="barGradEntradas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(72 100% 55%)" />
-                      <stop offset="100%" stopColor="hsl(72 100% 40%)" />
+                      <stop offset="0%" stopColor="hsl(202 46% 59%)" />
+                      <stop offset="100%" stopColor="hsl(224 57% 24%)" />
                     </linearGradient>
                     <linearGradient id="barGradSaidas" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.9} />
@@ -539,14 +539,14 @@ const DashboardGeral = () => {
             {ultimasMovimentacoes.map((mov, index) => (
               <div key={index} className="flex items-center justify-between py-3.5 border-b border-border/20 last:border-0">
                 <div className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full ${mov.tipo === "Recebimento" ? "bg-lime-400" : mov.tipo === "Pagamento" ? "bg-rose-400" : "bg-amber-400"}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full ${mov.tipo === "Recebimento" ? "bg-emerald-400" : mov.tipo === "Pagamento" ? "bg-rose-400" : "bg-amber-400"}`} />
                   <div>
                     <p className="font-medium text-sm">{mov.tipo}</p>
                     <p className="text-xs text-muted-foreground">{mov.descricao}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-lime-600 dark:text-lime-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{parseCurrency(mov.valor)}</p>
+                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-emerald-600 dark:text-emerald-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{parseCurrency(mov.valor)}</p>
                   <p className="text-xs text-muted-foreground">{formatDate(mov.data)}</p>
                 </div>
               </div>
@@ -695,8 +695,8 @@ const DashboardFinanceiro = () => {
             <BarChart data={evolutionData} barGap={8}>
               <defs>
                 <linearGradient id="finBarEntradas" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(72 100% 55%)" />
-                  <stop offset="100%" stopColor="hsl(72 100% 40%)" />
+                  <stop offset="0%" stopColor="hsl(202 46% 59%)" />
+                  <stop offset="100%" stopColor="hsl(224 57% 24%)" />
                 </linearGradient>
                 <linearGradient id="finBarSaidas" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(var(--destructive))" stopOpacity={0.9} />
@@ -721,8 +721,8 @@ const DashboardFinanceiro = () => {
             <BarChart data={contasStatusData}>
               <defs>
                 <linearGradient id="recStatusGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(72 100% 55%)" />
-                  <stop offset="100%" stopColor="hsl(72 100% 40%)" />
+                  <stop offset="0%" stopColor="hsl(202 46% 59%)" />
+                  <stop offset="100%" stopColor="hsl(224 57% 24%)" />
                 </linearGradient>
               </defs>
               <XAxis dataKey="status" tick={{ ...axisStyle, fontSize: 10 }} axisLine={false} tickLine={false} />
@@ -851,14 +851,14 @@ const DashboardFinanceiro = () => {
             {ultimasMovimentacoes.map((mov: any, index: number) => (
               <div key={index} className="flex items-center justify-between py-3.5 border-b border-border/20 last:border-0">
                 <div className="flex items-center gap-3">
-                  <div className={`w-2.5 h-2.5 rounded-full ${mov.tipo === "Recebimento" ? "bg-lime-400" : mov.tipo === "Pagamento" ? "bg-rose-400" : "bg-amber-400"}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full ${mov.tipo === "Recebimento" ? "bg-emerald-400" : mov.tipo === "Pagamento" ? "bg-rose-400" : "bg-amber-400"}`} />
                   <div>
                     <p className="font-medium text-sm">{mov.tipo}</p>
                     <p className="text-xs text-muted-foreground">{mov.descricao}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-lime-600 dark:text-lime-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{parseCurrency(mov.valor)}</p>
+                  <p className={`font-semibold text-sm ${mov.tipo === "Recebimento" ? "text-emerald-600 dark:text-emerald-400" : mov.tipo === "Pagamento" ? "text-rose-600 dark:text-rose-400" : ""}`}>{parseCurrency(mov.valor)}</p>
                   <p className="text-xs text-muted-foreground">{formatDate(mov.data)}</p>
                 </div>
               </div>
@@ -1433,7 +1433,7 @@ const DashboardMeuPerfil = () => {
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Setor</span><span className="font-medium">{me?.setor || "—"}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Supervisor</span><span className="font-medium">{me?.supervisor_nome || "—"}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-muted-foreground">Admissão</span><span className="font-medium">{formatDate(me?.data_admissao)}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Status</span><span className="font-medium text-lime-600">Ativo</span></div>
+                <div className="flex justify-between text-sm"><span className="text-muted-foreground">Status</span><span className="font-medium text-primary">Ativo</span></div>
               </div>
             </div>
           </div>
@@ -1464,7 +1464,7 @@ const DashboardMeuPerfil = () => {
               </div>
               <div className="bg-card rounded-2xl p-5 shadow-sm shadow-black/[0.04] dark:shadow-black/20 flex flex-col justify-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mb-1">Entradas Aprovadas</p>
-                <p className="text-2xl font-bold text-lime-600">{me?.stats?.entradas_aprovadas || 0}</p>
+                <p className="text-2xl font-bold text-primary">{me?.stats?.entradas_aprovadas || 0}</p>
                 <p className="text-xs text-muted-foreground mt-1">Lançamentos validados</p>
               </div>
             </div>
@@ -1486,7 +1486,7 @@ const DashboardMeuPerfil = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium">{membro.nome}</p>
-                  <p className="text-xs text-muted-foreground">{membro.cargo} · <span className="text-lime-600">Ativo</span></p>
+                  <p className="text-xs text-muted-foreground">{membro.cargo} · <span className="text-primary">Ativo</span></p>
                 </div>
               </div>
             )) : (

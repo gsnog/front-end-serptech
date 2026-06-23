@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import { useQuery } from "@tanstack/react-query"
 import { fetchInventario, fetchUnidades, inventarioQueryKey } from "@/services/estoque"
+import { unidadeMedidaLabel } from "@/lib/unidadesMedida"
 import { usePagination } from "@/hooks/usePagination"
 import { useSortable } from "@/hooks/useSortable"
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
@@ -49,7 +50,8 @@ export default function EstoqueInventario() {
       id: i.id,
       item: i.item_nome,
       quantidade: i.quantidade_disponivel,
-      unidade: i.unidade_nome
+      unidade: i.unidade_nome,
+      unidadeMedida: unidadeMedidaLabel(i.unidade_medida)
     }))
   }, [inventario])
 
@@ -65,7 +67,7 @@ export default function EstoqueInventario() {
   const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
   const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted)
 
-  const getExportData = () => filtered.map(i => ({ Item: i.item, Quantidade: i.quantidade, Unidade: i.unidade }));
+  const getExportData = () => filtered.map(i => ({ Item: i.item, Quantidade: i.quantidade, Unidade: i.unidade, "Unidade de Medida": i.unidadeMedida }));
   const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API" }); setDeleteId(null); } };
   const openEdit = (i: any) => { setEditItem(i); setEditData({ item: i.item, quantidade: String(i.quantidade), unidade: i.unidade }); };
   const handleSaveEdit = () => { if (editItem) { toast({ title: "Edição requer API" }); setEditItem(null); } };
@@ -98,13 +100,14 @@ export default function EstoqueInventario() {
               <SortableHead label="Item" field="item" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Quantidade" field="quantidade" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <SortableHead label="Unidade" field="unidade" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Unidade de Medida" field="unidadeMedida" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum item encontrado.</TableCell></TableRow>) : (
+              {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum item encontrado.</TableCell></TableRow>) : (
                 paginatedItems.map((item) => (
                   <TableRow key={item.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell >{item.item}</TableCell><TableCell >{item.quantidade}</TableCell><TableCell >{item.unidade}</TableCell>
+                    <TableCell >{item.item}</TableCell><TableCell >{item.quantidade}</TableCell><TableCell >{item.unidade}</TableCell><TableCell >{item.unidadeMedida}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} /></TableCell>
                   </TableRow>
                 ))
@@ -125,7 +128,7 @@ export default function EstoqueInventario() {
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes do Item</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Item: viewItem.item, Quantidade: viewItem.quantidade, Unidade: viewItem.unidade }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
+          {viewItem && <div className="space-y-2">{Object.entries({ Item: viewItem.item, Quantidade: viewItem.quantidade, Unidade: viewItem.unidade, "Unidade de Medida": viewItem.unidadeMedida }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
         </DialogContent>
       </Dialog>
 

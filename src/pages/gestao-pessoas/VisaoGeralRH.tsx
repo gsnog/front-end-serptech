@@ -65,7 +65,7 @@ export default function VisaoGeralRH() {
   const setoresList = ["todos", ...porSetor.filter(s => s.quantidade > 0).map(s => s.setor)];
 
   const pieData = [
-    { name: "Ativos", value: ativos, color: "hsl(72 100% 50%)" },
+    { name: "Ativos", value: ativos, color: "hsl(202 46% 59%)" },
     { name: "Afastados", value: afastados, color: "hsl(45 100% 50%)" },
     { name: "Desligados", value: desligados, color: "hsl(0 80% 60%)" },
   ];

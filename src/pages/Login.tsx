@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import logo from "@/assets/logo-serp.png";
+import logo from "@/assets/logo-dlc.png";
+import logoDark from "@/assets/Logo - DLC dark - mode (1).png";
+import { Footer } from "@/components/Footer";
 import api from "@/lib/api";
 import { LoginResponse } from "@/types/auth";
 import { usePermissions, availableDashboards, type UserPermissions } from "@/contexts/PermissionsContext";
@@ -89,7 +91,12 @@ const Login = () => {
           <img
             src={logo}
             alt="SERP Logo"
-            className="w-48 mb-8 drop-shadow-2xl"
+            className="w-48 mb-8 drop-shadow-2xl dark:hidden"
+          />
+          <img
+            src={logoDark}
+            alt="SERP Logo"
+            className="hidden w-48 mb-8 drop-shadow-2xl dark:block"
           />
           <h1 className="text-4xl font-bold text-white text-center mb-4">
             Sistema de Gestão
@@ -108,7 +115,12 @@ const Login = () => {
             <img
               src={logo}
               alt="SERP Logo"
-              className="w-32"
+              className="w-32 dark:hidden"
+            />
+            <img
+              src={logoDark}
+              alt="SERP Logo"
+              className="hidden w-32 dark:block"
             />
           </div>
 
@@ -237,10 +249,8 @@ const Login = () => {
             </button>
           </p>
 
-          {/* Footer */}
-          <p className="text-center text-xs text-muted-foreground mt-8">
-            © 2024 SERP. Todos os direitos reservados.
-          </p>
+          {/* Footer padrão de responsabilidade */}
+          <Footer className="mt-8 border-t-0 bg-transparent px-0 py-0" />
         </div>
       </div>
     </div>

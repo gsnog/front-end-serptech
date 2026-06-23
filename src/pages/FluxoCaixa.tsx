@@ -169,7 +169,7 @@ const FluxoCaixa = () => {
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
-          <Button onClick={() => navigate("/relatorios")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
+          <Button onClick={() => navigate("/relatorios?tipo=fluxo-caixa")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 
         <FilterSection

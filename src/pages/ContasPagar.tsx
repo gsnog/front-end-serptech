@@ -513,7 +513,7 @@ const ContasPagar = () => {
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/financeiro/contas-pagar/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Conta</Button>
-          <Button onClick={() => navigate("/relatorios")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
+          <Button onClick={() => navigate("/relatorios?tipo=contas-pagar")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 
         <FilterSection
