@@ -199,6 +199,7 @@ export interface Conciliacao {
 export interface Transacao {
     id: number;
     data_de_lancamento: string;
+    data_da_transacao: string;
     valor: number;
     descricao?: string;
     conta_origem: number;

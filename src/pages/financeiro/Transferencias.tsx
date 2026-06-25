@@ -30,7 +30,7 @@ const Transferencias = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<Transacao | null>(null);
   const [editItem, setEditItem] = useState<Transacao | null>(null);
-  const [editForm, setEditForm] = useState({ valor: "", descricao: "", conta_origem: 0, conta_destino: 0 });
+  const [editForm, setEditForm] = useState({ valor: "", descricao: "", conta_origem: 0, conta_destino: 0, data_da_transacao: "" });
 
   const [currentPage, setCurrentPage] = useState(1);
   const { data: response, isLoading } = useQuery({ queryKey: [...transferenciasQueryKey, currentPage], queryFn: () => fetchTransferencias(currentPage) });
@@ -55,15 +55,15 @@ const Transferencias = () => {
   });
 
   const filtered = items.filter(t => t.conta_origem_nome?.toLowerCase().includes(searchConta.toLowerCase()) || t.conta_destino_nome?.toLowerCase().includes(searchConta.toLowerCase()));
-  const getExportData = () => filtered.map(t => ({ Data: t.data_de_lancamento, "Conta Origem": t.conta_origem_nome, "Conta Destino": t.conta_destino_nome, Valor: t.valor }));
+  const getExportData = () => filtered.map(t => ({ "Data da Transação": t.data_da_transacao || t.data_de_lancamento, "Conta Origem": t.conta_origem_nome, "Conta Destino": t.conta_destino_nome, Valor: t.valor }));
   const deleteItemObj = items.find(i => i.id === deleteId);
 
-  const openEdit = (t: Transacao) => { setEditItem(t); setEditForm({ valor: String(t.valor ?? ""), descricao: t.descricao || "", conta_origem: t.conta_origem, conta_destino: t.conta_destino }); };
+  const openEdit = (t: Transacao) => { setEditItem(t); setEditForm({ valor: String(t.valor ?? ""), descricao: t.descricao || "", conta_origem: t.conta_origem, conta_destino: t.conta_destino, data_da_transacao: t.data_da_transacao || "" }); };
 
   return (
     <div className="flex flex-col h-full bg-background"><div className="space-y-6">
       <div className="flex flex-wrap gap-3 items-center">
-        <Button onClick={() => { setEditItem({ id: 0, data_de_lancamento: "", valor: 0, conta_origem: 0, conta_destino: 0 }); setEditForm({ valor: "", descricao: "", conta_origem: 0, conta_destino: 0 }); }} className="gap-2"><Plus className="w-4 h-4" />Nova Transferência</Button>
+        <Button onClick={() => { setEditItem({ id: 0, data_de_lancamento: "", data_da_transacao: "", valor: 0, conta_origem: 0, conta_destino: 0 }); setEditForm({ valor: "", descricao: "", conta_origem: 0, conta_destino: 0, data_da_transacao: "" }); }} className="gap-2"><Plus className="w-4 h-4" />Nova Transferência</Button>
         <ExportButton getData={getExportData} fileName="transferencias" />
       </div>
       <FilterSection fields={[
@@ -71,12 +71,12 @@ const Transferencias = () => {
         { type: "date" as const, label: "Data", value: searchData, onChange: setSearchData, width: "min-w-[160px]" }
       ]} resultsCount={totalCount} />
       <div className="rounded border border-border overflow-hidden"><Table><TableHeader><TableRow className="bg-table-header">
-        <TableHead className="text-center font-semibold">Data</TableHead><TableHead className="font-semibold">Conta Origem</TableHead><TableHead className="font-semibold">Conta Destino</TableHead><TableHead className="text-right font-semibold">Valor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
+        <TableHead className="text-center font-semibold">Data da Transação</TableHead><TableHead className="font-semibold">Conta Origem</TableHead><TableHead className="font-semibold">Conta Destino</TableHead><TableHead className="text-right font-semibold">Valor</TableHead><TableHead className="text-center font-semibold">Ações</TableHead>
       </TableRow></TableHeader><TableBody>
           {isLoading ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma transferência encontrada.</TableCell></TableRow> :
               filtered.map(t => <TableRow key={t.id} className="hover:bg-table-hover transition-colors">
-                <TableCell className="text-center">{t.data_de_lancamento}</TableCell>
+                <TableCell className="text-center">{t.data_da_transacao || t.data_de_lancamento}</TableCell>
                 <TableCell className="font-medium">{t.conta_origem_nome}</TableCell>
                 <TableCell >{t.conta_destino_nome}</TableCell>
                 <TableCell className="text-right font-semibold">R$ {t.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</TableCell>
@@ -94,7 +94,7 @@ const Transferencias = () => {
         )}
       </div>
     </div>
-      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent><DialogHeader><DialogTitle>Transferência</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Data" value={viewItem.data_de_lancamento} /><InfoRow label="Conta Origem" value={viewItem.conta_origem_nome || String(viewItem.conta_origem)} /><InfoRow label="Conta Destino" value={viewItem.conta_destino_nome || String(viewItem.conta_destino)} /><InfoRow label="Valor" value={`R$ ${viewItem.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /></div>}</DialogContent></Dialog>
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent><DialogHeader><DialogTitle>Transferência</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Data da Transação" value={viewItem.data_da_transacao || "-"} /><InfoRow label="Conta Origem" value={viewItem.conta_origem_nome || String(viewItem.conta_origem)} /><InfoRow label="Conta Destino" value={viewItem.conta_destino_nome || String(viewItem.conta_destino)} /><InfoRow label="Valor" value={`R$ ${viewItem.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} /></div>}</DialogContent></Dialog>
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editItem?.id ? "Editar Transferência" : "Nova Transferência"}</DialogTitle></DialogHeader>
@@ -111,6 +111,7 @@ const Transferencias = () => {
                 {contas.map((c: any) => <option key={c.id} value={c.id}>{contaLabel(c)}</option>)}
               </select>
             </div>
+            <div className="space-y-2"><Label>Data da Transação <span className="text-destructive">*</span></Label><Input type="date" value={editForm.data_da_transacao} onChange={e => setEditForm(p => ({ ...p, data_da_transacao: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Valor (R$)</Label><Input type="text" inputMode="decimal" placeholder="0,00" value={editForm.valor} onChange={e => setEditForm(p => ({ ...p, valor: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Descrição</Label><Input value={editForm.descricao} onChange={e => setEditForm(p => ({ ...p, descricao: e.target.value }))} /></div>
           </div>
@@ -118,6 +119,9 @@ const Transferencias = () => {
             <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
             <Button onClick={() => {
               const valorNum = Number(editForm.valor.replace(/\s/g, "").replace(",", "."));
+              if (!editForm.data_da_transacao) {
+                toast({ title: "Informe a data da transação.", variant: "destructive" }); return;
+              }
               if (!editForm.valor || Number.isNaN(valorNum) || valorNum <= 0) {
                 toast({ title: "Informe um valor válido.", variant: "destructive" }); return;
               }
