@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
-import { Stethoscope, UserPlus, Users, UserCheck } from "lucide-react";
+import { Stethoscope, UserPlus, UserCheck } from "lucide-react";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
@@ -12,22 +12,43 @@ import { toast } from "@/hooks/use-toast";
 import {
   createMedico,
   createPessoa,
+  deletePessoa,
   fetchEspecialidades,
   fetchFuncionarios,
-  fetchCargos,
   medicosQueryKey,
-  tiposVinculo,
 } from "@/services/pessoas";
 import { cn } from "@/lib/utils";
 
+// ─── Formatadores ─────────────────────────────────────────────────────────────
+
+/** (XX) XXXXX-XXXX para celular, (XX) XXXX-XXXX para fixo */
+function formatTelefone(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11)
+  if (d.length === 0) return ''
+  if (d.length <= 2) return `(${d}`
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
+/** CRM/UF XXXXXX — ex: CRM/SP 123456 */
+function formatCrm(value: string): string {
+  const upper = value.toUpperCase().replace(/^CRM\/?/, '').replace(/[^A-Z0-9]/g, '')
+  const letters = upper.replace(/[^A-Z]/g, '').slice(0, 2)
+  const digits  = upper.replace(/[^0-9]/g, '').slice(0, 6)
+  if (!letters && !digits) return ''
+  if (!digits) return `CRM/${letters}`
+  return `CRM/${letters} ${digits}`
+}
+
 // ─── Tipo selector ────────────────────────────────────────────────────────────
 
-type Tipo = "A" | "B" | "C";
+type Tipo = "A" | "B";
 
 const TIPOS: { value: Tipo; label: string; description: string; icon: React.ElementType }[] = [
   {
     value: "A",
-    label: "Médico puro",
+    label: "Médico externo",
     description: "Não é funcionário — cria novo usuário vinculado apenas como médico",
     icon: UserPlus,
   },
@@ -36,12 +57,6 @@ const TIPOS: { value: Tipo; label: string; description: string; icon: React.Elem
     label: "Funcionário existente",
     description: "Já é funcionário cadastrado no sistema — apenas vincula o CRM",
     icon: UserCheck,
-  },
-  {
-    value: "C",
-    label: "Novo funcionário",
-    description: "Ainda não está cadastrado — cria usuário, funcionário e médico",
-    icon: Users,
   },
 ];
 
@@ -74,12 +89,14 @@ function TipoAForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) =>
 
   const handleSalvar = async () => {
     if (!validateAll()) return;
+    let pessoaCriadaId: number | null = null;
     try {
       const pessoa = await createPessoaMut.mutateAsync({
         first_name: formData.first_name.trim(),
         last_name: formData.last_name.trim(),
         email: formData.email.trim(),
       });
+      pessoaCriadaId = pessoa.id;
       await createMedicoMut.mutateAsync({
         user: pessoa.id,
         crm: formData.crm.trim(),
@@ -88,6 +105,11 @@ function TipoAForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) =>
       });
       onSave(pessoa.id);
     } catch (error: any) {
+      // Desfaz a criação do usuário se o médico falhou
+      if (pessoaCriadaId) {
+        await deletePessoa(pessoaCriadaId).catch(() => {});
+        pessoaCriadaId = null;
+      }
       const data = error.response?.data;
       const msg = data ? Object.values(data).flat().join(" | ") : "Verifique os dados e tente novamente.";
       toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
@@ -133,9 +155,9 @@ function TipoAForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) =>
         <ValidatedInput
           label="CRM"
           required
-          placeholder="Ex: CRM/SP 123456"
+          placeholder="CRM/SP 123456"
           value={formData.crm}
-          onChange={(e) => setFieldValue("crm", e.target.value)}
+          onChange={(e) => setFieldValue("crm", formatCrm(e.target.value))}
           onBlur={() => setFieldTouched("crm")}
           error={getFieldError("crm")}
           touched={touched.crm}
@@ -145,7 +167,7 @@ function TipoAForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) =>
           required
           placeholder="(11) 99999-9999"
           value={formData.telefone}
-          onChange={(e) => setFieldValue("telefone", e.target.value)}
+          onChange={(e) => setFieldValue("telefone", formatTelefone(e.target.value))}
           onBlur={() => setFieldTouched("telefone")}
           error={getFieldError("telefone")}
           touched={touched.telefone}
@@ -219,9 +241,9 @@ function TipoBForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) =>
         <ValidatedInput
           label="CRM"
           required
-          placeholder="Ex: CRM/SP 123456"
+          placeholder="CRM/SP 123456"
           value={formData.crm}
-          onChange={(e) => setFieldValue("crm", e.target.value)}
+          onChange={(e) => setFieldValue("crm", formatCrm(e.target.value))}
           onBlur={() => setFieldTouched("crm")}
           error={getFieldError("crm")}
           touched={touched.crm}
@@ -231,139 +253,7 @@ function TipoBForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) =>
           required
           placeholder="(11) 99999-9999"
           value={formData.telefone}
-          onChange={(e) => setFieldValue("telefone", e.target.value)}
-          onBlur={() => setFieldTouched("telefone")}
-          error={getFieldError("telefone")}
-          touched={touched.telefone}
-        />
-        <ValidatedSelect
-          label="Especialidade"
-          value={especialidadeId}
-          onValueChange={setEspecialidadeId}
-          placeholder="Selecionar especialidade"
-          options={especialidadesOptions}
-        />
-      </div>
-      <FormActionBar onSave={handleSalvar} onCancel={onCancel} isSaving={isPending} />
-    </div>
-  );
-}
-
-// ─── Tipo C — Novo funcionário + médico ───────────────────────────────────────
-
-function TipoCForm({ onSave, onCancel, isSaving }: { onSave: (userId: number) => void; onCancel: () => void; isSaving: boolean }) {
-  const { data: cargos = [] } = useQuery({ queryKey: ["cargos"], queryFn: fetchCargos });
-  const { data: especialidades = [] } = useQuery({ queryKey: ["especialidades"], queryFn: fetchEspecialidades });
-
-  const [cargoId, setCargoId] = useState("");
-  const [tipoVinculo, setTipoVinculo] = useState("");
-  const [especialidadeId, setEspecialidadeId] = useState("");
-
-  const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } =
-    useFormValidation(
-      { first_name: "", last_name: "", email: "", crm: "", telefone: "" },
-      [
-        { name: "first_name", label: "Nome", required: true },
-        { name: "last_name", label: "Sobrenome", required: true },
-        { name: "email", label: "E-mail", required: true },
-        ...medicoValidation,
-      ]
-    );
-
-  const createPessoaMut = useMutation({ mutationFn: createPessoa });
-  const createMedicoMut = useMutation({ mutationFn: (data: any) => createMedico(data) });
-
-  const handleSalvar = async () => {
-    if (!validateAll()) return;
-    try {
-      const pessoa = await createPessoaMut.mutateAsync({
-        first_name: formData.first_name.trim(),
-        last_name: formData.last_name.trim(),
-        email: formData.email.trim(),
-        ...(cargoId ? { cargo_id: Number(cargoId) } : {}),
-        ...(tipoVinculo ? { tipoVinculo } : {}),
-      });
-      await createMedicoMut.mutateAsync({
-        user: pessoa.id,
-        crm: formData.crm.trim(),
-        telefone: formData.telefone.trim(),
-        especialidade_ids: especialidadeId ? [Number(especialidadeId)] : [],
-      });
-      onSave(pessoa.id);
-    } catch (error: any) {
-      const data = error.response?.data;
-      const msg = data ? Object.values(data).flat().join(" | ") : "Verifique os dados e tente novamente.";
-      toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
-    }
-  };
-
-  const cargosOptions = cargos.map(c => ({ value: String(c.id), label: c.nome }));
-  const especialidadesOptions = especialidades.map(e => ({ value: String(e.id), label: e.nome }));
-  const isPending = createPessoaMut.isPending || createMedicoMut.isPending || isSaving;
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <ValidatedInput
-          label="Nome"
-          required
-          placeholder="João"
-          value={formData.first_name}
-          onChange={(e) => setFieldValue("first_name", e.target.value)}
-          onBlur={() => setFieldTouched("first_name")}
-          error={getFieldError("first_name")}
-          touched={touched.first_name}
-        />
-        <ValidatedInput
-          label="Sobrenome"
-          required
-          placeholder="Silva"
-          value={formData.last_name}
-          onChange={(e) => setFieldValue("last_name", e.target.value)}
-          onBlur={() => setFieldTouched("last_name")}
-          error={getFieldError("last_name")}
-          touched={touched.last_name}
-        />
-        <ValidatedInput
-          label="E-mail"
-          required
-          placeholder="medico@exemplo.com"
-          value={formData.email}
-          onChange={(e) => setFieldValue("email", e.target.value)}
-          onBlur={() => setFieldTouched("email")}
-          error={getFieldError("email")}
-          touched={touched.email}
-        />
-        <ValidatedSelect
-          label="Cargo"
-          value={cargoId}
-          onValueChange={setCargoId}
-          placeholder="Selecionar cargo"
-          options={cargosOptions}
-        />
-        <ValidatedSelect
-          label="Tipo de Vínculo"
-          value={tipoVinculo}
-          onValueChange={setTipoVinculo}
-          placeholder="Selecionar vínculo"
-          options={tiposVinculo}
-        />
-        <ValidatedInput
-          label="CRM"
-          required
-          placeholder="Ex: CRM/SP 123456"
-          value={formData.crm}
-          onChange={(e) => setFieldValue("crm", e.target.value)}
-          onBlur={() => setFieldTouched("crm")}
-          error={getFieldError("crm")}
-          touched={touched.crm}
-        />
-        <ValidatedInput
-          label="Telefone"
-          required
-          placeholder="(11) 99999-9999"
-          value={formData.telefone}
-          onChange={(e) => setFieldValue("telefone", e.target.value)}
+          onChange={(e) => setFieldValue("telefone", formatTelefone(e.target.value))}
           onBlur={() => setFieldTouched("telefone")}
           error={getFieldError("telefone")}
           touched={touched.telefone}
@@ -387,6 +277,7 @@ const NovoMedico = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [tipo, setTipo] = useState<Tipo>("A");
+
 
   const handleSave = () => {
     queryClient.invalidateQueries({ queryKey: medicosQueryKey });
@@ -442,7 +333,6 @@ const NovoMedico = () => {
             {/* Form by tipo */}
             {tipo === "A" && <TipoAForm onSave={handleSave} onCancel={() => navigate("/gestao-pessoas/medicos")} isSaving={false} />}
             {tipo === "B" && <TipoBForm onSave={handleSave} onCancel={() => navigate("/gestao-pessoas/medicos")} isSaving={false} />}
-            {tipo === "C" && <TipoCForm onSave={handleSave} onCancel={() => navigate("/gestao-pessoas/medicos")} isSaving={false} />}
           </div>
         </CardContent>
       </Card>

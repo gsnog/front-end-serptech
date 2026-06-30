@@ -41,8 +41,6 @@ const Login = () => {
       const { access, refresh, user, permissions } = response.data;
 
       if (user) {
-        // Usa as permissões vindas do backend; caso a API ainda não as retorne
-        // (ex: usuário sem grupo), monta um fallback mínimo.
         const normalizedRole = user.role?.toLowerCase() || 'usuario';
         const resolvedPermissions: UserPermissions = permissions ?? {
           userId: String(user.id),
@@ -55,11 +53,12 @@ const Login = () => {
           })),
           exceptions: [],
         };
+
         login(access, refresh, resolvedPermissions);
       }
 
       toast.success("Login realizado com sucesso!");
-      navigate("/"); // Redireciona para o painel principal
+      navigate('/');
     } catch (error: any) {
       console.error("Erro no login:", error);
       const status = error.response?.status;
@@ -202,7 +201,7 @@ const Login = () => {
               <button
                 type="button"
                 className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-                onClick={() => toast.info("Funcionalidade em breve")}
+                onClick={() => navigate('/esqueci-senha')}
               >
                 Esqueceu a senha?
               </button>

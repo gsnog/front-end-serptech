@@ -15,6 +15,7 @@ import {
   Sun,
   Moon,
   ShieldCheck,
+  Stethoscope,
 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
@@ -145,6 +146,15 @@ const menuItems = [
   },
   { title: "Relatórios", url: "/relatorios", icon: BarChart3, module: "relatorios", help: "Geração de relatórios financeiros e operacionais." },
   {
+    title: "Portal do Médico",
+    icon: Stethoscope,
+    basePath: "/portal-medico",
+    medicoOnly: true,
+    help: "Painel exclusivo para médicos: envio e acompanhamento de mapas.",
+    // subItems são calculados dinamicamente no render com base em isOnlyMedico()
+    subItems: [],
+  },
+  {
     title: "Administração",
     icon: ShieldCheck,
     basePath: "/admin-panel",
@@ -167,7 +177,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<string[]>([])
   const [activeItem, setActiveItem] = useState<string>("Dashboard")
   const { theme, toggleTheme } = useTheme()
-  const { logout, currentUser, hasPermission, isStaff } = usePermissions()
+  const { logout, currentUser, hasPermission, isStaff, isMedico, isOnlyMedico } = usePermissions()
   const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase()
 
   // ── Permission helpers ───────────────────────────────────────────────────
@@ -177,10 +187,22 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const canViewPage = (module?: string, page?: string) =>
     !module || hasPermission(module, page || 'all', 'view')
 
+  // subItems do Portal do Médico
+  const portalSubItems = [
+    { title: "Dashboard",  url: "/portal-medico",       end: true },
+    { title: "Meus Mapas", url: "/portal-medico/mapas" },
+  ]
+
   // Filter top-level items
   const visibleMenuItems = menuItems.filter(item => {
     // Staff-only items
     if ('staffOnly' in item && item.staffOnly) return isStaff()
+
+    // Portal do Médico: visível para qualquer médico
+    if ('medicoOnly' in item && item.medicoOnly) return isMedico()
+
+    // Médico sem outro grupo funcional: esconde tudo exceto o Portal
+    if (isOnlyMedico()) return false
 
     // Items with a direct module field
     if ('module' in item && item.module) return canView(item.module)
@@ -300,7 +322,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
                   {!collapsed && openMenus.includes(item.title) && (
                     <ul className="mt-1 space-y-1 pl-4">
-                      {item.subItems
+                      {(('medicoOnly' in item && item.medicoOnly) ? portalSubItems : item.subItems)
                         .filter(subItem => canViewPage((subItem as any).module, (subItem as any).page))
                         .map((subItem) => (
                           'subItems' in subItem && subItem.subItems ? (

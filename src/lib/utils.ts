@@ -5,30 +5,40 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+const TZ = 'America/Sao_Paulo'
+
 /**
  * Formata uma data no padrão brasileiro DD/MM/YYYY.
- * Aceita strings YYYY-MM-DD, ISO datetime ou já formatadas DD/MM/YYYY.
- * Usa manipulação de string pura para evitar problemas de fuso horário.
+ * - Strings YYYY-MM-DD (sem hora): parsing por string, sem conversão UTC.
+ * - Strings ISO com hora/timezone: converte para America/Sao_Paulo antes de extrair a data.
+ * - Strings já em DD/MM/YYYY: retorna sem alteração.
  */
 export function fmtDate(value?: string | null): string {
   if (!value) return '—'
   if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) return value
-  const datePart = value.substring(0, 10)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-    const [y, m, d] = datePart.split('-')
+  // Data pura sem hora — usa split para evitar conversão UTC
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-')
     return `${d}/${m}/${y}`
   }
-  return value
+  // Datetime com fuso (ex: 2026-06-29T00:00:00Z) — converte para UTC-3
+  const date = new Date(value)
+  if (isNaN(date.getTime())) return value
+  return date.toLocaleDateString('pt-BR', { timeZone: TZ })
 }
 
 /**
- * Formata um datetime ISO para DD/MM/YYYY HH:mm.
+ * Formata um datetime ISO para DD/MM/YYYY HH:mm no fuso America/Sao_Paulo.
  */
 export function fmtDateTime(value?: string | null): string {
   if (!value) return '—'
   const d = new Date(value)
   if (isNaN(d.getTime())) return value
-  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return (
+    d.toLocaleDateString('pt-BR', { timeZone: TZ }) +
+    ' ' +
+    d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: TZ })
+  )
 }
 
 /**

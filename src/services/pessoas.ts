@@ -28,6 +28,7 @@ export interface Pessoa {
     supervisor_id: number | null;
     supervisor_nome: string | null;
     role: string;           // lowercase group name: admin, gestor, etc.
+    is_medico?: boolean;    // true se o usuário tem registro Medico
     profile_image: string | null;
     telefone: string;
     data_admissao: string | null;

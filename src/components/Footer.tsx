@@ -20,7 +20,7 @@ export function Footer({ className }: FooterProps) {
     >
       <span>© {year} • Aplicação desenvolvida pela</span>
       <a
-        href="https://serptech.com.br"
+        href="https://serptech.com.br/"
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex items-center transition-opacity hover:opacity-80"

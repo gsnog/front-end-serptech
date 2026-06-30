@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import LayoutShell from "@/layouts/LayoutShell";
-import { PermissionsProvider } from "@/contexts/PermissionsContext";
+import { PermissionsProvider, usePermissions } from "@/contexts/PermissionsContext";
 import { WebRTCProvider } from "@/contexts/WebRTCContext";
 import { ChatProvider } from "@/contexts/ChatContext";
 import Dashboard from "./pages/Dashboard";
@@ -82,9 +82,17 @@ import NovoPlanoContas from "./pages/cadastro/financeiro/NovoPlanoContas";
 import Mapas from "./pages/operacional/Mapas";
 import Exames from "./pages/operacional/Exames";
 
+// Portal do Médico
+import PortalMedicoWrapper from "./layouts/PortalMedicoWrapper";
+import PortalMedicoDashboard from "./pages/portal-medico/PortalMedicoDashboard";
+import PortalMedicoHome from "./pages/portal-medico/PortalMedicoHome";
+
 // Usuário
 import VisualizarPerfil from "./pages/usuario/VisualizarPerfil";
 import Login from "./pages/Login";
+import EsqueciSenha from "@/pages/EsqueciSenha";
+import VerificarCodigo from "@/pages/VerificarCodigo";
+import NovaSenha from "@/pages/NovaSenha";
 import AcessoNegado from "./pages/AcessoNegado";
 import Notificacoes from "./pages/Notificacoes";
 
@@ -101,6 +109,7 @@ import Hierarquia from "./pages/gestao-pessoas/Hierarquia";
 import Acessos from "./pages/gestao-pessoas/Acessos";
 import Auditoria from "./pages/gestao-pessoas/Auditoria";
 import Medicos from "./pages/gestao-pessoas/Medicos";
+import NovoMedico from "./pages/gestao-pessoas/NovoMedico";
 import RelatorioPessoas from "./pages/gestao-pessoas/RelatorioPessoas";
 
 // Módulos Globais (Header)
@@ -128,8 +137,15 @@ import DashboardComercial from "./pages/dashboards/DashboardComercial"
 // Admin Panel
 import AdminPanel from "./pages/admin/AdminPanel"
 import AdminUsuarios from "./pages/admin/AdminUsuarios";
+import AdminTokensAutomacao from "./pages/admin/AdminTokensAutomacao";
 
 const queryClient = new QueryClient();
+
+function SmartDashboard() {
+  const { isOnlyMedico } = usePermissions()
+  if (isOnlyMedico()) return <PortalMedicoDashboard />
+  return <Dashboard />
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -142,9 +158,12 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+                <Route path="/verificar-codigo" element={<VerificarCodigo />} />
+                <Route path="/nova-senha" element={<NovaSenha />} />
                 <Route path="/acesso-negado" element={<AcessoNegado />} />
                 <Route element={<LayoutShell />}>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/" element={<SmartDashboard />} />
                   <Route path="/financeiro/fluxo-caixa" element={<FluxoCaixa />} />
                   <Route path="/financeiro/fluxo-caixa/nova" element={<NovaTransacao />} />
                   <Route path="/financeiro/fluxo-caixa/relatorio" element={<RelatorioFluxoCaixa />} />
@@ -243,7 +262,7 @@ const App = () => (
                   <Route path="/gestao-pessoas/acessos" element={<Acessos />} />
                   <Route path="/gestao-pessoas/auditoria" element={<Auditoria />} />
                   <Route path="/gestao-pessoas/medicos" element={<Medicos />} />
-                  <Route path="/gestao-pessoas/medicos/novo" element={<Navigate to="/cadastro/pessoas/pessoas/nova" replace />} />
+                  <Route path="/gestao-pessoas/medicos/novo" element={<NovoMedico />} />
                   <Route path="/gestao-pessoas/relatorio" element={<RelatorioPessoas />} />
 
                   {/* Usuário e Notificações */}
@@ -275,7 +294,16 @@ const App = () => (
                   {/* Admin Panel */}
                   <Route path="/admin-panel" element={<AdminPanel />} />
                   <Route path="/admin-panel/usuarios" element={<AdminUsuarios />} />
+                  <Route path="/admin-panel/tokens-automacao" element={<AdminTokensAutomacao />} />
+
+                  {/* Portal do Médico — integrado ao LayoutShell */}
+                  <Route path="/portal-medico" element={<PortalMedicoWrapper />}>
+                    <Route index element={<PortalMedicoDashboard />} />
+                    <Route path="mapas" element={<PortalMedicoHome />} />
+                  </Route>
+
                 </Route>
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>

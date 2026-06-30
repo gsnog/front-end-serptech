@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { Users, UserCheck, UserX, ShieldCheck, UsersRound, ArrowRight } from 'lucide-react'
+import { Users, UserCheck, UserX, ShieldCheck, UsersRound, ArrowRight, Bot } from 'lucide-react'
 import api from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -92,6 +92,17 @@ export default function AdminPanel() {
               <span className="flex items-center gap-2">
                 <Users className="h-4 w-4" />
                 Usuários
+              </span>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-between"
+              onClick={() => navigate('/admin-panel/tokens-automacao')}
+            >
+              <span className="flex items-center gap-2">
+                <Bot className="h-4 w-4" />
+                Tokens de Automação
               </span>
               <ArrowRight className="h-4 w-4" />
             </Button>

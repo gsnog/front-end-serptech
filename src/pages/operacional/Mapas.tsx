@@ -10,22 +10,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Map, Plus, FileText, Loader2, ChevronRight, Upload, AlertCircle, CheckCircle, Edit2, X, Search, Trash2 } from "lucide-react";
+import { Map, Plus, FileText, Loader2, ChevronRight, Upload, AlertCircle, CheckCircle, Edit2, X, Search, Trash2, Clock } from "lucide-react";
 import { TableActions } from "@/components/TableActions";
 import { toast } from "@/hooks/use-toast";
 import {
   fetchMapas, deleteMapa, uploadMapa, fetchMapaFilhos,
-  updateMapaFilho, setMapaFilhoPendente, conciliarMapaFilho,
+  updateMapaFilho, setMapaFilhoPendente, conciliarMapaFilho, validarMapaFilho,
   mapasQueryKey, mapaFilhosQueryKey,
   type MapaPrincipal, type MapaFilho, type MapasFiltros,
 } from "@/services/operacional";
 import { fetchAllMedicos, type Medico } from "@/services/pessoas";
 
-// ─── Status badge ─────────────────────────────────────────────────────────────
+// ─── Status badge (filho) ─────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
-  return status === 'concluido'
-    ? <Badge className="bg-green-100 text-green-700 border-green-200 gap-1"><CheckCircle className="h-3 w-3" />Concluído</Badge>
-    : <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 gap-1"><AlertCircle className="h-3 w-3" />Pendente</Badge>;
+  if (status === 'concluido')
+    return <Badge className="bg-primary/20 text-primary border-transparent gap-1"><CheckCircle className="h-3 w-3" />Concluído</Badge>;
+  if (status === 'aguardando_verificacao')
+    return <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-400 border-transparent gap-1"><Clock className="h-3 w-3" />Em Revisão</Badge>;
+  return <Badge className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 border-transparent gap-1"><AlertCircle className="h-3 w-3" />Pendente</Badge>;
+}
+
+// ─── Status badge (mapa principal) ───────────────────────────────────────────
+function MapaStatusBadge({ mapa }: { mapa: MapaPrincipal }) {
+  if (mapa.pendentes_count > 0)
+    return <Badge className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 border-transparent gap-1"><AlertCircle className="h-3 w-3" />Com Pendência</Badge>;
+  if (mapa.aguardando_verificacao_count > 0)
+    return <Badge className="bg-blue-500/20 text-blue-600 dark:text-blue-400 border-transparent gap-1"><Clock className="h-3 w-3" />Em Revisão</Badge>;
+  if (mapa.filhos_count > 0)
+    return <Badge className="bg-primary/20 text-primary border-transparent gap-1"><CheckCircle className="h-3 w-3" />Revisado</Badge>;
+  return <span className="text-muted-foreground text-xs">—</span>;
 }
 
 // ─── Child maps panel ─────────────────────────────────────────────────────────
@@ -66,6 +79,12 @@ function FilhosPanel({ mapaId, onClose }: { mapaId: number; onClose: () => void 
     mutationFn: ({ id, formData }: { id: number; formData: FormData }) => conciliarMapaFilho(id, formData),
     onSuccess: () => { invalidate(); setConciliarId(null); setConciliarFilho(null); setConciliarObs(""); toast({ title: "Mapa conciliado com sucesso." }); },
     onError: () => toast({ title: "Erro ao conciliar.", variant: "destructive" }),
+  });
+
+  const validarMutation = useMutation({
+    mutationFn: (id: number) => validarMapaFilho(id),
+    onSuccess: () => { invalidate(); toast({ title: "Mapa validado com sucesso." }); },
+    onError: () => toast({ title: "Erro ao validar.", variant: "destructive" }),
   });
 
   const handleConciliar = () => {
@@ -163,10 +182,17 @@ function FilhosPanel({ mapaId, onClose }: { mapaId: number; onClose: () => void 
                           onClick={() => { setEditId(filho.id); setEditNome(filho.nome); }}>
                           <Edit2 className="h-3 w-3" />
                         </Button>
-                        {filho.status === 'concluido' && (
+                        {(filho.status === 'concluido' || filho.status === 'aguardando_verificacao') && (
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-yellow-600" title="Marcar como pendente"
                             onClick={() => { setPendenteId(filho.id); setPendenteObs(""); }}>
                             <AlertCircle className="h-3 w-3" />
+                          </Button>
+                        )}
+                        {filho.status === 'aguardando_verificacao' && (
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-green-600" title="Validar (marcar como concluído)"
+                            disabled={validarMutation.isPending}
+                            onClick={() => validarMutation.mutate(filho.id)}>
+                            <CheckCircle className="h-3 w-3" />
                           </Button>
                         )}
                         {filho.status === 'pendente' && (
@@ -409,17 +435,18 @@ export default function Mapas() {
               <TableHead>Data de Recebimento</TableHead>
               <TableHead className="text-center">Páginas</TableHead>
               <TableHead className="text-center">Pendentes</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="text-center">PDF Original</TableHead>
               <TableHead className="text-center w-[60px]">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10">
+              <TableRow><TableCell colSpan={9} className="text-center py-10">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary" />
               </TableCell></TableRow>
             ) : mapas.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
+              <TableRow><TableCell colSpan={9} className="text-center py-10 text-muted-foreground">
                 Nenhum mapa encontrado.
               </TableCell></TableRow>
             ) : (
@@ -441,9 +468,10 @@ export default function Mapas() {
                   </TableCell>
                   <TableCell className="text-center">
                     {mapa.pendentes_count > 0
-                      ? <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200">{mapa.pendentes_count}</Badge>
+                      ? <Badge className="bg-yellow-500/20 text-yellow-600 dark:text-yellow-500 border-transparent">{mapa.pendentes_count}</Badge>
                       : <span className="text-muted-foreground text-xs">—</span>}
                   </TableCell>
+                  <TableCell><MapaStatusBadge mapa={mapa} /></TableCell>
                   <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                     {mapa.arquivo_pdf_url ? (
                       <a href={mapa.arquivo_pdf_url} target="_blank" rel="noreferrer"

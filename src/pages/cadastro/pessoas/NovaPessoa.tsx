@@ -27,7 +27,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "@/hooks/use-toast"
 import { estadosBrasil, opcoesSelecao, bancosBrasil } from "@/data/brasil-localidades"
-import { fetchSetores, fetchCargos, setoresQueryKey, tiposVinculo, fetchPessoas, pessoasQueryKey, createPessoa, createMedico, fetchEspecialidades, medicosQueryKey } from "@/services/pessoas";
+import { fetchSetores, fetchCargos, setoresQueryKey, tiposVinculo, fetchPessoas, pessoasQueryKey, createPessoa, deletePessoa, createMedico, fetchEspecialidades, medicosQueryKey } from "@/services/pessoas";
 import { useSaveWithDelay } from "@/hooks/useSaveWithDelay"
 import {
 
@@ -41,6 +41,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+
+function formatCrm(value: string): string {
+  const upper = value.toUpperCase().replace(/^CRM\/?/, '').replace(/[^A-Z0-9]/g, '')
+  const letters = upper.replace(/[^A-Z]/g, '').slice(0, 2)
+  const digits  = upper.replace(/[^0-9]/g, '').slice(0, 6)
+  if (!letters && !digits) return ''
+  if (!digits) return `CRM/${letters}`
+  return `CRM/${letters} ${digits}`
+}
 
 interface ViaCepResponse {
   cep: string;
@@ -67,7 +76,7 @@ const requiredFieldsByStep: Record<number, string[]> = {
   2: ["celular", "emailPessoal"],
   3: ["cep", "endereco", "bairro", "cidade", "estado"],
   4: ["banco", "tipoConta", "agencia", "conta"],
-  5: ["cpf", "rg"],
+  5: ["cpf"],
   6: [],
   7: [], // handled dynamically in validateStep
 }
@@ -313,6 +322,11 @@ export default function NovaPessoa() {
   const validateStep = (step: number): boolean => {
     let required = requiredFieldsByStep[step] || []
 
+    // Médico externo: CPF e RG são opcionais (não é funcionário CLT)
+    if (step === 5 && formData.eMedico) {
+      required = []
+    }
+
     if (step === 7) {
       required = formData.eMedico
         ? ["tipoVinculo", "dataAdmissao"]
@@ -331,6 +345,13 @@ export default function NovaPessoa() {
 
   const handleSalvar = async () => {
     if (validateStep(currentStep)) {
+      // Validar CRM antes de criar qualquer registro
+      if (formData.eMedico && !formData.medicocrm.trim()) {
+        toast({ title: "CRM obrigatório para cadastro de médico", variant: "destructive" });
+        return;
+      }
+
+      let pessoaCriadaId: number | null = null;
       try {
         const endereco = [formData.endereco, formData.numero, formData.bairro, formData.cidade, formData.estado, formData.cep]
           .filter(Boolean).join(', ');
@@ -395,12 +416,9 @@ export default function NovaPessoa() {
           statusPessoa: formData.statusPessoa,
         };
         const pessoa = await createPessoa(payload);
+        pessoaCriadaId = pessoa.id;
 
         if (formData.eMedico) {
-          if (!formData.medicocrm.trim()) {
-            toast({ title: "CRM obrigatório para cadastro de médico", variant: "destructive" });
-            return;
-          }
           await createMedico({
             user: pessoa.id,
             crm: formData.medicocrm.trim(),
@@ -413,9 +431,13 @@ export default function NovaPessoa() {
 
         handleSave("/cadastro/pessoas/pessoas", "Pessoa cadastrada com sucesso!")
       } catch (e: any) {
+        // Rollback: desfaz a criação do usuário se o médico falhou
+        if (pessoaCriadaId) {
+          await deletePessoa(pessoaCriadaId).catch(() => {});
+        }
         toast({
           title: "Erro ao cadastrar",
-          description: e?.response?.data?.error || "Informativo técnico: Ocorreu um erro ao salvar.",
+          description: e?.response?.data?.error || "Ocorreu um erro ao salvar.",
           variant: "destructive"
         })
       }
@@ -583,10 +605,10 @@ export default function NovaPessoa() {
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">CRM <span className="text-destructive">*</span></Label>
                         <Input
-                          placeholder="Ex: CRM/SP 123456"
+                          placeholder="CRM/SP 123456"
                           className="form-input"
                           value={formData.medicocrm}
-                          onChange={(e) => updateField("medicocrm", e.target.value)}
+                          onChange={(e) => updateField("medicocrm", formatCrm(e.target.value))}
                         />
                       </div>
                       <ValidatedSelect
@@ -1026,7 +1048,7 @@ export default function NovaPessoa() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">RG <span className="text-destructive">*</span></Label>
+                    <Label className="text-sm font-medium">RG</Label>
                     <Input
                       placeholder="00.000.000-0"
                       className="form-input"

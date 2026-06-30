@@ -102,6 +102,10 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/operacional/mapas": { title: "Mapas", description: "Mapas do laboratório" },
   "/operacional/exames": { title: "Exames", description: "Tipos de exames" },
 
+  // Portal do Médico
+  "/portal-medico":       { title: "Portal do Médico", description: "Visão geral dos seus mapas" },
+  "/portal-medico/mapas": { title: "Portal do Médico", description: "Meus mapas enviados" },
+
   // Notas Fiscais
   "/nfe": { title: "Notas Fiscais", description: "Gerenciamento de notas fiscais eletrônicas" },
   "/nfe/nova": { title: "Notas Fiscais", description: "Nova Nota Fiscal" },
@@ -141,13 +145,19 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   // Admin Panel
   "/admin-panel": { title: "Administração", description: "Painel de administração do sistema" },
   "/admin-panel/usuarios": { title: "Administração", description: "Gerenciamento de usuários" },
+  "/admin-panel/tokens-automacao": { title: "Administração", description: "Tokens de automação" },
+
 }
 
 function LayoutContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
-  const { currentUser, isLoadingUser, hasPermission, isStaff } = usePermissions()
-  const pageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
+  const { currentUser, isLoadingUser, hasPermission, isStaff, isOnlyMedico } = usePermissions()
+  const basePageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
+  // Médico-only na rota raiz vê o dashboard do portal, não o dashboard principal
+  const pageInfo = (location.pathname === '/' && isOnlyMedico())
+    ? { title: "Portal do Médico", description: "Visão geral dos seus mapas" }
+    : basePageInfo
 
   // ── Auth guard: wait for hydration before deciding to redirect ────────────
   const token = localStorage.getItem('accessToken')

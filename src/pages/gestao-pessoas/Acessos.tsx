@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { Plus, Search, Shield, Users, Lock, ChevronDown, ChevronRight, Save, Loader2, Trash2 } from "lucide-react";
 import { systemRoles } from "@/contexts/PermissionsContext";
 import { usePermissions } from "@/contexts/PermissionsContext";
@@ -339,11 +340,14 @@ export default function Acessos() {
     savePermsMutation.mutate({ id: selectedRoleId, permissions: mapToPermissions(map, scopes) });
   };
 
+  const REMOVE_GRUPO = '__none__';
+
   const handleApplyRole = (pessoa: Pessoa) => {
     const grupo = userRoles[pessoa.id];
-    if (!grupo) return;
+    if (grupo === undefined) return;
     setSavingId(pessoa.id);
-    grupoMutation.mutate({ id: pessoa.id, grupo });
+    // '__none__' = remover grupo funcional → envia string vazia ao backend
+    grupoMutation.mutate({ id: pessoa.id, grupo: grupo === REMOVE_GRUPO ? '' : grupo });
   };
 
   const toggleModuleExpand = (modId: string) =>
@@ -605,7 +609,16 @@ export default function Acessos() {
                           </TableCell>
                           <TableCell>{pessoa.setor || "—"}</TableCell>
                           <TableCell>{pessoa.cargo || "—"}</TableCell>
-                          <TableCell className="text-muted-foreground capitalize">{pessoa.role}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="capitalize text-muted-foreground">{pessoa.role}</span>
+                              {pessoa.is_medico && (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                  Médico
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Select
@@ -617,14 +630,24 @@ export default function Acessos() {
                                   <SelectValue placeholder={pessoa.role} />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  {allRolesDisplay.map((role) => (
-                                    <SelectItem key={role.id} value={role.name}>
-                                      {role.name}
-                                    </SelectItem>
-                                  ))}
+                                  <SelectItem value={REMOVE_GRUPO}>
+                                    <span className="text-muted-foreground italic">Sem grupo funcional</span>
+                                  </SelectItem>
+                                  {allRolesDisplay
+                                    .filter(role => !['medico', 'usuario'].includes(role.name.toLowerCase()))
+                                    .map((role) => (
+                                      <SelectItem key={role.id} value={role.name}>
+                                        {role.name}
+                                      </SelectItem>
+                                    ))
+                                  }
                                 </SelectContent>
                               </Select>
-                              {isAdmin && userRoles[pessoa.id] && userRoles[pessoa.id] !== pessoa.role && (
+                              {isAdmin && userRoles[pessoa.id] !== undefined && (
+                                userRoles[pessoa.id] === REMOVE_GRUPO
+                                  ? (pessoa.role !== 'usuario' && pessoa.role !== 'medico')
+                                  : userRoles[pessoa.id] !== pessoa.role
+                              ) && (
                                 <Button
                                   size="sm"
                                   onClick={() => handleApplyRole(pessoa)}

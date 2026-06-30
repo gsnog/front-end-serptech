@@ -81,7 +81,7 @@ export interface MapaFilho {
     arquivo_pdf_url: string | null;
     arquivo_pdf_original: string | null;
     arquivo_pdf_original_url: string | null;
-    status: 'concluido' | 'pendente';
+    status: 'concluido' | 'pendente' | 'aguardando_verificacao';
     observacao: string | null;
     observacao_conciliacao: string | null;
     mapa_pendente: number | null;
@@ -97,6 +97,8 @@ export interface MapaPrincipal {
     medico_nome?: string | null;
     filhos_count: number;
     pendentes_count: number;
+    aguardando_verificacao_count: number;
+    origem: 'manual' | 'medico' | 'automacao';
     filhos?: MapaFilho[];
 }
 
@@ -138,6 +140,12 @@ export const fetchMapaFilhos = async (mapaId: number): Promise<MapaFilho[]> => {
 /** PATCH /api/lab/mapas-filhos/{id}/ — rename */
 export const updateMapaFilho = async (id: number, nome: string): Promise<MapaFilho> => {
     const res = await api.patch(`/api/lab/mapas-filhos/${id}/`, { nome });
+    return res.data;
+};
+
+/** PATCH /api/lab/mapas-filhos/{id}/ — validar (aguardando_verificacao → concluido) */
+export const validarMapaFilho = async (id: number): Promise<MapaFilho> => {
+    const res = await api.patch(`/api/lab/mapas-filhos/${id}/`, { status: 'concluido' });
     return res.data;
 };
 

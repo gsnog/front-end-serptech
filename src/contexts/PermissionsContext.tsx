@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
 import { chatSocket, rtcSocket } from '@/lib/socket';
+import api from '@/lib/api';
 
 // ── Types (espelho do backend) ────────────────────────────────────────────────
 
@@ -47,6 +48,8 @@ export interface UserPermissions {
   userId: string;
   roles: string[];
   is_staff?: boolean;
+  is_medico?: boolean;
+  is_only_medico?: boolean;
   /** Permissões granulares vindas da tabela RolePermission */
   permissions: Permission[];
   dashboardAccess: { dashboardId: string; canView: boolean; canViewSensitive: boolean }[];
@@ -65,6 +68,8 @@ interface PermissionsContextType {
   hasDashboardAccess: (dashboardId: string, sensitive?: boolean) => boolean;
   getScope: (module: string, page: string) => PermissionScope;
   isStaff: () => boolean;
+  isMedico: () => boolean;
+  isOnlyMedico: () => boolean;
   setUserPermissions: (permissions: UserPermissions | null) => void;
   login: (token: string, refreshToken: string, permissions: UserPermissions) => void;
   logout: () => void;
@@ -79,7 +84,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('userPermissions');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        // Descarta cache antigo sem is_only_medico — será re-buscado no useEffect
+        if (parsed.is_only_medico === undefined) {
+          localStorage.removeItem('userPermissions');
+          return { userId: '', roles: [], permissions: [], dashboardAccess: [], exceptions: [] };
+        }
+        return parsed;
       } catch (e) {
         console.error('Erro ao ler permissões do localStorage:', e);
       }
@@ -118,16 +129,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     chatSocket.connect();
     rtcSocket.connect();
 
-    // Busca permissões frescas do backend
-    fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/pessoas/me/permissions/`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    // Busca permissões frescas via axios (interceptor renova token expirado automaticamente)
+    api.get<UserPermissions>('/api/pessoas/me/permissions/')
       .then(res => {
-        if (!res.ok) return null;
-        return res.json();
-      })
-      .then((data: UserPermissions | null) => {
-        if (data?.userId) setUserPermissions(data);
+        if (res.data?.userId) {
+          setUserPermissions(res.data);
+        }
       })
       .catch(() => {/* silencia falhas de rede — usa cache do localStorage */})
       .finally(() => {
@@ -168,6 +175,12 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
   const isStaff = (): boolean =>
     !!currentUser.is_staff;
+
+  const isMedico = (): boolean =>
+    !!currentUser.is_medico;
+
+  const isOnlyMedico = (): boolean =>
+    !!currentUser.is_only_medico;
 
   // ── hasPermission ────────────────────────────────────────────────────────────
 
@@ -275,6 +288,8 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       hasDashboardAccess,
       getScope,
       isStaff,
+      isMedico,
+      isOnlyMedico,
       setUserPermissions,
       login,
       logout,

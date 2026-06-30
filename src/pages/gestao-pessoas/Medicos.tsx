@@ -11,6 +11,24 @@ import { ExportButton } from "@/components/ExportButton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus } from "lucide-react";
+
+function formatTelefone(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11)
+  if (d.length === 0) return ''
+  if (d.length <= 2) return `(${d}`
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
+}
+
+function formatCrm(value: string): string {
+  const upper = value.toUpperCase().replace(/^CRM\/?/, '').replace(/[^A-Z0-9]/g, '')
+  const letters = upper.replace(/[^A-Z]/g, '').slice(0, 2)
+  const digits  = upper.replace(/[^0-9]/g, '').slice(0, 6)
+  if (!letters && !digits) return ''
+  if (!digits) return `CRM/${letters}`
+  return `CRM/${letters} ${digits}`
+}
 import { toast } from "@/hooks/use-toast";
 import { fetchMedicos, updateMedico, deleteMedico, medicosQueryKey, type Medico } from "@/services/pessoas";
 
@@ -74,7 +92,7 @@ const Medicos = () => {
     <div className="flex flex-col h-full bg-background">
       <div className="space-y-6">
         <div className="flex flex-wrap gap-3 items-center">
-          <Button onClick={() => navigate("/cadastro/pessoas/pessoas/nova")} className="gap-2">
+          <Button onClick={() => navigate("/gestao-pessoas/medicos/novo")} className="gap-2">
             <Plus className="w-4 h-4" /> Novo Médico
           </Button>
           <ExportButton getData={getExportData} fileName="medicos" />
@@ -139,11 +157,11 @@ const Medicos = () => {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>CRM</Label>
-              <Input value={editCrm} onChange={e => setEditCrm(e.target.value)} placeholder="Ex: CRM/SP 123456" />
+              <Input value={editCrm} onChange={e => setEditCrm(formatCrm(e.target.value))} placeholder="CRM/SP 123456" />
             </div>
             <div className="space-y-2">
               <Label>Telefone</Label>
-              <Input value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder="(11) 99999-9999" />
+              <Input value={editTelefone} onChange={e => setEditTelefone(formatTelefone(e.target.value))} placeholder="(11) 99999-9999" />
             </div>
           </div>
           <DialogFooter>
