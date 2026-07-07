@@ -8,6 +8,8 @@ import { Ship } from "lucide-react";
 import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
+import { createEmbarcacao } from "@/services/operacional";
+import { toast } from "@/hooks/use-toast";
 
 const validationFields = [
   { name: "nome", label: "Nome", required: true, minLength: 2, maxLength: 100 },
@@ -34,7 +36,16 @@ const NovaEmbarcacao = () => {
 
   const handleSalvar = async () => {
     if (validateAll()) {
-      await handleSave("/operacional/embarcacoes", "Embarcação salva com sucesso!");
+      try {
+        await createEmbarcacao(formData);
+        await handleSave("/operacional/embarcacoes", "Embarcação salva com sucesso!");
+      } catch (err: any) {
+        toast({
+          title: "Erro",
+          description: err.response?.data?.error || "Erro ao salvar embarcação.",
+          variant: "destructive",
+        });
+      }
     }
   };
 

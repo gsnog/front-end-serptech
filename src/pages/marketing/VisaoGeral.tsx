@@ -1,22 +1,23 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GradientCard } from "@/components/financeiro/GradientCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { 
-  Users, Target, DollarSign, TrendingUp, Filter, ArrowUpRight, 
+import {
+  Users, Target, DollarSign, TrendingUp, Filter, ArrowUpRight,
   Megaphone, BarChart3, AlertTriangle, ChevronRight
 } from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, FunnelChart, Funnel, LabelList, LineChart, Line
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import { 
-  campanhasMock, canaisMock, getMetricasGerais, leadsPorCanalData,
-  funilMarketingData, roiPorCampanhaData
-} from "@/data/marketing-mock";
+import { fetchCampanhas, campanhasQueryKey, fetchCanais, canaisQueryKey, fetchLeadsMarketing, leadsMarketingQueryKey } from "@/services/marketing";
+
+const funilMarketingData: any[] = [];
+const roiPorCampanhaData: any[] = [];
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -27,10 +28,23 @@ export default function VisaoGeralMarketing() {
   const [periodo, setPeriodo] = useState("30d");
   const [canal, setCanal] = useState("__all__");
 
+  const { data: campanhasData = [] as any[] } = useQuery({ queryKey: campanhasQueryKey, queryFn: fetchCampanhas });
+  const { data: canaisData = [] as any[] } = useQuery({ queryKey: canaisQueryKey, queryFn: fetchCanais });
+  const { data: leadsData = [] as any[] } = useQuery({ queryKey: leadsMarketingQueryKey, queryFn: fetchLeadsMarketing });
+
+  const getMetricasGerais = () => {
+    return {
+      leads: leadsData.length,
+      mql: leadsData.filter((l: any) => l.status === 'mql').length,
+      sql: leadsData.filter((l: any) => l.status === 'sql').length,
+      cac: 0, roi: 0, pipelineInfluenciado: 0
+    };
+  };
+
   const metricas = getMetricasGerais();
 
   // Campanhas ativas
-  const campanhasAtivas = campanhasMock.filter(c => c.status === 'ativa').length;
+  const campanhasAtivas = campanhasData.filter((c: any) => c.status === 'ativa').length;
 
   // Alertas
   const campanhasROINegativo = roiPorCampanhaData.filter(c => c.roi < 0).length;
@@ -44,7 +58,7 @@ export default function VisaoGeralMarketing() {
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Período:</span>
             <div className="flex gap-1">
@@ -70,8 +84,8 @@ export default function VisaoGeralMarketing() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
-                {canaisMock.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                {canaisData.map((c: any) => (
+                  <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -181,7 +195,7 @@ export default function VisaoGeralMarketing() {
               <BarChart data={funilMarketingData} layout="vertical">
                 <XAxis type="number" />
                 <YAxis dataKey="etapa" type="category" width={100} tick={{ fontSize: 12 }} />
-                <Tooltip 
+                <Tooltip
                   formatter={(value: number) => [value, 'Quantidade']}
                   contentStyle={{ background: 'hsl(var(--muted) / 0.7)', border: '1px solid hsl(var(--border) / 0.5)', borderRadius: '12px', backdropFilter: 'blur(24px)' }}
                 />
@@ -201,7 +215,7 @@ export default function VisaoGeralMarketing() {
               <BarChart data={leadsPorCanalData}>
                 <XAxis dataKey="canal" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
                 <YAxis />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ background: 'hsl(var(--muted) / 0.7)', border: '1px solid hsl(var(--border) / 0.5)', borderRadius: '12px', backdropFilter: 'blur(24px)' }}
                 />
                 <Bar dataKey="leads" name="Leads" fill="hsl(var(--primary))" radius={[12, 12, 12, 12]} />

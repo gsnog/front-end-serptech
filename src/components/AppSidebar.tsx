@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
-import { 
-  LayoutGrid, 
-  ClipboardList, 
-  Package, 
+import {
+  LayoutGrid,
+  ClipboardList,
+  Package,
   TrendingUp,
   DollarSign,
   Building2,
@@ -14,54 +14,65 @@ import {
   BarChart3,
   Sun,
   Moon,
+  ShieldCheck,
+  Stethoscope,
 } from "lucide-react"
 import { NavLink, useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/hooks/useTheme"
 import { Badge } from "@/components/ui/badge"
-import logoSerpLight from "@/assets/logo-serp-light.png"
-import logoSerpDark from "@/assets/logo-serp-dark.png"
-import logoIcone from "@/assets/Logo_Serp_27.png"
+import { usePermissions } from "@/contexts/PermissionsContext"
+import logoSerpLight from "@/assets/logo-dlc.png"
+import logoSerpDark from "@/assets/Logo - DLC dark - mode (1).png"
+import logoIcone from "@/assets/logo-dlc.png"
 
+// ── Menu structure ─────────────────────────────────────────────────────────
 
+// module: if set, the item is only shown when hasPermission(module, 'all', 'view') === true
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutGrid, help: "Visão geral com indicadores e métricas do sistema." },
-  { 
-    title: "Cadastro", 
+  {
+    title: "Cadastro",
     icon: ClipboardList,
     basePath: "/cadastro",
     help: "Cadastro de dados mestres: itens, fornecedores, clientes, setores e contas.",
     subItems: [
-      { title: "Estoque", help: "Cadastros relacionados ao controle de estoque.", subItems: [
-        { title: "Fornecedores", url: "/cadastro/estoque/fornecedores" },
-        { title: "Itens", url: "/cadastro/estoque/itens" },
-        { title: "Setores", url: "/cadastro/estoque/setores" },
-        { title: "Unidades", url: "/cadastro/estoque/unidades" },
-      ]},
-      { title: "Financeiro", help: "Cadastros financeiros: contas, centros de custo e planos de contas.", subItems: [
-        { title: "Conta Bancária", url: "/cadastro/financeiro/conta-bancaria" },
-        { title: "Conciliação Bancária", url: "/cadastro/financeiro/conciliacao-bancaria" },
-        { title: "Transferências", url: "/cadastro/financeiro/transferencias" },
-        { title: "Clientes", url: "/cadastro/financeiro/clientes" },
-        { title: "Centro de Custo", url: "/cadastro/financeiro/centro-custo" },
-        { title: "Centro de Receita", url: "/cadastro/financeiro/centro-receita" },
-        { title: "Contábil", url: "/cadastro/financeiro/contabil" },
-        { title: "Categorias", url: "/cadastro/financeiro/categorias" },
-        { title: "Fornecedores", url: "/cadastro/financeiro/fornecedores" },
-        { title: "Subcategorias", url: "/cadastro/financeiro/subcategorias" },
-        { title: "Plano de Contas", url: "/cadastro/financeiro/plano-contas" },
-      ]},
-      { title: "Pessoas", help: "Cadastro de pessoas, setores e cargos.", subItems: [
-        { title: "Pessoas", url: "/cadastro/pessoas/pessoas" },
-        { title: "Setores/Áreas", url: "/cadastro/pessoas/setores" },
-        { title: "Cargos", url: "/cadastro/pessoas/cargos" },
-      ]},
+      {
+        title: "Estoque", module: "cadastro_estoque", help: "Cadastros relacionados ao controle de estoque.", subItems: [
+          { title: "Fornecedores", url: "/cadastro/estoque/fornecedores" },
+          { title: "Itens", url: "/cadastro/estoque/itens" },
+          { title: "Setores", url: "/cadastro/estoque/setores" },
+          { title: "Unidades", url: "/cadastro/estoque/unidades" },
+          { title: "Softwares", url: "/cadastro/estoque/software", roles: ["admin", "admin ti"] },
+        ]
+      },
+      {
+        title: "Financeiro", module: "cadastro_financeiro", help: "Cadastros financeiros: contas, centros de custo e planos de contas.", subItems: [
+          { title: "Conta Bancária", url: "/cadastro/financeiro/conta-bancaria" },
+          { title: "Clientes", url: "/cadastro/financeiro/clientes" },
+          { title: "Áreas", url: "/cadastro/financeiro/areas" },
+          { title: "Centro de Custo", url: "/cadastro/financeiro/centro-custo" },
+          { title: "Centro de Receita", url: "/cadastro/financeiro/centro-receita" },
+          { title: "Categorias", url: "/cadastro/financeiro/categorias" },
+          { title: "Classificações", url: "/cadastro/financeiro/classificacoes" },
+          { title: "Fornecedores", url: "/cadastro/estoque/fornecedores" },
+          { title: "Subcategorias", url: "/cadastro/financeiro/subcategorias" },
+          { title: "Plano de Contas", url: "/cadastro/financeiro/plano-contas" },
+        ]
+      },
+      {
+        title: "Pessoas", module: "cadastro_pessoas", help: "Cadastro de pessoas e cargos.", subItems: [
+          { title: "Pessoas", url: "/cadastro/pessoas/pessoas" },
+          { title: "Cargos", url: "/cadastro/pessoas/cargos" },
+        ]
+      },
     ]
   },
-  { 
-    title: "Comercial", 
+  {
+    title: "Comercial",
     icon: TrendingUp,
     basePath: "/comercial",
+    module: "comercial",
     badge: "BETA",
     help: "Gestão comercial: leads, oportunidades e propostas.",
     subItems: [
@@ -73,62 +84,87 @@ const menuItems = [
       { title: "Atividades", url: "/comercial/atividades" },
     ]
   },
-  { 
-    title: "Estoque", 
+  {
+    title: "Estoque",
     icon: Package,
     basePath: "/estoque",
+    module: "estoque",
     help: "Controle de estoque: entradas, saídas, inventário, requisições e patrimônio.",
     subItems: [
-      { title: "Entradas", url: "/estoque/entradas" },
-      { title: "Inventário", url: "/estoque/inventario" },
-      { title: "Locações", url: "/estoque/locacoes" },
-      { title: "Ordem de Compra", url: "/estoque/ordem-compra" },
-      { title: "Ordem de Serviço", url: "/estoque/ordem-servico" },
-      { title: "Pedidos Internos", url: "/estoque/pedidos-internos" },
-      { title: "Saídas", url: "/estoque/saidas" },
-      { title: "Patrimônio", url: "/patrimonio" },
+      { title: "Entradas",         url: "/estoque/entradas",         module: "estoque",    page: "est_entradas"         },
+      { title: "Inventário",        url: "/estoque/inventario",        module: "estoque",    page: "est_inventario"        },
+      { title: "Locações",          url: "/estoque/locacoes",          module: "estoque",    page: "est_locacoes"          },
+      { title: "Ordem de Compra",   url: "/estoque/ordem-compra",      module: "estoque",    page: "est_ordens_compra"     },
+      { title: "Ordem de Serviço",  url: "/estoque/ordem-servico",     module: "estoque",    page: "est_ordens_servico"    },
+      { title: "Pedidos Internos",  url: "/estoque/pedidos-internos",  module: "estoque",    page: "est_pedidos_internos"  },
+      { title: "Saídas",            url: "/estoque/saidas",            module: "estoque",    page: "est_saidas"            },
+      { title: "Transferências",    url: "/estoque/transferencias",    module: "estoque",    page: "est_transferencias"    },
+      { title: "Patrimônio",        url: "/patrimonio",                module: "estoque",    page: "est_patrimonio"        },
     ]
   },
-  { 
-    title: "Financeiro", 
+  {
+    title: "Financeiro",
     icon: DollarSign,
     basePath: "/financeiro",
+    module: "financeiro",
     help: "Módulo financeiro: contas a pagar/receber, fluxo de caixa e XML.",
     subItems: [
+      { title: "Conciliação Bancária", url: "/financeiro/conciliacao-bancaria" },
       { title: "Contas a Receber", url: "/financeiro/contas-receber" },
       { title: "Contas a Pagar", url: "/financeiro/contas-pagar" },
       { title: "Fluxo de Caixa", url: "/financeiro/fluxo-caixa" },
-      { title: "XML", url: "/financeiro/xml" },
+      { title: "Notas Fiscais", url: "/financeiro/xml" },
+      { title: "Transferências", url: "/financeiro/transferencias" },
     ]
   },
-  { 
-    title: "Operacional", 
+  {
+    title: "Operacional",
     icon: BarChart3,
     basePath: "/operacional",
-    help: "Gestão operacional: setores, embarcações, operações e serviços.",
+    module: "operacional",
+    help: "Laboratório: mapas e exames.",
     subItems: [
-      { title: "Setor", url: "/operacional/setor" },
-      { title: "Embarcações", url: "/operacional/embarcacoes" },
-      { title: "Operação", url: "/operacional/operacao" },
-      { title: "Serviços", url: "/operacional/servicos" },
+      { title: "Mapas", url: "/operacional/mapas" },
+      { title: "Exames", url: "/operacional/exames" },
     ]
   },
-  
-  { 
-    title: "Gestão de Pessoas", 
+  {
+    title: "Gestão de Pessoas",
     icon: UserRoundPlus,
     basePath: "/gestao-pessoas",
+    module: "gestao_pessoas",
     badge: "BETA",
     help: "RH e gestão de pessoas: visão 360º, hierarquia, permissões e auditoria.",
     subItems: [
-      { title: "Pessoas (360º)", url: "/gestao-pessoas/pessoas" },
-      { title: "Hierarquia", url: "/gestao-pessoas/hierarquia" },
-      { title: "Permissões", url: "/gestao-pessoas/acessos" },
-      { title: "Dashboards", url: "/gestao-pessoas/dashboards" },
-      { title: "Auditoria", url: "/gestao-pessoas/auditoria" },
+      { title: "Pessoas (360º)",    url: "/gestao-pessoas/pessoas",   module: "gestao_pessoas", page: "gp_pessoas"    },
+      { title: "Médicos",          url: "/gestao-pessoas/medicos",    module: "gestao_pessoas", page: "gp_medicos"    },
+      { title: "Hierarquia",       url: "/gestao-pessoas/hierarquia", module: "gestao_pessoas", page: "gp_hierarquia" },
+      { title: "Permissões",       url: "/gestao-pessoas/acessos",    module: "gestao_pessoas", page: "gp_permissoes" },
+      { title: "Auditoria",        url: "/gestao-pessoas/auditoria",  module: "gestao_pessoas", page: "gp_auditoria"  },
+      { title: "Relatório",        url: "/gestao-pessoas/relatorio",  module: "gestao_pessoas", page: "gp_pessoas"    },
     ]
   },
-  { title: "Relatórios", url: "/relatorios", icon: BarChart3, help: "Geração de relatórios financeiros e operacionais." },
+  { title: "Relatórios", url: "/relatorios", icon: BarChart3, module: "relatorios", help: "Geração de relatórios financeiros e operacionais." },
+  {
+    title: "Portal do Médico",
+    icon: Stethoscope,
+    basePath: "/portal-medico",
+    medicoOnly: true,
+    help: "Painel exclusivo para médicos: envio e acompanhamento de mapas.",
+    // subItems são calculados dinamicamente no render com base em isOnlyMedico()
+    subItems: [],
+  },
+  {
+    title: "Administração",
+    icon: ShieldCheck,
+    basePath: "/admin-panel",
+    staffOnly: true,
+    help: "Painel de administração do sistema. Exclusivo para usuários staff.",
+    subItems: [
+      { title: "Visão Geral", url: "/admin-panel", end: true },
+      { title: "Usuários", url: "/admin-panel/usuarios" },
+    ]
+  },
 ]
 
 interface SidebarProps {
@@ -141,17 +177,52 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
   const [openMenus, setOpenMenus] = useState<string[]>([])
   const [activeItem, setActiveItem] = useState<string>("Dashboard")
   const { theme, toggleTheme } = useTheme()
+  const { logout, currentUser, hasPermission, isStaff, isMedico, isOnlyMedico } = usePermissions()
+  const currentRole = (currentUser?.roles?.[0] ?? "usuario").toLowerCase()
+
+  // ── Permission helpers ───────────────────────────────────────────────────
+  const canView = (module?: string) =>
+    !module || hasPermission(module, 'all', 'view')
+
+  const canViewPage = (module?: string, page?: string) =>
+    !module || hasPermission(module, page || 'all', 'view')
+
+  // subItems do Portal do Médico
+  const portalSubItems = [
+    { title: "Dashboard",  url: "/portal-medico",       end: true },
+    { title: "Meus Mapas", url: "/portal-medico/mapas" },
+  ]
+
+  // Filter top-level items
+  const visibleMenuItems = menuItems.filter(item => {
+    // Staff-only items
+    if ('staffOnly' in item && item.staffOnly) return isStaff()
+
+    // Portal do Médico: visível para qualquer médico
+    if ('medicoOnly' in item && item.medicoOnly) return isMedico()
+
+    // Médico sem outro grupo funcional: esconde tudo exceto o Portal
+    if (isOnlyMedico()) return false
+
+    // Items with a direct module field
+    if ('module' in item && item.module) return canView(item.module)
+
+    // "Cadastro" is visible if at least one sub-group is accessible
+    if (item.title === 'Cadastro' && item.subItems) {
+      return item.subItems.some(sub => canView((sub as any).module))
+    }
+
+    return true
+  })
 
   const toggleMenu = (label: string, isSubMenu = false) => {
     setOpenMenus((prev) => {
       if (prev.includes(label)) {
         return prev.filter((item) => item !== label)
       }
-      
       if (isSubMenu) {
         return [...prev, label]
       }
-      
       const mainMenuTitles = menuItems.filter(item => item.subItems).map(item => item.title)
       const filteredMenus = prev.filter(item => !mainMenuTitles.includes(item))
       return [...filteredMenus, label]
@@ -189,7 +260,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="relative flex h-20 items-center justify-center border-b border-[hsl(var(--sidebar-border))] px-4">
         <div className="relative flex items-center justify-center overflow-hidden w-full h-full">
           <img
-            src={logoIcone}
+            src={theme === "dark" ? logoSerpDark : logoIcone}
             alt="S"
             className={cn(
               "absolute object-contain transition-all duration-300 ease-in-out h-12",
@@ -205,7 +276,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
             )}
           />
         </div>
-        
+
         {/* Toggle button */}
         <button
           onClick={onToggle}
@@ -218,7 +289,7 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 sidebar-nav-scroll px-3 py-4">
         <ul className="space-y-1">
-          {menuItems.map((item) => (
+          {visibleMenuItems.map((item) => (
             <li key={item.title}>
               {item.subItems ? (
                 <>
@@ -235,9 +306,9 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                         <span className="flex-1 text-left text-sm text-[hsl(var(--sidebar-foreground))] flex items-center gap-2">
                           {item.title}
                           {'badge' in item && item.badge && (
-                             <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary bg-primary text-primary-foreground font-semibold">
-                               {item.badge}
-                             </Badge>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-primary bg-primary text-primary-foreground font-semibold">
+                              {item.badge}
+                            </Badge>
                           )}
                         </span>
                         {openMenus.includes(item.title) ? (
@@ -248,67 +319,72 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                       </>
                     )}
                   </button>
-                  
+
                   {!collapsed && openMenus.includes(item.title) && (
                     <ul className="mt-1 space-y-1 pl-4">
-                      {item.subItems.map((subItem) => (
-                        'subItems' in subItem && subItem.subItems ? (
-                          <li key={subItem.title}>
-                            <button
-                              onClick={() => toggleMenu(`${item.title}-${subItem.title}`, true)}
-                              className="sidebar-item w-full text-sm"
-                            >
-                              <span className="flex-1 text-left text-[hsl(var(--sidebar-muted))]">
-                                {subItem.title}
-                              </span>
-                              
-                              {openMenus.includes(`${item.title}-${subItem.title}`) ? (
-                                <ChevronDown className="h-3 w-3 text-foreground dark:text-primary" />
-                              ) : (
-                                <ChevronRight className="h-3 w-3 text-foreground dark:text-primary" />
+                      {(('medicoOnly' in item && item.medicoOnly) ? portalSubItems : item.subItems)
+                        .filter(subItem => canViewPage((subItem as any).module, (subItem as any).page))
+                        .map((subItem) => (
+                          'subItems' in subItem && subItem.subItems ? (
+                            <li key={subItem.title}>
+                              <button
+                                onClick={() => toggleMenu(`${item.title}-${subItem.title}`, true)}
+                                className="sidebar-item w-full text-sm"
+                              >
+                                <span className="flex-1 text-left text-[hsl(var(--sidebar-muted))]">
+                                  {subItem.title}
+                                </span>
+                                {openMenus.includes(`${item.title}-${subItem.title}`) ? (
+                                  <ChevronDown className="h-3 w-3 text-foreground dark:text-primary" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3 text-foreground dark:text-primary" />
+                                )}
+                              </button>
+
+                              {openMenus.includes(`${item.title}-${subItem.title}`) && (
+                                <ul className="mt-1 space-y-1 pl-4">
+                                  {subItem.subItems.filter((nestedItem) =>
+                                    !('roles' in nestedItem && nestedItem.roles) ||
+                                    (nestedItem as any).roles.includes(currentRole)
+                                  ).map((nestedItem) => (
+                                    <li key={nestedItem.title}>
+                                      <NavLink
+                                        to={nestedItem.url}
+                                        className={({ isActive }) =>
+                                          cn(
+                                            "sidebar-item text-xs",
+                                            isActive
+                                              ? "sidebar-nav-active"
+                                              : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
+                                          )
+                                        }
+                                      >
+                                        {nestedItem.title}
+                                      </NavLink>
+                                    </li>
+                                  ))}
+                                </ul>
                               )}
-                            </button>
-                            
-                            {openMenus.includes(`${item.title}-${subItem.title}`) && (
-                              <ul className="mt-1 space-y-1 pl-4">
-                                {subItem.subItems.map((nestedItem) => (
-                                  <li key={nestedItem.title}>
-                                    <NavLink
-                                      to={nestedItem.url}
-                                      className={({ isActive }) =>
-                                        cn(
-                                      "sidebar-item text-xs",
-                                          isActive
-                                            ? "sidebar-nav-active"
-                                            : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
-                                        )
-                                      }
-                                    >
-                                      {nestedItem.title}
-                                    </NavLink>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        ) : (
-                          <li key={subItem.title}>
-                            <NavLink
-                              to={'url' in subItem ? subItem.url : '#'}
-                              className={({ isActive }) =>
-                                cn(
-                                  "sidebar-item text-sm",
-                                  isActive
-                                    ? "sidebar-nav-active"
-                                    : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
-                                )
-                              }
-                            >
-                              {subItem.title}
-                            </NavLink>
-                          </li>
-                        )
-                      ))}
+                            </li>
+                          ) : (
+                            <li key={subItem.title}>
+                              <NavLink
+                                to={'url' in subItem ? subItem.url : '#'}
+                                end={'end' in subItem ? subItem.end : false}
+                                className={({ isActive }) =>
+                                  cn(
+                                    "sidebar-item text-sm",
+                                    isActive
+                                      ? "sidebar-nav-active"
+                                      : "text-[hsl(var(--sidebar-muted))] hover:text-[hsl(var(--sidebar-foreground))]"
+                                  )
+                                }
+                              >
+                                {subItem.title}
+                              </NavLink>
+                           </li>
+                          )
+                        ))}
                     </ul>
                   )}
                 </>
@@ -321,12 +397,9 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
                 >
                   <item.icon className="h-5 w-5 shrink-0 text-[hsl(var(--sidebar-foreground))]" />
                   {!collapsed && (
-                    <>
-                      <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
-                        {item.title}
-                      </span>
-                      
-                    </>
+                    <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
+                      {item.title}
+                    </span>
                   )}
                 </NavLink>
               )}
@@ -337,36 +410,22 @@ export function AppSidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Footer */}
       <div className="border-t border-[hsl(var(--sidebar-border))] p-3 space-y-1">
-
-        {/* Theme toggle */}
-        <button
-          onClick={toggleTheme}
-          className="sidebar-item w-full"
-        >
+        <button onClick={toggleTheme} className="sidebar-item w-full">
           {theme === "dark" ? (
             <Sun className="h-5 w-5 shrink-0 text-[hsl(var(--sidebar-foreground))]" />
           ) : (
             <Moon className="h-5 w-5 shrink-0 text-[hsl(var(--sidebar-foreground))]" />
           )}
           {!collapsed && (
-            <>
-              <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
-                {theme === "dark" ? "Modo Diurno" : "Modo Noturno"}
-              </span>
-              
-            </>
+            <span className="text-sm text-[hsl(var(--sidebar-foreground))]">
+              {theme === "dark" ? "Modo Diurno" : "Modo Noturno"}
+            </span>
           )}
         </button>
 
-        {/* Logout */}
-        <button className="sidebar-item w-full text-red-500 hover:bg-red-500/20">
+        <button className="sidebar-item w-full text-red-500 hover:bg-red-500/20" onClick={logout}>
           <LogOut className="h-5 w-5 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="text-sm">Sair</span>
-              
-            </>
-          )}
+          {!collapsed && <span className="text-sm">Sair</span>}
         </button>
       </div>
     </aside>

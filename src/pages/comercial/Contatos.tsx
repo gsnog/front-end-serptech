@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,8 @@ import { FilterSection } from "@/components/FilterSection";
 import { ExportButton } from "@/components/ExportButton";
 import { Plus, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { contatosMock, getContaById } from "@/data/comercial-mock";
+import { useQuery } from "@tanstack/react-query";
+import { fetchContatos, fetchContas } from "@/services/comercial";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -18,31 +19,45 @@ export default function Contatos() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [papelFilter, setPapelFilter] = useState("");
-  const [contatos, setContatos] = useState(contatosMock);
-  const [viewItem, setViewItem] = useState<typeof contatosMock[0] | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [editItem, setEditItem] = useState<typeof contatosMock[0] | null>(null);
-  const [editData, setEditData] = useState({ nome: "", cargo: "", email: "", telefone: "" });
 
-  const filteredContatos = contatos.filter(contato => {
-    const matchSearch = !searchTerm || contato.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                       contato.email.toLowerCase().includes(searchTerm.toLowerCase()) || contato.cargo.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchPapel = !papelFilter || contato.papel === papelFilter;
-    return matchSearch && matchPapel;
+  const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [searchTerm]);
+  const { data: contatosResponse, isLoading: isLoadingContatos } = useQuery({
+    queryKey: ['crm_contatos', currentPage, searchTerm],
+    queryFn: () => fetchContatos(currentPage, searchTerm),
   });
+  const contatosData = Array.isArray(contatosResponse) ? contatosResponse : (contatosResponse?.results ?? []);
+  const totalCount = Array.isArray(contatosResponse) ? contatosResponse.length : (contatosResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
+  const { data: contasData = [] } = useQuery({ queryKey: ['crm_contas'], queryFn: fetchContas });
+
+  const getContaNome = (contaId: number) => {
+    const conta = contasData.find(c => c.id === contaId);
+    return conta ? conta.nome_fantasia : 'N/A';
+  };
+
+  const [editItem, setEditItem] = useState<any | null>(null);
+  const [editData, setEditData] = useState({ nome: "", cargo: "", email: "", telefone: "" });
+  const [viewItem, setViewItem] = useState<any | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const filteredContatos = contatosData;
 
   const getPapelLabel = (papel: string) => { const labels: Record<string, string> = { 'decisor': 'Decisor', 'influenciador': 'Influenciador', 'usuario': 'Usuário', 'compras': 'Compras' }; return labels[papel] || papel; };
   const getPapelVariant = (papel: string): "default" | "secondary" | "outline" | "destructive" => { switch (papel) { case 'decisor': return 'default'; case 'influenciador': return 'secondary'; default: return 'outline'; } };
 
-  const getExportData = () => filteredContatos.map(c => {
-    const conta = getContaById(c.contaId);
-    return { Nome: c.nome, Cargo: c.cargo, Email: c.email, Telefone: c.telefone, Papel: getPapelLabel(c.papel), Empresa: conta?.nomeFantasia || 'N/A', Tags: c.tags.join(', ') };
-  });
+  const getExportData = () => filteredContatos.map(c => ({
+    Nome: c.nome,
+    Cargo: c.cargo || '',
+    Email: c.email || '',
+    Telefone: c.telefone || '',
+    Empresa: getContaNome(c.conta)
+  }));
 
-  const openEdit = (c: typeof contatosMock[0]) => { setEditItem(c); setEditData({ nome: c.nome, cargo: c.cargo, email: c.email, telefone: c.telefone }) };
-  const handleSaveEdit = () => { if (editItem) { setContatos(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Contato atualizado." }) } };
-  const handleDelete = () => { if (deleteId) { setContatos(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removido", description: "Contato excluído." }) } };
-  const deleteItemData = contatos.find(i => i.id === deleteId);
+  const openEdit = (c: any) => { setEditItem(c); setEditData({ nome: c.nome, cargo: c.cargo || '', email: c.email || '', telefone: c.telefone || '' }) };
+  const handleSaveEdit = () => { toast({ title: "Informação", description: "Edição via API ainda não implementada neste dashboard." }); setEditItem(null); };
+  const handleDelete = () => { toast({ title: "Informação", description: "Exclusão via API ainda não implementada neste dashboard." }); setDeleteId(null); };
+  const deleteItemData = contatosData.find(i => i.id === deleteId);
 
   return (
     <div className="space-y-6">
@@ -54,12 +69,14 @@ export default function Contatos() {
       <FilterSection
         fields={[
           { type: "text", label: "Buscar", placeholder: "Nome, email ou cargo...", value: searchTerm, onChange: setSearchTerm, width: "flex-1 min-w-[200px]" },
-          { type: "select", label: "Papel", placeholder: "Todos", value: papelFilter, onChange: setPapelFilter, options: [
-            { value: "decisor", label: "Decisor" }, { value: "influenciador", label: "Influenciador" },
-            { value: "usuario", label: "Usuário" }, { value: "compras", label: "Compras" }
-          ], width: "min-w-[160px]" }
+          {
+            type: "select", label: "Papel", placeholder: "Todos", value: papelFilter, onChange: setPapelFilter, options: [
+              { value: "decisor", label: "Decisor" }, { value: "influenciador", label: "Influenciador" },
+              { value: "usuario", label: "Usuário" }, { value: "compras", label: "Compras" }
+            ], width: "min-w-[160px]"
+          }
         ]}
-        resultsCount={filteredContatos.length}
+        resultsCount={totalCount}
       />
 
       <div className="rounded border border-border">
@@ -69,25 +86,59 @@ export default function Contatos() {
           </TableRow></TableHeader>
           <TableBody>
             {filteredContatos.map((contato) => {
-              const conta = getContaById(contato.contaId);
               return (
                 <TableRow key={contato.id} className="hover:bg-muted/50 cursor-pointer">
                   <TableCell><div className="flex items-center gap-2"><div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center"><User className="h-4 w-4 text-primary" /></div><span className="font-medium">{contato.nome}</span></div></TableCell>
                   <TableCell>{contato.cargo}</TableCell><TableCell>{contato.email}</TableCell><TableCell>{contato.telefone}</TableCell>
-                  <TableCell><Badge variant={getPapelVariant(contato.papel)}>{getPapelLabel(contato.papel)}</Badge></TableCell>
-                  <TableCell>{conta?.nomeFantasia || 'N/A'}</TableCell>
-                  <TableCell><div className="flex gap-1">{contato.tags.slice(0, 2).map(tag => (<Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>))}</div></TableCell>
+                  <TableCell><Badge variant="outline">{contato.principal ? 'Principal' : 'Secundário'}</Badge></TableCell>
+                  <TableCell>{getContaNome(contato.conta)}</TableCell>
+                  <TableCell><Badge variant="outline" className="text-xs">CRM</Badge></TableCell>
                   <TableCell><TableActions onView={() => setViewItem(contato)} onEdit={() => openEdit(contato)} onDelete={() => setDeleteId(contato.id)} /></TableCell>
                 </TableRow>
               );
             })}
+            {filteredContatos.length === 0 && !isLoadingContatos && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum contato encontrado.</TableCell>
+              </TableRow>
+            )}
+            {isLoadingContatos && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">Carregando contatos...</TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes do Contato</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Nome: viewItem.nome, Cargo: viewItem.cargo, Email: viewItem.email, Telefone: viewItem.telefone, Papel: getPapelLabel(viewItem.papel), Empresa: getContaById(viewItem.contaId)?.nomeFantasia || 'N/A', Tags: viewItem.tags.join(', ') }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
+          {viewItem && (
+            <div className="space-y-2">
+              {[
+                { label: 'Nome', value: viewItem.nome },
+                { label: 'Cargo', value: viewItem.cargo },
+                { label: 'Email', value: viewItem.email },
+                { label: 'Telefone', value: viewItem.telefone },
+                { label: 'Empresa', value: getContaNome(viewItem.conta) },
+                { label: 'Principal', value: viewItem.principal ? 'Sim' : 'Não' }
+              ].map((item) => (
+                <div key={item.label} className="flex justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-sm text-muted-foreground">{item.label}</span>
+                  <span className="text-sm font-medium">{item.value || 'N/A'}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

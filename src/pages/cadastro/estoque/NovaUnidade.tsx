@@ -1,22 +1,21 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Building2, Loader2 } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
-import { pessoasMock } from "@/data/pessoas-mock";
 import { estadosBrasil } from "@/data/brasil-localidades";
 import { toast } from "@/hooks/use-toast";
-import { useAuditTrail } from "@/hooks/useAuditTrail";
+import { unidadesQueryKey } from "@/services/estoque";
+import api from "@/lib/api";
 
 interface ViaCepResponse {
-  cep: string;
   logradouro: string;
   complemento: string;
   bairro: string;
@@ -26,53 +25,67 @@ interface ViaCepResponse {
 }
 
 const validationFields = [
-  { name: "nome", label: "Nome da Unidade", required: true, minLength: 2, maxLength: 100 },
-  { name: "cep", label: "CEP", required: true },
-  { name: "endereco", label: "Endereço", required: true },
-  { name: "bairro", label: "Bairro", required: true },
-  { name: "cidade", label: "Cidade", required: true },
-  { name: "estado", label: "Estado", required: true },
-  { name: "responsavel", label: "Responsável", required: true },
+  { name: "nome", label: "Nome da Unidade", required: true, minLength: 2, maxLength: 200 },
+  { name: "cep", label: "CEP", required: false },
+  { name: "endereco", label: "Endereço", required: false },
+  { name: "bairro", label: "Bairro", required: false },
+  { name: "cidade", label: "Cidade", required: false },
+  { name: "estado", label: "Estado", required: false },
+  { name: "responsavel", label: "Responsável", required: false },
 ];
 
 const NovaUnidade = () => {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
-  const { getAuditMetadata } = useAuditTrail();
+  const queryClient = useQueryClient();
   const [isLoadingCep, setIsLoadingCep] = useState(false);
 
-  const {
-    formData,
-    setFieldValue,
-    setFieldTouched,
-    validateAll,
-    getFieldError,
-    touched,
-  } = useFormValidation(
-    { nome: "", cep: "", endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", responsavel: "" },
-    validationFields
-  );
+  const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } =
+    useFormValidation(
+      { nome: "", cep: "", endereco: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "", responsavel: "" },
+      validationFields
+    );
+
+  const { data: funcionariosRaw = [] } = useQuery({
+    queryKey: ['funcionarios'],
+    queryFn: () => api.get('/api/funcionarios/').then(r => Array.isArray(r.data) ? r.data : r.data?.results ?? []),
+  });
+  const responsaveisOptions = (funcionariosRaw as any[]).map((f: any) => ({
+    value: String(f.id),
+    label: f.nome,
+  }));
+
+  const mutation = useMutation({
+    mutationFn: (data: any) => api.post('/api/estoque/unidades/', data).then(r => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: unidadesQueryKey });
+      toast({ title: "Unidade salva com sucesso!" });
+      navigate("/cadastro/estoque/unidades");
+    },
+    onError: (error: any) => {
+      const data = error.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Verifique os dados e tente novamente.";
+      toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
+    },
+  });
 
   const fetchAddressByCep = useCallback(async (cep: string) => {
     const cleanCep = cep.replace(/\D/g, '');
     if (cleanCep.length !== 8) return;
-
     setIsLoadingCep(true);
     try {
       const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
       const data: ViaCepResponse = await response.json();
-
       if (data.erro) {
         toast({ title: "CEP não encontrado", description: "Verifique o CEP digitado.", variant: "destructive" });
         return;
       }
-
       setFieldValue("endereco", data.logradouro || "");
       setFieldValue("bairro", data.bairro || "");
       setFieldValue("cidade", data.localidade || "");
       setFieldValue("estado", data.uf || "");
       if (data.complemento) setFieldValue("complemento", data.complemento);
-
       toast({ title: "Endereço encontrado!", description: `${data.logradouro}, ${data.bairro} - ${data.localidade}/${data.uf}` });
     } catch {
       toast({ title: "Erro ao buscar CEP", description: "Tente novamente.", variant: "destructive" });
@@ -81,20 +94,19 @@ const NovaUnidade = () => {
     }
   }, [setFieldValue]);
 
-  const responsaveisOptions = pessoasMock
-    .filter(p => p.status === 'Ativo')
-    .map(p => ({ value: p.id, label: `${p.nome} - ${p.cargo}` }));
-
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      const audit = getAuditMetadata();
-      console.log("Audit metadata:", audit);
-      await handleSave("/cadastro/estoque/unidades", "Unidade salva com sucesso!");
-    }
-  };
-
-  const handleCancelar = () => {
-    navigate("/cadastro/estoque/unidades");
+  const handleSalvar = () => {
+    if (!validateAll()) return;
+    mutation.mutate({
+      unidade: formData.nome,
+      cep: formData.cep || null,
+      rua: formData.endereco || null,
+      numero: formData.numero || null,
+      complemento: formData.complemento || null,
+      bairro: formData.bairro || null,
+      cidade: formData.cidade || null,
+      estado: formData.estado || null,
+      responsavel: formData.responsavel ? Number(formData.responsavel) : null,
+    });
   };
 
   return (
@@ -124,30 +136,25 @@ const NovaUnidade = () => {
               />
               <ValidatedSelect
                 label="Responsável"
-                required
                 value={formData.responsavel}
                 onValueChange={(v) => setFieldValue("responsavel", v)}
-                placeholder="Selecionar responsável"
+                placeholder="Selecionar responsável (opcional)"
                 options={responsaveisOptions}
                 searchable
                 searchPlaceholder="Buscar pessoa..."
               />
             </div>
 
-            {/* Endereço */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">CEP <span className="text-destructive">*</span></Label>
+                <Label className="text-sm font-medium">CEP</Label>
                 <div className="relative">
                   <Input
                     placeholder="00000-000"
                     className="form-input"
                     value={formData.cep}
                     onChange={(e) => setFieldValue("cep", e.target.value)}
-                    onBlur={(e) => {
-                      setFieldTouched("cep");
-                      fetchAddressByCep(e.target.value);
-                    }}
+                    onBlur={(e) => { setFieldTouched("cep"); fetchAddressByCep(e.target.value); }}
                   />
                   {isLoadingCep && (
                     <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -155,7 +162,7 @@ const NovaUnidade = () => {
                 </div>
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label className="text-sm font-medium">Endereço <span className="text-destructive">*</span></Label>
+                <Label className="text-sm font-medium">Endereço</Label>
                 <Input
                   placeholder="Rua, Avenida, etc."
                   className="form-input"
@@ -188,7 +195,7 @@ const NovaUnidade = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Bairro <span className="text-destructive">*</span></Label>
+                <Label className="text-sm font-medium">Bairro</Label>
                 <Input
                   placeholder="Bairro"
                   className="form-input"
@@ -197,7 +204,7 @@ const NovaUnidade = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Cidade <span className="text-destructive">*</span></Label>
+                <Label className="text-sm font-medium">Cidade</Label>
                 <Input
                   placeholder="Cidade"
                   className="form-input"
@@ -207,7 +214,6 @@ const NovaUnidade = () => {
               </div>
               <ValidatedSelect
                 label="Estado"
-                required
                 value={formData.estado}
                 onValueChange={(v) => setFieldValue("estado", v)}
                 placeholder="UF"
@@ -217,8 +223,8 @@ const NovaUnidade = () => {
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/estoque/unidades")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

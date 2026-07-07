@@ -9,7 +9,7 @@ import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
-import { origensLead } from "@/data/comercial-mock";
+import { origensLead } from "@/services/comercial";
 
 const validationFields = [
   { name: "nome", label: "Nome", required: true, minLength: 2 },

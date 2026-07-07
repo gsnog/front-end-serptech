@@ -1,28 +1,31 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Search, LayoutDashboard, Shield, Users, Eye, EyeOff } from "lucide-react";
+import { Search, LayoutDashboard, Shield, Users, Eye } from "lucide-react";
 import { availableDashboards, systemRoles } from "@/contexts/PermissionsContext";
-import { pessoasMock } from "@/data/pessoas-mock";
+import { useQuery } from "@tanstack/react-query";
+import { fetchPessoas, pessoasQueryKey, type Pessoa } from "@/services/pessoas";
 
 export default function Dashboards() {
   const [activeTab, setActiveTab] = useState("perfis");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filteredPessoas = pessoasMock.filter(p => 
-    p.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  const { data: pessoasResponse, isLoading } = useQuery({
+    queryKey: pessoasQueryKey,
+    queryFn: () => fetchPessoas(1, '', 200),
+  });
+  const pessoas: Pessoa[] = pessoasResponse?.results ?? [];
+
+  const filteredPessoas = useMemo(() =>
+    pessoas.filter(p => p.nome.toLowerCase().includes(searchTerm.toLowerCase())),
+    [pessoas, searchTerm]
   );
 
   return (
@@ -30,22 +33,18 @@ export default function Dashboards() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="perfis" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Por Perfil
+            <Shield className="h-4 w-4" /> Por Perfil
           </TabsTrigger>
           <TabsTrigger value="pessoas" className="gap-2">
-            <Users className="h-4 w-4" />
-            Por Pessoa (Exceções)
+            <Users className="h-4 w-4" /> Por Pessoa (Exceções)
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab Por Perfil */}
         <TabsContent value="perfis" className="mt-6">
           <Card className="border-border">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
-                <LayoutDashboard className="h-5 w-5" />
-                Visibilidade de Dashboards por Perfil
+                <LayoutDashboard className="h-5 w-5" /> Visibilidade de Dashboards por Perfil
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -56,7 +55,7 @@ export default function Dashboards() {
                       <TableHead>Perfil</TableHead>
                       {availableDashboards.map((dash) => (
                         <TableHead key={dash.id} className="text-center">
-                          <span>{dash.name.replace("Dashboard ", "")}</span>
+                          {dash.name.replace("Dashboard ", "")}
                         </TableHead>
                       ))}
                     </TableRow>
@@ -69,18 +68,12 @@ export default function Dashboards() {
                           <TableCell key={dash.id} className="text-center">
                             <div className="flex flex-col items-center gap-2">
                               <div className="flex items-center gap-2">
-                                <Switch 
-                                  defaultChecked={role.id === 'admin' || role.id === 'diretor'}
-                                  disabled={role.id === 'admin'}
-                                />
+                                <Switch defaultChecked={role.id === 'admin' || role.id === 'diretor'} disabled={role.id === 'admin'} />
                                 <span className="text-xs text-muted-foreground">Ver</span>
                               </div>
                               {dash.sensitive && (
                                 <div className="flex items-center gap-2">
-                                  <Switch 
-                                    defaultChecked={role.id === 'admin'}
-                                    disabled={role.id === 'admin'}
-                                  />
+                                  <Switch defaultChecked={role.id === 'admin'} disabled={role.id === 'admin'} />
                                   <span className="text-xs text-muted-foreground">$$$</span>
                                 </div>
                               )}
@@ -96,7 +89,6 @@ export default function Dashboards() {
           </Card>
         </TabsContent>
 
-        {/* Tab Por Pessoa */}
         <TabsContent value="pessoas" className="mt-6">
           <Card className="border-border">
             <CardHeader>
@@ -104,12 +96,7 @@ export default function Dashboards() {
                 <CardTitle className="text-lg">Exceções por Pessoa</CardTitle>
                 <div className="relative w-64">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar pessoa..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+                  <Input placeholder="Buscar pessoa..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
                 </div>
               </div>
             </CardHeader>
@@ -119,7 +106,7 @@ export default function Dashboards() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Pessoa</TableHead>
-                      <TableHead>Perfil Base</TableHead>
+                      <TableHead>Role</TableHead>
                       {availableDashboards.map((dash) => (
                         <TableHead key={dash.id} className="text-center min-w-[120px]">
                           {dash.name.replace("Dashboard ", "")}
@@ -128,7 +115,17 @@ export default function Dashboards() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredPessoas.slice(0, 10).map((pessoa) => (
+                    {isLoading ? (
+                      Array.from({ length: 4 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                          {availableDashboards.map((_, j) => (
+                            <TableCell key={j}><Skeleton className="h-4 w-10 mx-auto" /></TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : filteredPessoas.slice(0, 10).map((pessoa) => (
                       <TableRow key={pessoa.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -138,15 +135,11 @@ export default function Dashboards() {
                             <span className="font-medium">{pessoa.nome}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">Usuário</TableCell>
+                        <TableCell className="text-muted-foreground">{pessoa.role}</TableCell>
                         {availableDashboards.map((dash) => (
                           <TableCell key={dash.id} className="text-center">
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              className="gap-1 group/eye"
-                            >
-                              <Eye className="h-4 w-4 text-primary group-hover/eye:text-white dark:text-muted-foreground dark:group-hover/eye:text-muted-foreground transition-colors" />
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4 text-primary" />
                             </Button>
                           </TableCell>
                         ))}

@@ -1,9 +1,11 @@
+import React from "react"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
-import { useState, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { FilterSection } from "@/components/FilterSection"
-import { Plus, FileText, ArrowUpRight, Wallet } from "lucide-react"
+import { SortableHead } from "@/components/SortableHead"
+import { Plus, FileText, ArrowUpRight, Wallet, ChevronDown, ChevronRight, DollarSign, Paperclip, ExternalLink, AlertCircle } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { GradientCard } from "@/components/financeiro/GradientCard"
 import { StatusBadge } from "@/components/StatusBadge"
@@ -12,109 +14,934 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
 
-const mockContas = [
-  { id: 1, dataLancamento: "12/05/2025", dataFaturamento: "30/04/2025", cliente: "ABEEMAR", documento: "NI", valorTitulo: "R$ 659,88", valorTotalRecebido: "R$ 659,88", proximoVencimento: "XX/XX/XXXX", status: "Recebida" },
-  { id: 2, dataLancamento: "12/05/2025", dataFaturamento: "30/04/2025", cliente: "ABEEMAR", documento: "NI", valorTitulo: "R$ 659,88", valorTotalRecebido: "R$ 659,88", proximoVencimento: "XX/XX/XXXX", status: "Em Aberto" },
-  { id: 3, dataLancamento: "12/05/2025", dataFaturamento: "30/04/2025", cliente: "ALPHA TECNOLOGIA", documento: "NF 1234", valorTitulo: "R$ 12.345,00", valorTotalRecebido: "R$ 0,00", proximoVencimento: "15/12/2025", status: "Vencida" },
-  { id: 4, dataLancamento: "10/05/2025", dataFaturamento: "28/04/2025", cliente: "BETA CORP", documento: "NF 5678", valorTitulo: "R$ 8.500,00", valorTotalRecebido: "R$ 4.250,00", proximoVencimento: "10/01/2026", status: "Pago Parcial" },
-]
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { fetchContasReceber, updateContaReceber, deleteContaReceber, updateParcelaReceber, uploadComprovante, anexarNotaFiscal, uploadBoletoParcela, fetchContasBancarias, fetchCentrosReceita, fetchPlanoContas, type ContaReceber as Conta, type ParcelaReceber, type ContaBancaria, type CentroReceita, type PlanoContas, fetchContasReceberEstatisticas, contasReceberQueryKey, contasBancariasQueryKey, reparcelarContaReceber } from "@/services/financeiro"
+import { fetchUnidades, unidadesQueryKey } from "@/services/estoque"
+import api from "@/lib/api"
+import { useSortable } from "@/hooks/useSortable"
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
+import { todayStr } from "@/lib/utils"
 
-type Conta = typeof mockContas[0];
+// 'dd/mm/yyyy' (formato da API) → 'yyyy-mm-dd' (input date)
+const brToIso = (s?: string | null): string => {
+  if (!s) return "";
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return s.slice(0, 10); // já ISO
+};
+
+const FORMAS_PAGAMENTO = ["Dinheiro", "Débito", "Cartão de Crédito", "Cartão de Débito", "Boleto", "PIX", "TED", "DOC", "Cheque"];
+const STATUS_PARCELA = ["Pendente", "Pago", "Vencido", "Adiantamento"];
 
 const ContasReceber = () => {
+  const formatBRL = (value?: number | null) =>
+    value != null
+      ? Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+      : '—';
   const navigate = useNavigate()
-  const [items, setItems] = useState(mockContas)
+  const queryClient = useQueryClient()
+  // Invalida lista + indicadores (estatísticas da página, KPIs do dashboard e saldos bancários),
+  // garantindo que nenhum card continue exibindo dados de uma conta alterada/excluída.
+  const invalidateContasReceber = () => {
+    queryClient.invalidateQueries({ queryKey: contasReceberQueryKey })
+    queryClient.invalidateQueries({ queryKey: ["contas_receber_estatisticas"] })
+    queryClient.invalidateQueries({ queryKey: ["estatisticasFinanceiras"] })
+    queryClient.invalidateQueries({ queryKey: ["dashboard_full"] })
+    queryClient.invalidateQueries({ queryKey: contasBancariasQueryKey })
+  }
+  const [filterDateType, setFilterDateType] = useState("faturamento")
+  const [filterStatus, setFilterStatus] = useState("todos")
   const [filterCliente, setFilterCliente] = useState("")
   const [filterDocumento, setFilterDocumento] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
   const [filterDataFim, setFilterDataFim] = useState("")
+  // applied state (sent to API) — atualiza apenas ao clicar "Filtrar"
+  const [appliedDataInicio, setAppliedDataInicio] = useState("")
+  const [appliedDataFim, setAppliedDataFim] = useState("")
   const [viewItem, setViewItem] = useState<Conta | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<Conta | null>(null)
-  const [editData, setEditData] = useState({ cliente: "", documento: "", valorTitulo: "", valorTotalRecebido: "" })
+  const [editData, setEditData] = useState<Partial<Conta>>({})
+  const [editNfPdf, setEditNfPdf] = useState<File | null>(null)
+  const [editNfXml, setEditNfXml] = useState<File | null>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const toggleExpand = (id: number) => setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; })
 
-  const filtered = useMemo(() => {
-    return items.filter(conta => {
-      const matchCliente = conta.cliente.toLowerCase().includes(filterCliente.toLowerCase())
-      const matchDocumento = conta.documento.toLowerCase().includes(filterDocumento.toLowerCase())
-      const matchDataInicio = filterDataInicio ? conta.dataFaturamento >= filterDataInicio.split("-").reverse().join("/") : true
-      const matchDataFim = filterDataFim ? conta.dataFaturamento <= filterDataFim.split("-").reverse().join("/") : true
-      return matchCliente && matchDocumento && matchDataInicio && matchDataFim
+  interface ParcelaEditRow { numero: number; data_de_vencimento: string; valor: string; }
+  const [parcelasEdit, setParcelasEdit] = useState<ParcelaEditRow[]>([])
+  const [showReparcelar, setShowReparcelar] = useState(false)
+
+  // Edição in-place das parcelas existentes (todos os campos)
+  interface ParcelaEditFull {
+    id: number; numero: number; data_de_vencimento: string; valor: string; valor_pago: string;
+    status: string; forma_de_pagamento: string; conta_bancaria: string; data_de_pagamento: string;
+    boletoFile: File | null; boletoUrl: string | null;
+  }
+  const [parcelasFull, setParcelasFull] = useState<ParcelaEditFull[]>([])
+  const setParcelaFull = (i: number, patch: Partial<ParcelaEditFull>) =>
+    setParcelasFull(prev => prev.map((p, j) => j === i ? { ...p, ...patch } : p))
+
+  const addMonthsEdit = (dateStr: string, months: number): string => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr + "T00:00:00");
+    d.setMonth(d.getMonth() + months);
+    return d.toISOString().split("T")[0];
+  };
+
+  const [pagamentoModal, setPagamentoModal] = useState<{ parcela: ParcelaReceber; conta: Conta } | null>(null)
+  const [pagamentoForm, setPagamentoForm] = useState({ valor_pago: "", data_de_pagamento: "", forma_de_pagamento: "", conta_bancaria: "" })
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null)
+
+  const openPagamento = (parcela: ParcelaReceber, conta: Conta) => {
+    setPagamentoModal({ parcela, conta })
+    setPagamentoForm({
+      valor_pago: String(parcela.valor),
+      data_de_pagamento: todayStr(),
+      forma_de_pagamento: "",
+      conta_bancaria: "",
     })
-  }, [items, filterCliente, filterDocumento, filterDataInicio, filterDataFim])
+    setComprovanteFile(null)
+  }
 
-  const getExportData = () => filtered.map(c => ({ Lançamento: c.dataLancamento, Faturamento: c.dataFaturamento, Cliente: c.cliente, Documento: c.documento, Título: c.valorTitulo, Recebido: c.valorTotalRecebido, Vencimento: c.proximoVencimento, Status: c.status }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Conta excluída." }); } };
-  const openEdit = (c: Conta) => { setEditItem(c); setEditData({ cliente: c.cliente, documento: c.documento, valorTitulo: c.valorTitulo, valorTotalRecebido: c.valorTotalRecebido }); };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Conta atualizada." }); } };
-  const deleteItemData = items.find(i => i.id === deleteId);
+  const pagamentoMutation = useMutation({
+    mutationFn: async ({ id, data, file }: { id: number; data: Partial<ParcelaReceber>; file: File | null }) => {
+      await updateParcelaReceber(id, data)
+      if (file) await uploadComprovante(id, file)
+    },
+    onSuccess: () => {
+      invalidateContasReceber()
+      setPagamentoModal(null)
+      setComprovanteFile(null)
+      toast({ title: "Pagamento registrado!", description: "Parcela marcada como paga." })
+    },
+    onError: () => toast({ title: "Erro", description: "Não foi possível registrar o pagamento.", variant: "destructive" }),
+  })
+
+  const { data: contasBancariasRaw } = useQuery({ queryKey: contasBancariasQueryKey, queryFn: fetchContasBancarias })
+  const contasBancarias: ContaBancaria[] = (Array.isArray(contasBancariasRaw) ? contasBancariasRaw : (contasBancariasRaw as any)?.results ?? []).slice().sort((a, b) => a.id - b.id)
+
+  // Listas de opções para edição completa da conta
+  const { data: clientesRaw } = useQuery({ queryKey: ['lab-clientes'], queryFn: () => api.get('/api/lab/clientes/').then(r => r.data) })
+  const clientes: { id: number; nome: string }[] = Array.isArray(clientesRaw) ? clientesRaw : (clientesRaw?.results ?? [])
+  const { data: unidadesRaw } = useQuery({ queryKey: [...unidadesQueryKey], queryFn: fetchUnidades })
+  const unidades: any[] = Array.isArray(unidadesRaw) ? unidadesRaw : (unidadesRaw as any)?.results ?? []
+  const { data: centrosReceitaRaw } = useQuery({ queryKey: ['centrosReceita'], queryFn: () => fetchCentrosReceita() })
+  const centrosReceita: CentroReceita[] = Array.isArray(centrosReceitaRaw) ? centrosReceitaRaw : (centrosReceitaRaw as any)?.results ?? []
+  const { data: planoContasRaw } = useQuery({ queryKey: ['planoContas'], queryFn: () => fetchPlanoContas() })
+  const planoContasList: PlanoContas[] = Array.isArray(planoContasRaw) ? planoContasRaw : (planoContasRaw as any)?.results ?? []
+
+  useRealtimeUpdates([[...contasReceberQueryKey]]);
+
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [filterDateType, filterStatus, filterCliente, filterDocumento, appliedDataInicio, appliedDataFim]);
+
+  const handleFilter = () => {
+    setPage(1)
+    setAppliedDataInicio(filterDataInicio)
+    setAppliedDataFim(filterDataFim)
+  }
+
+  const filters = { dateType: filterDateType, status: filterStatus === "todos" ? "" : filterStatus, cliente: filterCliente, documento: filterDocumento, dataInicio: appliedDataInicio, dataFim: appliedDataFim };
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...contasReceberQueryKey, page, filters],
+    queryFn: () => fetchContasReceber(page, filters),
+  });
+  const items = response?.results ?? [];
+  const serverTotal = response?.count ?? 0;
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { id: number; payload: Partial<Conta>; nfPdf?: File | null; nfXml?: File | null; parcelas?: ParcelaEditFull[] }) => {
+      await updateContaReceber(data.id, data.payload);
+      if (data.nfPdf) await anexarNotaFiscal('receber', data.id, data.nfPdf, data.nfXml);
+      // PATCH in-place de cada parcela (sequencial; o signal ajusta o saldo). conta_bancaria_id é gravável.
+      for (const p of data.parcelas ?? []) {
+        await updateParcelaReceber(p.id, {
+          data_de_vencimento: p.data_de_vencimento || null,
+          valor: parseFloat(p.valor) || 0,
+          valor_pago: p.valor_pago === "" ? 0 : (parseFloat(p.valor_pago) || 0),
+          status: p.status,
+          forma_de_pagamento: p.forma_de_pagamento || null,
+          conta_bancaria_id: p.conta_bancaria ? Number(p.conta_bancaria) : null,
+          data_de_pagamento: p.data_de_pagamento || null,
+        } as any);
+        if (p.boletoFile) await uploadBoletoParcela(p.id, p.boletoFile);
+      }
+    },
+    onSuccess: () => {
+      invalidateContasReceber();
+      setEditItem(null);
+      setEditNfPdf(null);
+      setEditNfXml(null);
+      toast({ title: "Salvo", description: "Conta e parcelas atualizadas." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
+  });
+
+  const reparcelarMutation = useMutation({
+    mutationFn: (data: { id: number; parcelas: { numero: number; data_de_vencimento: string | null; valor: number }[] }) =>
+      reparcelarContaReceber(data.id, data.parcelas),
+    onSuccess: () => {
+      invalidateContasReceber();
+      setEditItem(null);
+      setShowReparcelar(false);
+      toast({ title: "Parcelas atualizadas com sucesso." });
+    },
+    onError: (err: any) => toast({ title: "Erro", description: err?.response?.data?.detail ?? "Falha ao reparcelar.", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteContaReceber,
+    onSuccess: () => {
+      invalidateContasReceber();
+      setDeleteId(null);
+      toast({ title: "Removida", description: "Conta a receber excluída." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  });
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(items)
+  const paginatedItems = sorted;
+  const total = serverTotal;
+  const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
+  const hasNext = page < totalPages;
+  const hasPrev = page > 1;
+  const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
+
+  const getExportData = () => items.map((c: Conta) => ({ Lançamento: c.data_de_lancamento, Faturamento: c.data_de_faturamento, Cliente: c.cliente_nome, Documento: c.numero_documento, Título: c.valor_do_titulo, Total: c.valor_total, Vencimento: c.data_de_vencimento, Status: c.status }));
+  const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
+  const openEdit = (c: Conta) => {
+    setEditItem(c);
+    setEditData({ ...c });
+    setEditNfPdf(null);
+    setEditNfXml(null);
+    setShowReparcelar(false);
+    const existentes = (c.parcelas ?? [])
+      .filter(p => p.status !== 'Pago' && p.status !== 'Adiantamento')
+      .map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento ?? "", valor: String(p.valor) }));
+    setParcelasEdit(existentes.length > 0 ? existentes : [{ numero: 1, data_de_vencimento: c.data_de_vencimento?.slice(0, 10) ?? "", valor: String(c.valor_total ?? "") }]);
+    // Edição in-place: snapshot completo das parcelas existentes
+    setParcelasFull((c.parcelas ?? []).map(p => ({
+      id: p.id,
+      numero: p.numero,
+      data_de_vencimento: brToIso(p.data_de_vencimento),
+      valor: String(p.valor ?? ""),
+      valor_pago: p.valor_pago != null ? String(p.valor_pago) : "",
+      status: p.status ?? "Pendente",
+      forma_de_pagamento: p.forma_de_pagamento ?? "",
+      conta_bancaria: p.conta_bancaria != null ? String(p.conta_bancaria) : "",
+      data_de_pagamento: brToIso(p.data_de_pagamento),
+      boletoFile: null,
+      boletoUrl: p.boleto ?? null,
+    })));
+  };
+
+  // Página principal: boleto é somente leitura. A troca é feita no modal de edição.
+  const BoletoCell = ({ parcela }: { parcela: ParcelaReceber }) => (
+    parcela.boleto ? (
+      <a href={parcela.boleto} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+        <ExternalLink className="h-3 w-3" />Ver
+      </a>
+    ) : <span className="text-muted-foreground">—</span>
+  );
+
+  const handleSaveEdit = () => {
+    if (!editItem) return;
+    // `documento`/`nf_detalhe` são URLs (read-only) no editData; não vão no PUT.
+    // A NF é tratada à parte via anexarNotaFiscal.
+    const { documento, nf_detalhe, ...payload } = editData as any;
+    updateMutation.mutate({ id: editItem.id, payload, nfPdf: editNfPdf, nfXml: editNfXml, parcelas: parcelasFull });
+  };
+  const deleteItemData = items.find((i: Conta) => i.id === deleteId);
+
+  const { data: stats } = useQuery({
+    queryKey: ["contas_receber_estatisticas"],
+    queryFn: fetchContasReceberEstatisticas,
+  });
 
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <GradientCard title="Total Recebido" value="R$ 87.939,88" icon={ArrowUpRight} variant="success" />
-          <GradientCard title="Total a Receber" value="R$ 12.345,00" icon={ArrowUpRight} variant="info" />
-          <GradientCard title="Valor Total em Títulos" value="R$ 100.284,88" icon={Wallet} variant="orange" />
+          <GradientCard title="Total Recebido" value={formatBRL(stats?.total_recebido)} icon={ArrowUpRight} variant="success" />
+          <GradientCard title="Total a Receber" value={formatBRL(stats?.total_a_receber)} icon={ArrowUpRight} variant="info" />
+          <GradientCard title="Total a Receber Projetado" value={formatBRL(stats?.total_projetado)} icon={Wallet} variant="orange" />
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
           <Button onClick={() => navigate("/financeiro/contas-receber/nova")} className="gap-2"><Plus className="w-4 h-4" />Adicionar Conta</Button>
-          <Button onClick={() => navigate("/financeiro/contas-receber/relatorio")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
-          <ExportButton getData={getExportData} fileName="contas-receber" />
+          <Button onClick={() => navigate("/relatorios?tipo=contas-receber")} variant="outline" className="gap-2 border-border"><FileText className="w-4 h-4" />Relatório</Button>
         </div>
 
         <FilterSection
           fields={[
+            { type: "select", label: "Tipo de Data", value: filterDateType, onChange: setFilterDateType, width: "min-w-[200px]",
+              options: [
+                { value: "faturamento", label: "Faturamento" },
+                { value: "vencimento", label: "Vencimento (Parcela)" },
+                { value: "pagamento", label: "Pagamento (Parcela)" },
+              ]
+            },
+            { type: "select", label: "Status", value: filterStatus, onChange: setFilterStatus, width: "min-w-[160px]",
+              options: [
+                { value: "todos", label: "Todos" },
+                { value: "Pendente", label: "Pendente" },
+                { value: "Pago", label: "Pago" },
+                { value: "Vencido", label: "Vencido" },
+                { value: "Adiantamento", label: "Adiantamento" },
+              ]
+            },
             { type: "text", label: "Cliente", placeholder: "Buscar cliente...", value: filterCliente, onChange: setFilterCliente, width: "flex-1 min-w-[180px]" },
             { type: "text", label: "Documento", placeholder: "Número do documento...", value: filterDocumento, onChange: setFilterDocumento, width: "min-w-[160px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
-          resultsCount={filtered.length}
+          onFilter={handleFilter}
+          onClear={() => {
+            setFilterStatus("todos")
+            setFilterDataInicio(""); setFilterDataFim("")
+            setAppliedDataInicio(""); setAppliedDataFim("")
+          }}
+          resultsCount={serverTotal}
         />
 
-        <Table>
-          <TableHeader><TableRow>
-            <TableHead className="text-center">Lançamento</TableHead><TableHead className="text-center">Faturamento</TableHead><TableHead className="text-center">Cliente</TableHead><TableHead className="text-center">Documento</TableHead><TableHead className="text-center">Título</TableHead><TableHead className="text-center">Recebido</TableHead><TableHead className="text-center">Vencimento</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Ações</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (<TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>) : (
-              filtered.map((conta) => (
-                <TableRow key={conta.id}>
-                  <TableCell className="text-center">{conta.dataLancamento}</TableCell><TableCell className="text-center">{conta.dataFaturamento}</TableCell><TableCell className="text-center">{conta.cliente}</TableCell><TableCell className="text-center">{conta.documento}</TableCell><TableCell className="text-center">{conta.valorTitulo}</TableCell><TableCell className="text-center">{conta.valorTotalRecebido}</TableCell><TableCell className="text-center">{conta.proximoVencimento}</TableCell>
-                  <TableCell className="text-center"><StatusBadge status={conta.status} /></TableCell>
-                  <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <div className="rounded border border-border overflow-hidden">
+          <Table className="table-fixed w-full">
+            <colgroup>
+              <col className="w-8" />
+              <col className="w-[90px]" />
+              <col className="w-[90px]" />
+              <col className="w-[14%]" />
+              <col className="w-[12%]" />
+              <col className="w-[100px]" />
+              <col className="w-[100px]" />
+              <col className="w-[90px]" />
+              <col className="w-[60px]" />
+              <col className="w-[100px]" />
+              <col className="w-[70px]" />
+              <col className="w-[110px]" />
+              <col className="w-[72px]" />
+            </colgroup>
+            <TableHeader><TableRow className="bg-table-header">
+              <TableHead className="w-8" />
+              <SortableHead label="Lançamento" field="data_de_lancamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Faturamento" field="data_de_faturamento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Cliente" field="cliente_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Documento" field="numero_documento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Título" field="valor_do_titulo" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Total" field="valor_total" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Vencimento" field="data_de_vencimento" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold text-xs">Parcelas</TableHead>
+              <TableHead className="text-center font-semibold text-xs">Próx. Venc.</TableHead>
+              <TableHead className="text-center font-semibold text-xs">Em Atraso</TableHead>
+              <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold">Ações</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : paginatedItems.length === 0 ? (
+                <TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+              ) : (
+                paginatedItems.map((conta: Conta) => {
+                  const expanded = expandedIds.has(conta.id)
+                  const parcelas: ParcelaReceber[] = conta.parcelas ?? []
+                  return (
+                    <React.Fragment key={conta.id}>
+                      <TableRow className="hover:bg-table-hover transition-colors">
+                        <TableCell className="w-8 px-1">
+                          {parcelas.length > 0 && (
+                            <button onClick={() => toggleExpand(conta.id)} className="p-1 rounded hover:bg-muted transition-colors">
+                              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">{conta.data_de_lancamento || "—"}</TableCell>
+                        <TableCell className="text-center">{conta.data_de_faturamento || "—"}</TableCell>
+                        <TableCell >{conta.cliente_nome || "—"}</TableCell>
+                        <TableCell >
+                          <span className="flex items-center gap-1 truncate max-w-full" title={conta.numero_documento || ""}>
+                            <span className="truncate">{conta.numero_documento || "—"}</span>
+                            {(conta.documento || conta.nf_detalhe?.pdf_url) && (
+                              <a href={(conta.documento || conta.nf_detalhe?.pdf_url) as string} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/80" title="Abrir documento">
+                                <Paperclip className="w-3 h-3" />
+                              </a>
+                            )}
+                            {conta.nf_detalhe?.xml_url && (
+                              <a href={conta.nf_detalhe.xml_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary hover:text-primary/80" title={`Abrir XML da NF ${conta.nf_detalhe.numero}`}>
+                                <FileText className="w-3 h-3" />
+                              </a>
+                            )}
+                          </span>
+                        </TableCell>
+                        <TableCell >{formatBRL(conta.valor_do_titulo)}</TableCell>
+                        <TableCell >{formatBRL(conta.valor_total)}</TableCell>
+                        <TableCell className="text-center">{conta.data_de_vencimento || "—"}</TableCell>
+                        <TableCell className="text-center text-xs text-muted-foreground">{conta.total_parcelas ?? "—"}</TableCell>
+                        <TableCell className="text-center text-xs">{conta.proxima_data_vencimento || "—"}</TableCell>
+                        <TableCell className="text-center text-xs">
+                          {(conta.parcelas_em_atraso ?? 0) > 0
+                            ? <span className="text-destructive font-bold">{conta.parcelas_em_atraso}</span>
+                            : <span className="text-muted-foreground">0</span>}
+                        </TableCell>
+                        <TableCell className="text-center"><StatusBadge status={conta.status || "Em Aberto"} /></TableCell>
+                        <TableCell className="text-center"><TableActions onView={() => setViewItem(conta)} onEdit={() => openEdit(conta)} onDelete={() => setDeleteId(conta.id)} /></TableCell>
+                      </TableRow>
+                      {expanded && parcelas.length > 0 && (
+                        <TableRow className="bg-muted/40">
+                          <TableCell colSpan={13} className="p-0">
+                            <div className="px-6 py-3">
+                              <p className="text-xs font-semibold text-muted-foreground mb-2">PARCELAS</p>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted">
+                                    <TableHead className="text-xs h-8">Nº</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Valor</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Valor Pago</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Pagamento</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Status</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Conta</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Boleto</TableHead>
+                                    <TableHead className="text-center text-xs h-8">Comprovante</TableHead>
+                                    {conta.status !== 'Pago' && <TableHead className="text-xs h-8">Ação</TableHead>}
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {parcelas.map(p => (
+                                    <TableRow key={p.id} className="text-sm">
+                                      <TableCell className="py-1">{p.numero}</TableCell>
+                                      <TableCell className="text-center py-1">{p.data_de_vencimento || "—"}</TableCell>
+                                      <TableCell className="py-1">{formatBRL(p.valor)}</TableCell>
+                                      <TableCell className="py-1">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
+                                      <TableCell className="text-center py-1">{p.data_de_pagamento || "—"}</TableCell>
+                                      <TableCell className="text-center py-1"><StatusBadge status={p.status} /></TableCell>
+                                      <TableCell className="text-center py-1 text-muted-foreground">{p.conta_bancaria_nome || "—"}</TableCell>
+                                      <TableCell className="text-center py-1"><BoletoCell parcela={p} /></TableCell>
+                                      <TableCell className="text-center py-1">
+                                        {p.comprovante ? (
+                                          <a href={p.comprovante} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                                            <ExternalLink className="h-3 w-3" />Ver
+                                          </a>
+                                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                                      </TableCell>
+                                      {conta.status !== 'Pago' && (
+                                        <TableCell className="py-1">
+                                          {p.status !== 'Pago' && (
+                                            <button onClick={() => openPagamento(p, conta)} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                                              <DollarSign className="h-3 w-3" />Pagar
+                                            </button>
+                                          )}
+                                        </TableCell>
+                                      )}
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </React.Fragment>
+                  )
+                })
+              )}
+            </TableBody>
+          </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Detalhes - Conta a Receber</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Lançamento: viewItem.dataLancamento, Faturamento: viewItem.dataFaturamento, Cliente: viewItem.cliente, Documento: viewItem.documento, "Valor Título": viewItem.valorTitulo, "Total Recebido": viewItem.valorTotalRecebido, "Próx. Vencimento": viewItem.proximoVencimento, Status: viewItem.status }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
+        <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col gap-0 p-0">
+          {viewItem && (
+            <>
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
+                <div className="min-w-0">
+                  <DialogHeader>
+                    <DialogTitle className="text-base font-semibold truncate">{viewItem.cliente_nome || "—"}</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-xs text-muted-foreground mt-1">Nº Documento: {viewItem.numero_documento || "—"}</p>
+                  <div className="flex items-center gap-3 flex-wrap mt-1">
+                    {(viewItem.documento || viewItem.nf_detalhe?.pdf_url) && (
+                      <a href={(viewItem.documento || viewItem.nf_detalhe?.pdf_url) as string} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        <ExternalLink className="h-3 w-3" />Ver documento{!viewItem.documento && viewItem.nf_detalhe ? ` (NF ${viewItem.nf_detalhe.numero})` : ""}
+                      </a>
+                    )}
+                    {viewItem.nf_detalhe?.xml_url && (
+                      <a href={viewItem.nf_detalhe.xml_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                        <FileText className="h-3 w-3" />NF XML{viewItem.nf_detalhe.numero ? ` ${viewItem.nf_detalhe.numero}` : ""}
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <StatusBadge status={viewItem.status || "Em Aberto"} />
+              </div>
+
+              <Separator />
+
+              <div className="overflow-y-auto flex-1 px-6 py-4 space-y-5">
+                {/* Info grid */}
+                <div className="grid grid-cols-2 gap-x-8 gap-y-0">
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Datas</p>
+                    {[["Lançamento", viewItem.data_de_lancamento], ["Faturamento", viewItem.data_de_faturamento]].map(([l, v]) => (
+                      <div key={l} className="flex justify-between items-baseline py-1.5 border-b border-border/50 last:border-0">
+                        <span className="text-xs text-muted-foreground">{l}</span>
+                        <span className="text-xs font-medium">{v || "—"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Valores</p>
+                    <div className="flex justify-between items-baseline py-1.5 border-b border-border/50">
+                      <span className="text-xs text-muted-foreground">Valor Título</span>
+                      <span className="text-xs font-medium">{formatBRL(viewItem.valor_do_titulo)}</span>
+                    </div>
+                    <div className="flex justify-between items-baseline py-1.5">
+                      <span className="text-xs text-muted-foreground">Valor Total</span>
+                      <span className="text-sm font-semibold text-primary">{formatBRL(viewItem.valor_total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {(viewItem.centro_de_receita_detalhe || viewItem.plano_de_contas_detalhe) && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-2">Classificação</p>
+                      {viewItem.centro_de_receita_detalhe && (
+                        <div className="flex justify-between items-baseline py-1.5 border-b border-border/50">
+                          <span className="text-xs text-muted-foreground">Centro de Receita</span>
+                          <span className="text-xs font-medium text-right">
+                            {viewItem.centro_de_receita_detalhe.centro_id}
+                            {viewItem.centro_de_receita_detalhe.setor_nome ? ` — ${viewItem.centro_de_receita_detalhe.setor_nome}` : ""}
+                          </span>
+                        </div>
+                      )}
+                      {viewItem.plano_de_contas_detalhe && (
+                        <div className="flex justify-between items-baseline py-1.5">
+                          <span className="text-xs text-muted-foreground">Plano de Contas</span>
+                          <span className="text-xs font-medium text-right">
+                            {viewItem.plano_de_contas_detalhe.id_plano}
+                            {viewItem.plano_de_contas_detalhe.classificacao_nome ? ` — ${viewItem.plano_de_contas_detalhe.classificacao_nome}` : ""}
+                            {viewItem.plano_de_contas_detalhe.categoria_nome ? ` / ${viewItem.plano_de_contas_detalhe.categoria_nome}` : ""}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Parcelas */}
+                {(viewItem.parcelas ?? []).length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Parcelas</p>
+                        <span className="text-xs text-muted-foreground">
+                          {(viewItem.parcelas ?? []).filter(p => p.status === 'Pago').length} / {viewItem.parcelas?.length} pagas
+                        </span>
+                      </div>
+                      <div className="rounded border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50">
+                              <TableHead className="text-xs h-8 w-10">Nº</TableHead>
+                              <TableHead className="text-center text-xs h-8">Vencimento</TableHead>
+                              <TableHead className="text-right text-xs h-8">Valor</TableHead>
+                              <TableHead className="text-xs h-8">Pago</TableHead>
+                              <TableHead className="text-center text-xs h-8">Status</TableHead>
+                              <TableHead className="text-center text-xs h-8">Conta</TableHead>
+                              <TableHead className="text-center text-xs h-8">Boleto</TableHead>
+                              <TableHead className="text-center text-xs h-8">Comprovante</TableHead>
+                              {viewItem.status !== 'Pago' && <TableHead className="w-16 h-8" />}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(viewItem.parcelas ?? []).map(p => (
+                              <TableRow key={p.id} className="text-xs hover:bg-muted/30">
+                                <TableCell className="py-2 font-medium">{p.numero}</TableCell>
+                                <TableCell className="text-center py-2">{p.data_de_vencimento || "—"}</TableCell>
+                                <TableCell className="py-2">{formatBRL(p.valor)}</TableCell>
+                                <TableCell className="py-2">{p.valor_pago ? formatBRL(p.valor_pago) : "—"}</TableCell>
+                                <TableCell className="text-center py-2"><StatusBadge status={p.status} /></TableCell>
+                                <TableCell className="text-center py-2 text-muted-foreground">{p.conta_bancaria_nome || "—"}</TableCell>
+                                <TableCell className="text-center py-2"><BoletoCell parcela={p} /></TableCell>
+                                <TableCell className="text-center py-2">
+                                  {p.comprovante ? (
+                                    <a href={p.comprovante} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                      <ExternalLink className="h-3 w-3" />Ver
+                                    </a>
+                                  ) : <span className="text-muted-foreground">—</span>}
+                                </TableCell>
+                                {viewItem.status !== 'Pago' && (
+                                  <TableCell className="py-2">
+                                    {p.status !== 'Pago' && (
+                                      <button onClick={() => { setViewItem(null); openPagamento(p, viewItem) }} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                                        <DollarSign className="h-3 w-3" />Pagar
+                                      </button>
+                                    )}
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Cliente</Label><Input value={editData.cliente} onChange={e => setEditData({ ...editData, cliente: e.target.value })} /></div>
-            <div><Label>Documento</Label><Input value={editData.documento} onChange={e => setEditData({ ...editData, documento: e.target.value })} /></div>
-            <div><Label>Valor Título</Label><Input value={editData.valorTitulo} onChange={e => setEditData({ ...editData, valorTitulo: e.target.value })} /></div>
-            <div><Label>Total Recebido</Label><Input value={editData.valorTotalRecebido} onChange={e => setEditData({ ...editData, valorTotalRecebido: e.target.value })} /></div>
+      <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setShowReparcelar(false); setEditNfPdf(null); setEditNfXml(null); }}>
+        <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col gap-0 p-0">
+          <div className="px-6 pt-6 pb-4">
+            <DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
           </div>
-          <DialogFooter><Button onClick={handleSaveEdit}>Salvar</Button></DialogFooter>
+          <Separator />
+          <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label>Cliente</Label>
+                <Select value={editData.cliente != null ? String(editData.cliente) : ""} onValueChange={v => setEditData({ ...editData, cliente: Number(v) })}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{clientes.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.nome}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Unidade</Label>
+                <Select value={(editData as any).unidade != null ? String((editData as any).unidade) : ""} onValueChange={v => setEditData({ ...editData, unidade: Number(v) } as any)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{unidades.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.unidade}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Centro de Receita</Label>
+                <Select value={(editData as any).centro_de_receita != null ? String((editData as any).centro_de_receita) : ""} onValueChange={v => setEditData({ ...editData, centro_de_receita: Number(v) } as any)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{centrosReceita.map(cr => <SelectItem key={cr.id} value={String(cr.id)}>{cr.centro_id ?? `Centro ${cr.id}`}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Plano de Contas</Label>
+                <Select value={(editData as any).plano_de_contas != null ? String((editData as any).plano_de_contas) : ""} onValueChange={v => setEditData({ ...editData, plano_de_contas: Number(v) } as any)}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>{planoContasList.map(pc => <SelectItem key={pc.id} value={String(pc.id)}>{[pc.id_plano, pc.classificacao_nome, pc.categoria_nome].filter(Boolean).join(" - ")}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div><Label>Documento</Label><Input value={editData.numero_documento || ""} onChange={e => setEditData({ ...editData, numero_documento: e.target.value })} /></div>
+              <div><Label>Data de Faturamento</Label><Input type="date" value={brToIso(editData.data_de_faturamento)} onChange={e => setEditData({ ...editData, data_de_faturamento: e.target.value })} /></div>
+              <div><Label>Valor Título</Label><Input type="number" step="0.01" value={editData.valor_do_titulo ?? ""} onChange={e => setEditData({ ...editData, valor_do_titulo: parseFloat(e.target.value) })} /></div>
+              <div><Label>Valor Total</Label><Input type="number" step="0.01" value={editData.valor_total ?? ""} onChange={e => setEditData({ ...editData, valor_total: parseFloat(e.target.value) })} /></div>
+              <div><Label>Multa</Label><Input type="number" step="0.01" value={(editData as any).multa ?? ""} onChange={e => setEditData({ ...editData, multa: parseFloat(e.target.value) } as any)} /></div>
+              <div><Label>Juros</Label><Input type="number" step="0.01" value={(editData as any).juros ?? ""} onChange={e => setEditData({ ...editData, juros: parseFloat(e.target.value) } as any)} /></div>
+              <div><Label>Encargos</Label><Input type="number" step="0.01" value={(editData as any).encargos ?? ""} onChange={e => setEditData({ ...editData, encargos: parseFloat(e.target.value) } as any)} /></div>
+              <div><Label>Desconto</Label><Input type="number" step="0.01" value={(editData as any).desconto ?? ""} onChange={e => setEditData({ ...editData, desconto: parseFloat(e.target.value) } as any)} /></div>
+              <div className="col-span-2"><Label>Descrição</Label><Input value={editData.descricao || ""} onChange={e => setEditData({ ...editData, descricao: e.target.value })} /></div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Nota Fiscal</Label>
+                <div className="flex items-center gap-3">
+                  {editItem?.nf_detalhe?.pdf_url && (
+                    <a href={editItem.nf_detalhe.pdf_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <ExternalLink className="h-3 w-3" />NF atual (PDF)
+                    </a>
+                  )}
+                  {editItem?.nf_detalhe?.xml_url && (
+                    <a href={editItem.nf_detalhe.xml_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                      <FileText className="h-3 w-3" />XML
+                    </a>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">PDF</Label>
+                  <Input type="file" accept=".pdf"
+                    onChange={e => setEditNfPdf(e.target.files?.[0] ?? null)}
+                    className="file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">XML (opcional)</Label>
+                  <Input type="file" accept=".xml"
+                    onChange={e => setEditNfXml(e.target.files?.[0] ?? null)}
+                    className="file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90" />
+                </div>
+              </div>
+              {editNfPdf
+                ? <p className="text-xs text-muted-foreground truncate">Nova NF: {editNfPdf.name}{editNfXml ? ` + ${editNfXml.name}` : ""}</p>
+                : editItem?.nf_detalhe && <p className="text-xs text-muted-foreground">Envie um PDF para substituir a nota fiscal atual.</p>}
+            </div>
+
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold">Parcelas</p>
+                <button className="text-xs text-primary underline" onClick={() => setShowReparcelar(v => !v)}>
+                  {showReparcelar ? "Cancelar edição de parcelas" : "Editar parcelas"}
+                </button>
+              </div>
+
+              {!showReparcelar && (
+                <div className="space-y-2">
+                  {parcelasFull.length === 0
+                    ? <p className="text-xs text-muted-foreground">Sem parcelas.</p>
+                    : parcelasFull.map((p, i) => (
+                      <div key={p.id} className="rounded border border-border p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold">Parcela {p.numero}</span>
+                          <div className="inline-flex items-center gap-3 text-xs">
+                            {p.boletoUrl && (
+                              <a href={p.boletoUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                                <ExternalLink className="h-3 w-3" />Boleto
+                              </a>
+                            )}
+                            <label className="inline-flex items-center gap-1 cursor-pointer text-muted-foreground hover:text-primary">
+                              <Paperclip className="h-3 w-3" />{p.boletoFile ? p.boletoFile.name : (p.boletoUrl ? "Trocar boleto" : "Anexar boleto")}
+                              <input type="file" accept=".pdf,.png,.jpg,.jpeg" className="hidden"
+                                onChange={e => setParcelaFull(i, { boletoFile: e.target.files?.[0] ?? null })} />
+                            </label>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Vencimento</Label><Input type="date" className="h-8 text-xs" value={p.data_de_vencimento} onChange={e => setParcelaFull(i, { data_de_vencimento: e.target.value })} /></div>
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Valor</Label><Input type="number" step="0.01" className="h-8 text-xs" value={p.valor} onChange={e => setParcelaFull(i, { valor: e.target.value })} /></div>
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Valor Pago</Label><Input type="number" step="0.01" className="h-8 text-xs" value={p.valor_pago} onChange={e => setParcelaFull(i, { valor_pago: e.target.value })} /></div>
+                          <div className="space-y-1"><Label className="text-[10px] text-muted-foreground">Pagamento</Label><Input type="date" className="h-8 text-xs" value={p.data_de_pagamento} onChange={e => setParcelaFull(i, { data_de_pagamento: e.target.value })} /></div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Status</Label>
+                            <Select value={p.status} onValueChange={v => setParcelaFull(i, { status: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>{STATUS_PARCELA.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] text-muted-foreground">Forma</Label>
+                            <Select value={p.forma_de_pagamento || undefined} onValueChange={v => setParcelaFull(i, { forma_de_pagamento: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>{FORMAS_PAGAMENTO.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1 col-span-2">
+                            <Label className="text-[10px] text-muted-foreground">Conta Bancária</Label>
+                            <Select value={p.conta_bancaria || undefined} onValueChange={v => setParcelaFull(i, { conta_bancaria: v })}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                              <SelectContent>{contasBancarias.map(cb => <SelectItem key={cb.id} value={String(cb.id)}>{cb.banco} ({cb.numero_conta})</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
+              {showReparcelar && (
+                <div className="space-y-3 p-3 border border-border rounded bg-muted/20">
+                  <p className="text-xs text-muted-foreground">Parcelas pagas são mantidas. Apenas as pendentes serão substituídas.</p>
+                  <div className="flex gap-2 items-center">
+                    <Label className="text-xs whitespace-nowrap">Nº de parcelas:</Label>
+                    <Input
+                      type="number" min="1" className="h-7 w-20 text-xs"
+                      value={parcelasEdit.length}
+                      onChange={e => {
+                        const n = Math.max(1, parseInt(e.target.value) || 1);
+                        const total = parseFloat(String(editData.valor_total || "0")) || 0;
+                        const base = total > 0 ? Math.floor((total / n) * 100) / 100 : 0;
+                        const remainder = total > 0 ? parseFloat((total - base * n).toFixed(2)) : 0;
+                        const firstDate = parcelasEdit[0]?.data_de_vencimento || editData.data_de_vencimento?.slice(0, 10) || "";
+                        setParcelasEdit(Array.from({ length: n }, (_, i) => ({
+                          numero: i + 1,
+                          data_de_vencimento: addMonthsEdit(firstDate, i),
+                          valor: (i === n - 1 ? base + remainder : base).toFixed(2),
+                        })));
+                      }}
+                    />
+                  </div>
+                  <div className="rounded border border-border overflow-hidden">
+                    <Table>
+                      <TableHeader><TableRow className="bg-muted/50">
+                        <TableHead className="h-7 text-xs w-10">Nº</TableHead>
+                        <TableHead className="h-7 text-xs text-center">Vencimento</TableHead>
+                        <TableHead className="h-7 text-xs text-right">Valor (R$)</TableHead>
+                      </TableRow></TableHeader>
+                      <TableBody>
+                        {parcelasEdit.map((p, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-1 text-xs font-medium">{p.numero}</TableCell>
+                            <TableCell className="py-1">
+                              <Input type="date" value={p.data_de_vencimento} className="h-7 text-xs"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, data_de_vencimento: e.target.value } : r))} />
+                            </TableCell>
+                            <TableCell className="py-1">
+                              <Input type="number" step="0.01" value={p.valor} className="h-7 text-xs text-right"
+                                onChange={e => setParcelasEdit(prev => prev.map((r, j) => j === i ? { ...r, valor: e.target.value } : r))} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  {(() => {
+                    const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                    const total = parseFloat(String(editData.valor_total || "0")) || 0;
+                    const ok = total > 0 && Math.abs(soma - total) < 0.01;
+                    return total > 0 ? (
+                      <p className={`text-xs flex items-center gap-1 ${ok ? "text-green-600" : "text-destructive"}`}>
+                        {!ok && <AlertCircle className="h-3 w-3" />}
+                        Soma: R$ {soma.toFixed(2)} / Total: R$ {total.toFixed(2)}
+                      </p>
+                    ) : null;
+                  })()}
+                  <Button size="sm" className="mt-1"
+                    disabled={reparcelarMutation.isPending}
+                    onClick={() => {
+                      if (!editItem) return;
+                      const soma = parcelasEdit.reduce((acc, p) => acc + (parseFloat(p.valor) || 0), 0);
+                      const total = parseFloat(String(editData.valor_total || editItem.valor_total || "0")) || 0;
+                      if (total > 0 && Math.abs(soma - total) > 0.01) {
+                        toast({ title: "A soma das parcelas deve ser igual ao valor total.", variant: "destructive" }); return;
+                      }
+                      reparcelarMutation.mutate({
+                        id: editItem.id,
+                        parcelas: parcelasEdit.map(p => ({ numero: p.numero, data_de_vencimento: p.data_de_vencimento || null, valor: parseFloat(p.valor) || 0 })),
+                      });
+                    }}
+                  >{reparcelarMutation.isPending ? "Salvando..." : "Salvar Parcelas"}</Button>
+                </div>
+              )}
+            </div>
+          </div>
+          <Separator />
+          <div className="px-6 py-4">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setEditItem(null); setShowReparcelar(false); setEditNfPdf(null); setEditNfXml(null); }}>Cancelar</Button>
+              <Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar Dados"}</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!pagamentoModal} onOpenChange={() => setPagamentoModal(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Registrar Pagamento — Parcela {pagamentoModal?.parcela.numero}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Valor Pago (R$)</Label>
+              <Input
+                type="number" min="0" step="0.01"
+                value={pagamentoForm.valor_pago}
+                onChange={e => setPagamentoForm(p => ({ ...p, valor_pago: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Data de Pagamento</Label>
+              <Input
+                type="date"
+                value={pagamentoForm.data_de_pagamento}
+                onChange={e => setPagamentoForm(p => ({ ...p, data_de_pagamento: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Forma de Pagamento <span className="text-destructive">*</span></Label>
+              <Select value={pagamentoForm.forma_de_pagamento} onValueChange={v => setPagamentoForm(p => ({ ...p, forma_de_pagamento: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {["Dinheiro", "Débito", "Cartão de Crédito", "Cartão de Débito", "Boleto", "PIX", "TED", "DOC", "Cheque"].map(op => (
+                    <SelectItem key={op} value={op}>{op}</SelectItem>
+                  ))}
+
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Conta Bancária <span className="text-destructive">*</span></Label>
+              <Select value={pagamentoForm.conta_bancaria} onValueChange={v => setPagamentoForm(p => ({ ...p, conta_bancaria: v }))}>
+                <SelectTrigger><SelectValue placeholder="Selecione a conta..." /></SelectTrigger>
+                <SelectContent>
+                  {contasBancarias.map(c => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      {c.numero_conta || c.agencia}
+                      {c.unidade_nome ? ` — ${c.unidade_nome}` : ""}
+                      {c.tipo ? ` (${c.tipo})` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1"><Paperclip className="w-3 h-3" />Comprovante (opcional)</Label>
+              <Input
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={e => setComprovanteFile(e.target.files?.[0] ?? null)}
+                className="cursor-pointer"
+              />
+              {comprovanteFile && <p className="text-xs text-muted-foreground">{comprovanteFile.name}</p>}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPagamentoModal(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (!pagamentoModal) return
+                if (!pagamentoForm.valor_pago || Number(pagamentoForm.valor_pago) <= 0) {
+                  toast({ title: "Informe o valor pago.", variant: "destructive" }); return
+                }
+                if (!pagamentoForm.data_de_pagamento) {
+                  toast({ title: "Informe a data de pagamento.", variant: "destructive" }); return
+                }
+                if (!pagamentoForm.forma_de_pagamento) {
+                  toast({ title: "Selecione a forma de pagamento.", variant: "destructive" }); return
+                }
+                if (!pagamentoForm.conta_bancaria) {
+                  toast({ title: "Selecione a conta bancária.", variant: "destructive" }); return
+                }
+                pagamentoMutation.mutate({
+                  id: pagamentoModal.parcela.id,
+                  data: {
+                    valor_pago: Number(pagamentoForm.valor_pago),
+                    data_de_pagamento: pagamentoForm.data_de_pagamento,
+                    forma_de_pagamento: pagamentoForm.forma_de_pagamento,
+                    conta_bancaria_id: Number(pagamentoForm.conta_bancaria),
+                    status: 'Pago',
+                  },
+                  file: comprovanteFile,
+                })
+              }}
+              disabled={pagamentoMutation.isPending}
+            >
+              {pagamentoMutation.isPending ? "Salvando..." : "Confirmar Pagamento"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir conta?</AlertDialogTitle><AlertDialogDescription>Deseja excluir a conta de "{deleteItemData?.cliente}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "Excluindo..." : "Excluir"}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

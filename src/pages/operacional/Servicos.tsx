@@ -11,32 +11,43 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-
-const initialServicos = [
-  { id: 1, nome: "Pintura", descricao: "Pintura completa de casco", custo: "R$ 5.000,00" },
-  { id: 2, nome: "Manutenção Motor", descricao: "Revisão completa do motor", custo: "R$ 3.500,00" },
-  { id: 3, nome: "Elétrica", descricao: "Instalação de sistema elétrico", custo: "R$ 2.000,00" },
-  { id: 4, nome: "Fibra", descricao: "Reparo em fibra de vidro", custo: "R$ 1.500,00" },
-]
-
-type Servico = typeof initialServicos[0];
+import { useQuery } from "@tanstack/react-query";
+import { fetchTarefas } from "@/services/operacional";
+import { Loader2 } from "lucide-react";
 
 const Servicos = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(initialServicos);
+  const { data: tarefas, isLoading } = useQuery({
+    queryKey: ['tarefas'],
+    queryFn: fetchTarefas
+  });
+
   const [filterNome, setFilterNome] = useState("");
-  const [viewItem, setViewItem] = useState<Servico | null>(null);
+  const [viewItem, setViewItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editItem, setEditItem] = useState<Servico | null>(null);
+  const [editItem, setEditItem] = useState<any>(null);
   const [editData, setEditData] = useState({ nome: "", descricao: "", custo: "" });
+
+  const items = useMemo(() => {
+    return (tarefas || []).map(t => ({
+      id: t.id,
+      nome: t.titulo,
+      descricao: t.descricao || "-",
+      custo: "Sob Consulta"
+    }));
+  }, [tarefas]);
 
   const filtered = useMemo(() => items.filter(s => s.nome.toLowerCase().includes(filterNome.toLowerCase())), [items, filterNome]);
 
   const getExportData = () => filtered.map(s => ({ Nome: s.nome, Descrição: s.descricao, Custo: s.custo }));
-  const openEdit = (s: Servico) => { setEditItem(s); setEditData({ nome: s.nome, descricao: s.descricao, custo: s.custo }) };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Serviço atualizado." }) } };
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removido", description: "Serviço excluído." }) } };
+  const openEdit = (s: any) => { setEditItem(s); setEditData({ nome: s.nome, descricao: s.descricao, custo: s.custo }) };
+  const handleSaveEdit = () => { if (editItem) { toast({ title: "Edição requer API de Update", description: "Módulo em desenvolvimento." }); setEditItem(null); } };
+  const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API de Delete", description: "Módulo em desenvolvimento." }); setDeleteId(null); } };
   const deleteItemData = items.find(i => i.id === deleteId);
+
+  if (isLoading) {
+    return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  }
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -51,13 +62,13 @@ const Servicos = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Nome do Serviço</TableHead><TableHead className="text-center">Descrição</TableHead><TableHead className="text-center">Custo</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead >Nome do Serviço</TableHead><TableHead >Descrição</TableHead><TableHead className="text-right">Custo</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum serviço encontrado.</TableCell></TableRow>) : (
                 filtered.map((servico) => (
                   <TableRow key={servico.id}>
-                    <TableCell className="text-center">{servico.nome}</TableCell><TableCell className="text-center">{servico.descricao}</TableCell><TableCell className="text-center">{servico.custo}</TableCell>
+                    <TableCell >{servico.nome}</TableCell><TableCell >{servico.descricao}</TableCell><TableCell >{servico.custo}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(servico)} onEdit={() => openEdit(servico)} onDelete={() => setDeleteId(servico.id)} /></TableCell>
                   </TableRow>
                 ))

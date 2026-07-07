@@ -1,16 +1,18 @@
+import { useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Truck, Loader2 } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
 import { useCnpjLookup, formatCnpj } from "@/hooks/useCnpjLookup";
+import { createFornecedor, fornecedoresQueryKey } from "@/services/estoque";
+import { toast } from "@/hooks/use-toast";
 
 const validationFields = [
   { name: "cnpj", label: "CNPJ", required: false },
@@ -19,10 +21,10 @@ const validationFields = [
   { name: "razaoSocial", label: "Razão Social", required: false },
   { name: "endereco", label: "Endereço", required: false },
   { name: "vendedor", label: "Vendedor", required: false },
-  { 
-    name: "email", 
-    label: "Email", 
-    required: false, 
+  {
+    name: "email",
+    label: "Email",
+    required: false,
     pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     patternMessage: "Email inválido"
   },
@@ -31,7 +33,7 @@ const validationFields = [
 
 const NovoFornecedor = () => {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
+  const queryClient = useQueryClient();
 
   const {
     formData,
@@ -47,14 +49,34 @@ const NovoFornecedor = () => {
 
   const { consultarCnpj, isSearching } = useCnpjLookup(setFieldValue);
 
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      await handleSave("/cadastro/estoque/fornecedores", "Fornecedor salvo com sucesso!");
-    }
-  };
+  const mutation = useMutation({
+    mutationFn: createFornecedor,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: fornecedoresQueryKey });
+      toast({ title: "Fornecedor salvo com sucesso!" });
+      navigate("/cadastro/estoque/fornecedores");
+    },
+    onError: (error: any) => {
+      const data = error.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Verifique os dados e tente novamente.";
+      toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
+    },
+  });
 
-  const handleCancelar = () => {
-    navigate("/cadastro/estoque/fornecedores");
+  const handleSalvar = () => {
+    if (!validateAll()) return;
+    mutation.mutate({
+      nome: formData.nome,
+      cnpj: formData.cnpj || undefined,
+      cpf: formData.cpf || undefined,
+      razao_social: formData.razaoSocial || "",
+      endereco: formData.endereco || "",
+      vendedor: formData.vendedor || undefined,
+      email: formData.email || undefined,
+      telefone: formData.telefone || undefined,
+    } as any);
   };
 
   return (
@@ -171,8 +193,8 @@ const NovoFornecedor = () => {
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/estoque/fornecedores")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

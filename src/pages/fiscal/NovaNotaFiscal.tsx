@@ -10,7 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Plus, Trash2, Save, CheckCircle, Send, ChevronRight } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { mockClientes, mockItensCadastro } from "@/data/fiscal-mock";
+// Fiscal-mock removed — stubs until /api/fiscal/ endpoints exist
+const mockClientes: { id: string; nome: string; cpfCnpj: string; endereco: string; municipio: string; uf: string }[] = [];
+const mockItensCadastro: { id: string; descricao: string; tipo: string; valorRef: number }[] = [];
 import SimpleFormWizard from "@/components/SimpleFormWizard";
 import FormActionBar from "@/components/FormActionBar";
 
@@ -67,17 +69,17 @@ export default function NovaNotaFiscal() {
   // Auto-generate tributos based on tipo
   const defaultTributos: TributoLinha[] = tipo === "NF-e"
     ? [
-        { imposto: "ICMS", baseCalculo: totalFinal, aliquota: 18, valorCalculado: +(totalFinal * 0.18).toFixed(2), valorFinal: +(totalFinal * 0.18).toFixed(2), justificativa: "" },
-        { imposto: "IPI", baseCalculo: totalFinal, aliquota: 5, valorCalculado: +(totalFinal * 0.05).toFixed(2), valorFinal: +(totalFinal * 0.05).toFixed(2), justificativa: "" },
-        { imposto: "PIS", baseCalculo: totalFinal, aliquota: 1.65, valorCalculado: +(totalFinal * 0.0165).toFixed(2), valorFinal: +(totalFinal * 0.0165).toFixed(2), justificativa: "" },
-        { imposto: "COFINS", baseCalculo: totalFinal, aliquota: 7.6, valorCalculado: +(totalFinal * 0.076).toFixed(2), valorFinal: +(totalFinal * 0.076).toFixed(2), justificativa: "" },
-      ]
+      { imposto: "ICMS", baseCalculo: totalFinal, aliquota: 18, valorCalculado: +(totalFinal * 0.18).toFixed(2), valorFinal: +(totalFinal * 0.18).toFixed(2), justificativa: "" },
+      { imposto: "IPI", baseCalculo: totalFinal, aliquota: 5, valorCalculado: +(totalFinal * 0.05).toFixed(2), valorFinal: +(totalFinal * 0.05).toFixed(2), justificativa: "" },
+      { imposto: "PIS", baseCalculo: totalFinal, aliquota: 1.65, valorCalculado: +(totalFinal * 0.0165).toFixed(2), valorFinal: +(totalFinal * 0.0165).toFixed(2), justificativa: "" },
+      { imposto: "COFINS", baseCalculo: totalFinal, aliquota: 7.6, valorCalculado: +(totalFinal * 0.076).toFixed(2), valorFinal: +(totalFinal * 0.076).toFixed(2), justificativa: "" },
+    ]
     : [
-        { imposto: "ISS", baseCalculo: totalFinal, aliquota: 5, valorCalculado: +(totalFinal * 0.05).toFixed(2), valorFinal: +(totalFinal * 0.05).toFixed(2), justificativa: "" },
-        { imposto: "PIS", baseCalculo: totalFinal, aliquota: 0.65, valorCalculado: +(totalFinal * 0.0065).toFixed(2), valorFinal: +(totalFinal * 0.0065).toFixed(2), justificativa: "" },
-        { imposto: "COFINS", baseCalculo: totalFinal, aliquota: 3, valorCalculado: +(totalFinal * 0.03).toFixed(2), valorFinal: +(totalFinal * 0.03).toFixed(2), justificativa: "" },
-        { imposto: "IRRF", baseCalculo: totalFinal, aliquota: 1.5, valorCalculado: +(totalFinal * 0.015).toFixed(2), valorFinal: +(totalFinal * 0.015).toFixed(2), justificativa: "" },
-      ];
+      { imposto: "ISS", baseCalculo: totalFinal, aliquota: 5, valorCalculado: +(totalFinal * 0.05).toFixed(2), valorFinal: +(totalFinal * 0.05).toFixed(2), justificativa: "" },
+      { imposto: "PIS", baseCalculo: totalFinal, aliquota: 0.65, valorCalculado: +(totalFinal * 0.0065).toFixed(2), valorFinal: +(totalFinal * 0.0065).toFixed(2), justificativa: "" },
+      { imposto: "COFINS", baseCalculo: totalFinal, aliquota: 3, valorCalculado: +(totalFinal * 0.03).toFixed(2), valorFinal: +(totalFinal * 0.03).toFixed(2), justificativa: "" },
+      { imposto: "IRRF", baseCalculo: totalFinal, aliquota: 1.5, valorCalculado: +(totalFinal * 0.015).toFixed(2), valorFinal: +(totalFinal * 0.015).toFixed(2), justificativa: "" },
+    ];
 
   const [tributos, setTributos] = useState<TributoLinha[]>(defaultTributos);
 
@@ -194,13 +196,12 @@ export default function NovaNotaFiscal() {
             <div key={i} className="flex items-center gap-2">
               <button
                 onClick={() => setCurrentStep(i)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
-                  i === currentStep
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${i === currentStep
                     ? "bg-primary text-primary-foreground"
                     : i < currentStep
-                    ? "bg-primary/20 text-primary"
-                    : "bg-muted text-muted-foreground"
-                }`}
+                      ? "bg-primary/20 text-primary"
+                      : "bg-muted text-muted-foreground"
+                  }`}
               >
                 <span className="flex items-center justify-center w-5 h-5 rounded-full bg-background/30 text-xs font-bold">{i + 1}</span>
                 {step}
@@ -300,9 +301,9 @@ export default function NovaNotaFiscal() {
                   <Table>
                     <TableHeader><TableRow className="bg-table-header">
                       <TableHead className="font-semibold">Descrição</TableHead>
-                      <TableHead className="text-center font-semibold w-24">Qtd</TableHead>
-                      <TableHead className="text-center font-semibold w-32">Vlr Unit.</TableHead>
-                      <TableHead className="text-center font-semibold w-28">Desconto</TableHead>
+                      <TableHead className="text-right font-semibold w-24">Qtd</TableHead>
+                      <TableHead className="font-semibold w-32">Vlr Unit.</TableHead>
+                      <TableHead className="text-right font-semibold w-28">Desconto</TableHead>
                       <TableHead className="text-right font-semibold w-32">Total</TableHead>
                       <TableHead className="w-12" />
                     </TableRow></TableHeader>
@@ -376,9 +377,9 @@ export default function NovaNotaFiscal() {
                   <Table>
                     <TableHeader><TableRow className="bg-table-header">
                       <TableHead className="font-semibold">Imposto</TableHead>
-                      <TableHead className="text-right font-semibold">Base Cálculo</TableHead>
-                      <TableHead className="text-center font-semibold">Alíquota %</TableHead>
-                      <TableHead className="text-right font-semibold">Calculado</TableHead>
+                      <TableHead className="font-semibold">Base Cálculo</TableHead>
+                      <TableHead className="font-semibold">Alíquota %</TableHead>
+                      <TableHead className="font-semibold">Calculado</TableHead>
                       <TableHead className="text-right font-semibold">Valor Final</TableHead>
                       <TableHead className="font-semibold">Justificativa</TableHead>
                     </TableRow></TableHeader>
@@ -387,7 +388,7 @@ export default function NovaNotaFiscal() {
                         <TableRow key={t.imposto} className="hover:bg-table-hover">
                           <TableCell className="font-semibold">{t.imposto}</TableCell>
                           <TableCell className="text-right">{formatCurrency(t.baseCalculo)}</TableCell>
-                          <TableCell className="text-center">{t.aliquota}%</TableCell>
+                          <TableCell >{t.aliquota}%</TableCell>
                           <TableCell className="text-right text-muted-foreground">{formatCurrency(t.valorCalculado)}</TableCell>
                           <TableCell>
                             <Input type="number" step={0.01} value={t.valorFinal} onChange={e => updateTributo(idx, "valorFinal", +e.target.value)} className="form-input h-8 text-right w-28" />

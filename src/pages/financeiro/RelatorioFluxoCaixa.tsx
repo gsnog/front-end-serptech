@@ -1,250 +1,200 @@
+import { useState, useMemo } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
 import { useNavigate } from "react-router-dom"
 import { SimpleFormWizard } from "@/components/SimpleFormWizard"
-import { FormActionBar } from "@/components/FormActionBar"
-import { FileText, Users } from "lucide-react"
+import { FileText } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import {
+  fetchContasReceberAll, fetchContasPagarAll,
+  contasReceberAllQueryKey, contasPagarAllQueryKey,
+} from "@/services/financeiro"
+
+const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+const fmtDate = (d: string | null | undefined) => {
+  if (!d) return '—'
+  const [y, m, day] = d.split('T')[0].split('-')
+  return `${day}/${m}/${y}`
+}
+
+const NONE = "__all__"
 
 export default function RelatorioFluxoCaixa() {
   const navigate = useNavigate()
+  const [dataInicio, setDataInicio] = useState("")
+  const [dataFim, setDataFim] = useState("")
+  const [beneficiarioId, setBeneficiarioId] = useState("")
 
-  const handleGerar = () => {
-    console.log("Gerando relatório...")
+  const { data: contasReceberRaw } = useQuery({ queryKey: contasReceberAllQueryKey, queryFn: fetchContasReceberAll })
+  const { data: contasPagarRaw } = useQuery({ queryKey: contasPagarAllQueryKey, queryFn: fetchContasPagarAll })
+
+  const contasReceberApi = contasReceberRaw ?? []
+  const contasPagarApi = contasPagarRaw ?? []
+
+  const beneficiariosList = useMemo(() => {
+    const seen = new Set<string>()
+    const lista: { value: string; label: string }[] = []
+    contasReceberApi.forEach((cr: any) => {
+      const nome = cr.cliente_nome
+      if (nome && !seen.has(`r-${cr.cliente}`)) {
+        seen.add(`r-${cr.cliente}`)
+        lista.push({ value: `r-${cr.cliente}`, label: nome })
+      }
+    })
+    contasPagarApi.forEach((cp: any) => {
+      const nome = cp.fornecedor_nome
+      if (nome && !seen.has(`p-${cp.beneficiario}`)) {
+        seen.add(`p-${cp.beneficiario}`)
+        lista.push({ value: `p-${cp.beneficiario}`, label: nome })
+      }
+    })
+    return lista.sort((a, b) => a.label.localeCompare(b.label))
+  }, [contasReceberApi, contasPagarApi])
+
+  const isInPeriod = (dateStr: string | null | undefined): boolean => {
+    if (!dateStr) return false
+    const d = dateStr.split('T')[0]
+    return (!dataInicio || d >= dataInicio) && (!dataFim || d <= dataFim)
   }
 
-  const handleVoltar = () => {
-    navigate("/financeiro/fluxo-caixa")
-  }
+  const extrato = useMemo(() => {
+    const linhas: { data: string; descricao: string; tipo: 'entrada' | 'saida'; valor: number; key: string }[] = []
+
+    contasReceberApi.forEach((cr: any) => {
+      if (beneficiarioId && beneficiarioId !== `r-${cr.cliente}`) return
+      const parcelas: any[] = cr.parcelas ?? []
+      parcelas.forEach(p => {
+        if (!p.data_de_pagamento || !isInPeriod(p.data_de_pagamento)) return
+        linhas.push({ data: p.data_de_pagamento, descricao: cr.cliente_nome || '—', tipo: 'entrada', valor: p.valor ?? 0, key: `r-${cr.id}-${p.id}` })
+      })
+    })
+
+    contasPagarApi.forEach((cp: any) => {
+      if (beneficiarioId && beneficiarioId !== `p-${cp.beneficiario}`) return
+      const parcelas: any[] = cp.parcelas ?? []
+      parcelas.forEach(p => {
+        if (!p.data_de_pagamento || !isInPeriod(p.data_de_pagamento)) return
+        linhas.push({ data: p.data_de_pagamento, descricao: cp.fornecedor_nome || '—', tipo: 'saida', valor: p.valor ?? 0, key: `p-${cp.id}-${p.id}` })
+      })
+    })
+
+    linhas.sort((a, b) => a.data.localeCompare(b.data))
+
+    let saldoAcc = 0
+    return linhas.map(item => {
+      saldoAcc += item.tipo === 'entrada' ? item.valor : -item.valor
+      return {
+        key: item.key,
+        data: fmtDate(item.data),
+        descricao: item.descricao,
+        isEntrada: item.tipo === 'entrada',
+        valor: item.tipo === 'entrada' ? `+${fmt(item.valor)}` : `-${fmt(item.valor)}`,
+        saldo: fmt(saldoAcc),
+        _saldo: saldoAcc,
+        _val: item.valor,
+      }
+    })
+  }, [contasReceberApi, contasPagarApi, dataInicio, dataFim, beneficiarioId])
+
+  const totalEntradas = extrato.filter(i => i.isEntrada).reduce((s, i) => s + i._val, 0)
+  const totalSaidas = extrato.filter(i => !i.isEntrada).reduce((s, i) => s + i._val, 0)
+  const saldoPeriodo = extrato.length > 0 ? extrato[extrato.length - 1]._saldo : 0
 
   return (
-    <SimpleFormWizard title="Relatório Fluxo de Caixa">
-      <Card className="border-border shadow-lg">
-        <CardContent className="p-6 md:p-8">
-          <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
-                <FileText className="h-5 w-5 text-primary" />
+    <SimpleFormWizard title="Fluxo de Caixa">
+      <div className="space-y-6">
+        <Card className="border-border shadow-lg">
+          <CardContent className="p-6 md:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded bg-primary/10 flex items-center justify-center">
+                  <FileText className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Extrato</h2>
+                  <p className="text-sm text-muted-foreground">Parcelas pagas no período</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">Filtros do Relatório</h2>
-                <p className="text-sm text-muted-foreground">Configure os filtros para gerar o relatório</p>
-              </div>
+              <Button variant="outline" className="gap-2" onClick={() => navigate("/relatorios")}>
+                <FileText className="h-4 w-4" /> Ver Relatórios
+              </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Tipo</Label>
-                <Select defaultValue="fluxo-caixa">
-                  <SelectTrigger className="form-input">
-                    <SelectValue placeholder="Fluxo de Caixa" />
-                  </SelectTrigger>
+                <Label className="text-sm font-medium">Beneficiário</Label>
+                <Select value={beneficiarioId || NONE} onValueChange={v => setBeneficiarioId(v === NONE ? "" : v)}>
+                  <SelectTrigger className="form-input"><SelectValue placeholder="---" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    <SelectItem value="fluxo-caixa">Fluxo de Caixa</SelectItem>
-                    <SelectItem value="contas-receber">Contas a Receber</SelectItem>
-                    <SelectItem value="contas-pagar">Contas a Pagar</SelectItem>
+                    <SelectItem value={NONE}>---</SelectItem>
+                    {beneficiariosList.map(b => (
+                      <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Data</Label>
-                <Select defaultValue="vencimento">
-                  <SelectTrigger className="form-input">
-                    <SelectValue placeholder="Data de Vencimento" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="vencimento">Data de Vencimento</SelectItem>
-                    <SelectItem value="pagamento">Data de Pagamento</SelectItem>
-                    <SelectItem value="lancamento">Data de Lançamento</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium">Data Início</Label>
+                <Input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} className="form-input" />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Filtrar por</Label>
-                <Select defaultValue="anual">
-                  <SelectTrigger className="form-input">
-                    <SelectValue placeholder="Anual" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover">
-                    <SelectItem value="anual">Anual</SelectItem>
-                    <SelectItem value="mensal">Mensal</SelectItem>
-                    <SelectItem value="semanal">Semanal</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Ano</Label>
-                <Input placeholder="2025" className="form-input" />
+                <Label className="text-sm font-medium">Data Fim</Label>
+                <Input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} className="form-input" />
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-foreground">Relacionados</h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Cliente</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="cliente1">Cliente 1</SelectItem>
-                      <SelectItem value="cliente2">Cliente 2</SelectItem>
-                    </SelectContent>
-                  </Select>
+        {extrato.length > 0 && (
+          <Card className="border-border shadow-lg">
+            <CardContent className="p-6">
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="p-4 rounded-xl bg-primary/5 text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Entradas</p>
+                  <p className="text-xl font-bold text-emerald-600 mt-1">{fmt(totalEntradas)}</p>
                 </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Conta Bancária</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="conta1">Conta 1</SelectItem>
-                      <SelectItem value="conta2">Conta 2</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="p-4 rounded-xl bg-primary/5 text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Saídas</p>
+                  <p className="text-xl font-bold text-rose-500 mt-1">{fmt(totalSaidas)}</p>
                 </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Categoria</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="cat1">Categoria 1</SelectItem>
-                      <SelectItem value="cat2">Categoria 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Sub Categoria</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="subcat1">Sub Categoria 1</SelectItem>
-                      <SelectItem value="subcat2">Sub Categoria 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Contábil</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="contabil1">Contábil 1</SelectItem>
-                      <SelectItem value="contabil2">Contábil 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Plano de Contas</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="plano1">Plano 1</SelectItem>
-                      <SelectItem value="plano2">Plano 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Diretoria</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="diretoria1">Diretoria 1</SelectItem>
-                      <SelectItem value="diretoria2">Diretoria 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Gerência</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="gerencia1">Gerência 1</SelectItem>
-                      <SelectItem value="gerencia2">Gerência 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Departamento</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="depto1">Departamento 1</SelectItem>
-                      <SelectItem value="depto2">Departamento 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Centro de Receita</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="centro1">Centro 1</SelectItem>
-                      <SelectItem value="centro2">Centro 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Status</Label>
-                  <Select>
-                    <SelectTrigger className="form-input">
-                      <SelectValue placeholder="---" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover">
-                      <SelectItem value="pendente">Pendente</SelectItem>
-                      <SelectItem value="efetuado">Efetuado</SelectItem>
-                      <SelectItem value="vencido">Vencido</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="p-4 rounded-xl bg-primary/5 text-center">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Saldo do Período</p>
+                  <p className={`text-xl font-bold mt-1 ${saldoPeriodo >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{fmt(saldoPeriodo)}</p>
                 </div>
               </div>
-            </div>
 
-            <FormActionBar
-              onSave={handleGerar}
-              onCancel={handleVoltar}
-              isSaving={false}
-              saveLabel="Gerar"
-              cancelLabel="Voltar"
-            />
-          </div>
-        </CardContent>
-      </Card>
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
+                    <TableHead className="text-foreground font-semibold">Data</TableHead>
+                    <TableHead className="text-foreground font-semibold">Descrição</TableHead>
+                    <TableHead className="text-right text-foreground font-semibold">Valor</TableHead>
+                    <TableHead className="text-right text-foreground font-semibold">Saldo</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {extrato.map(item => (
+                    <TableRow key={item.key}>
+                      <TableCell>{item.data}</TableCell>
+                      <TableCell>{item.descricao}</TableCell>
+                      <TableCell className={`text-right font-semibold ${item.isEntrada ? 'text-emerald-600' : 'text-rose-500'}`}>
+                        {item.valor}
+                      </TableCell>
+                      <TableCell className="text-right font-bold">{item.saldo}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </SimpleFormWizard>
   )
 }

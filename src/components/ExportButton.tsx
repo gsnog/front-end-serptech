@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -5,26 +6,33 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { FileText, FileSpreadsheet, ChevronDown, FileDown } from "lucide-react";
+import { FileText, FileSpreadsheet, ChevronDown, FileDown, Loader2 } from "lucide-react";
 import { exportData, type ExportFormat } from "@/lib/exportData";
 
 interface ExportButtonProps {
-  getData: () => Record<string, unknown>[];
+  getData: () => Record<string, unknown>[] | Promise<Record<string, unknown>[]>;
   fileName: string;
   sheetName?: string;
 }
 
 export function ExportButton({ getData, fileName, sheetName }: ExportButtonProps) {
-  const handleExport = (format: ExportFormat) => {
-    const data = getData();
-    exportData(data, fileName, format, sheetName);
+  const [loading, setLoading] = useState(false);
+
+  const handleExport = async (format: ExportFormat) => {
+    setLoading(true);
+    try {
+      const data = await getData();
+      exportData(data, fileName, format, sheetName);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="gap-2 border-border">
-            <FileText className="h-4 w-4" />
+          <Button variant="outline" className="gap-2 border-border" disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
             Exportar
             <ChevronDown className="h-4 w-4" />
           </Button>

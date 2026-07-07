@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
+import { chatSocket, rtcSocket } from '@/lib/socket';
+import api from '@/lib/api';
 
-// Tipos de permissão
+// ── Types (espelho do backend) ────────────────────────────────────────────────
+
 export type PermissionScope = 'self' | 'team' | 'area' | 'all';
 
 export type Permission = {
@@ -17,154 +20,237 @@ export type Role = {
   permissions: Permission[];
 };
 
-// Roles predefinidas do sistema
+// Roles predefinidas — usadas apenas na UI de exibição de nomes/descrições.
+// As permissões reais vêm do backend.
 export const systemRoles: Role[] = [
-  {
-    id: 'admin',
-    name: 'Administrador',
-    description: 'Acesso total ao sistema',
-    permissions: [
-      { module: 'all', page: 'all', actions: ['view', 'create', 'edit', 'delete', 'approve', 'export'], scope: 'all' }
-    ]
-  },
-  {
-    id: 'rh_admin',
-    name: 'RH Admin',
-    description: 'Acesso total ao módulo de pessoas',
-    permissions: [
-      { module: 'cadastro_pessoas', page: 'all', actions: ['view', 'create', 'edit', 'delete'], scope: 'all' },
-      { module: 'gestao_pessoas', page: 'all', actions: ['view', 'create', 'edit', 'delete'], scope: 'all' },
-      { module: 'dashboard', page: 'all', actions: ['view'], scope: 'all' }
-    ]
-  },
-  {
-    id: 'rh_leitura',
-    name: 'RH Leitura',
-    description: 'Visualização do módulo de pessoas',
-    permissions: [
-      { module: 'gestao_pessoas', page: 'pessoas', actions: ['view'], scope: 'all' },
-      { module: 'gestao_pessoas', page: 'hierarquia', actions: ['view'], scope: 'all' }
-    ]
-  },
-  {
-    id: 'gestor',
-    name: 'Gestor',
-    description: 'Visualização da equipe',
-    permissions: [
-      { module: 'gestao_pessoas', page: 'pessoas', actions: ['view'], scope: 'team' },
-      { module: 'gestao_pessoas', page: 'hierarquia', actions: ['view'], scope: 'team' },
-      { module: 'calendario', page: 'all', actions: ['view', 'create', 'edit'], scope: 'team' },
-      { module: 'chat', page: 'all', actions: ['view', 'create'], scope: 'all' },
-      { module: 'kanban', page: 'all', actions: ['view', 'create', 'edit'], scope: 'team' }
-    ]
-  },
-  {
-    id: 'usuario',
-    name: 'Usuário Comum',
-    description: 'Acesso básico ao sistema',
-    permissions: [
-      { module: 'gestao_pessoas', page: 'hierarquia', actions: ['view'], scope: 'self' },
-      { module: 'calendario', page: 'all', actions: ['view', 'create'], scope: 'self' },
-      { module: 'chat', page: 'all', actions: ['view', 'create'], scope: 'all' },
-      { module: 'kanban', page: 'all', actions: ['view', 'create'], scope: 'self' }
-    ]
-  },
-  {
-    id: 'diretor',
-    name: 'Diretor',
-    description: 'Visão gerencial completa',
-    permissions: [
-      { module: 'all', page: 'all', actions: ['view'], scope: 'all' },
-      { module: 'dashboard', page: 'all', actions: ['view'], scope: 'all' },
-      { module: 'gestao_pessoas', page: 'hierarquia', actions: ['view'], scope: 'all' }
-    ]
-  }
+  { id: 'admin',      name: 'Administrador',   description: 'Acesso total ao sistema',               permissions: [] },
+  { id: 'rh_admin',   name: 'RH Admin',         description: 'Acesso total ao módulo de pessoas',     permissions: [] },
+  { id: 'rh_leitura', name: 'RH Leitura',       description: 'Visualização do módulo de pessoas',     permissions: [] },
+  { id: 'gestor',     name: 'Gestor',            description: 'Visualização da equipe',                permissions: [] },
+  { id: 'usuario',    name: 'Usuário Comum',     description: 'Acesso básico ao sistema',              permissions: [] },
+  { id: 'diretor',    name: 'Diretor',           description: 'Visão gerencial completa',              permissions: [] },
+  { id: 'assistente', name: 'Assistente',        description: 'Acesso operacional básico',             permissions: [] },
 ];
 
 // Dashboards disponíveis
 export const availableDashboards = [
-  { id: 'geral', name: 'Dashboard Geral', sensitive: false },
-  { id: 'financeiro', name: 'Dashboard Financeiro', sensitive: true },
-  { id: 'estoque', name: 'Dashboard Estoque', sensitive: false },
-  { id: 'patrimonio', name: 'Dashboard Patrimônio', sensitive: false },
-  { id: 'comercial', name: 'Dashboard Comercial', sensitive: false },
-  { id: 'rh', name: 'Dashboard Gestão de Pessoas', sensitive: false },
+  { id: 'geral',      name: 'Dashboard Geral',              sensitive: false },
+  { id: 'financeiro', name: 'Dashboard Financeiro',         sensitive: true  },
+  { id: 'estoque',    name: 'Dashboard Estoque',            sensitive: false },
+  { id: 'patrimonio', name: 'Dashboard Patrimônio',         sensitive: false },
+  { id: 'comercial',  name: 'Dashboard Comercial',          sensitive: false },
+  { id: 'rh',         name: 'Dashboard Gestão de Pessoas',  sensitive: false },
 ];
 
-interface UserPermissions {
+// ── Payload de permissões (retornado pelo backend no login) ───────────────────
+
+export interface UserPermissions {
   userId: string;
   roles: string[];
+  is_staff?: boolean;
+  is_medico?: boolean;
+  is_only_medico?: boolean;
+  /** Permissões granulares vindas da tabela RolePermission */
+  permissions: Permission[];
   dashboardAccess: { dashboardId: string; canView: boolean; canViewSensitive: boolean }[];
   exceptions: Permission[];
 }
 
+// ── Context type ──────────────────────────────────────────────────────────────
+
 interface PermissionsContextType {
   currentUser: UserPermissions;
+  isLoadingUser: boolean;
   hasPermission: (module: string, page: string, action: string) => boolean;
+  /** Verifica permissão Django nativa (ex: 'accounts.view_rolepermission') */
+  hasDjangoPerm: (perm: string) => boolean;
   hasMenuAccess: (menuPath: string) => boolean;
   hasDashboardAccess: (dashboardId: string, sensitive?: boolean) => boolean;
   getScope: (module: string, page: string) => PermissionScope;
-  setUserRole: (roleId: string) => void;
+  isStaff: () => boolean;
+  isMedico: () => boolean;
+  isOnlyMedico: () => boolean;
+  setUserPermissions: (permissions: UserPermissions | null) => void;
+  login: (token: string, refreshToken: string, permissions: UserPermissions) => void;
+  logout: () => void;
 }
 
 const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
 
-// Mock: usuário atual com role de admin para desenvolvimento
-const defaultUserPermissions: UserPermissions = {
-  userId: '1',
-  roles: ['admin'], // Alterar para testar diferentes permissões
-  dashboardAccess: availableDashboards.map(d => ({ dashboardId: d.id, canView: true, canViewSensitive: true })),
-  exceptions: []
-};
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<UserPermissions>(defaultUserPermissions);
-
-  const getUserRoles = (): Role[] => {
-    return currentUser.roles.map(roleId => systemRoles.find(r => r.id === roleId)).filter(Boolean) as Role[];
-  };
-
-  const hasPermission = (module: string, page: string, action: string): boolean => {
-    const roles = getUserRoles();
-    
-    // Verifica exceções primeiro
-    const exception = currentUser.exceptions.find(
-      e => e.module === module && (e.page === page || e.page === 'all')
-    );
-    if (exception) {
-      return exception.actions.includes(action);
-    }
-
-    // Verifica permissões das roles
-    for (const role of roles) {
-      for (const permission of role.permissions) {
-        if (
-          (permission.module === 'all' || permission.module === module) &&
-          (permission.page === 'all' || permission.page === page) &&
-          permission.actions.includes(action)
-        ) {
-          return true;
+  const [currentUser, setCurrentUser] = useState<UserPermissions>(() => {
+    const saved = localStorage.getItem('userPermissions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Descarta cache antigo sem is_only_medico — será re-buscado no useEffect
+        if (parsed.is_only_medico === undefined) {
+          localStorage.removeItem('userPermissions');
+          return { userId: '', roles: [], permissions: [], dashboardAccess: [], exceptions: [] };
         }
+        return parsed;
+      } catch (e) {
+        console.error('Erro ao ler permissões do localStorage:', e);
       }
     }
-    return false;
+    return { userId: '', roles: [], permissions: [], dashboardAccess: [], exceptions: [] };
+  });
+
+  // true while the initial permissions fetch is in-flight — prevents the auth
+  // guard in LayoutShell from redirecting to /login before the fetch resolves.
+  const [isLoadingUser, setIsLoadingUser] = useState<boolean>(() => {
+    // If there's no token, there's nothing to load — no redirect risk.
+    return !!localStorage.getItem('accessToken');
+  });
+
+  const setUserPermissions = (permissions: UserPermissions | null) => {
+    if (permissions) {
+      setCurrentUser(permissions);
+      localStorage.setItem('userPermissions', JSON.stringify(permissions));
+    } else {
+      const empty: UserPermissions = { userId: '', roles: [], permissions: [], dashboardAccess: [], exceptions: [] };
+      setCurrentUser(empty);
+      localStorage.removeItem('userPermissions');
+    }
   };
 
+  // Ao montar: reconecta sockets e busca permissões atualizadas do backend.
+  // Isso garante que mudanças feitas em Acessos.tsx sejam refletidas sem
+  // precisar de novo login — elimina o problema de permissões stale no localStorage.
+  useEffect(() => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      setIsLoadingUser(false);
+      return;
+    }
+
+    chatSocket.connect();
+    rtcSocket.connect();
+
+    // Busca permissões frescas via axios (interceptor renova token expirado automaticamente)
+    api.get<UserPermissions>('/api/pessoas/me/permissions/')
+      .then(res => {
+        if (res.data?.userId) {
+          setUserPermissions(res.data);
+        }
+      })
+      .catch(() => {/* silencia falhas de rede — usa cache do localStorage */})
+      .finally(() => {
+        setIsLoadingUser(false);
+      });
+  }, []);
+
+  const login = (token: string, refreshToken: string, permissions: UserPermissions) => {
+    localStorage.setItem('accessToken', token);
+    localStorage.setItem('refreshToken', refreshToken);
+    setUserPermissions(permissions);
+    chatSocket.connect();
+    rtcSocket.connect();
+  };
+
+  const logout = () => {
+    // Disconnect all sockets BEFORE clearing tokens to prevent
+    // reconnect timers from firing with a null token after logout
+    chatSocket.disconnect();
+    rtcSocket.disconnect();
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('userPermissions');
+    setUserPermissions(null);
+    window.location.href = '/login';
+  };
+
+  // ── Helpers internos ────────────────────────────────────────────────────────
+
+  /** Todas as permissões do usuário (role permissions + exceções) — memoized */
+  const allPermissions = useMemo((): Permission[] => [
+    ...currentUser.permissions,
+    ...currentUser.exceptions,
+  ], [currentUser.permissions, currentUser.exceptions]);
+
+  const isAdmin = (): boolean =>
+    currentUser.roles.includes('admin');
+
+  const isStaff = (): boolean =>
+    !!currentUser.is_staff;
+
+  const isMedico = (): boolean =>
+    !!currentUser.is_medico;
+
+  const isOnlyMedico = (): boolean =>
+    !!currentUser.is_only_medico;
+
+  // ── hasPermission ────────────────────────────────────────────────────────────
+
+  const hasPermission = (module: string, page: string, action: string): boolean => {
+    if (isAdmin()) return true;
+
+    const perms = allPermissions;
+
+    // Exceções têm prioridade
+    const exception = currentUser.exceptions.find(
+      e => (e.module === module || e.module === 'all') && (e.page === page || e.page === 'all'),
+    );
+    if (exception) return exception.actions.includes(action);
+
+    return perms.some(
+      p =>
+        (p.module === 'all' || p.module === module) &&
+        // page='all' on either side means "any page in this module"
+        (p.page === 'all' || page === 'all' || p.page === page) &&
+        p.actions.includes(action),
+    );
+  };
+
+  // ── hasDjangoPerm ─────────────────────────────────────────────────────────────
+  // Verifica permissão Django nativa (app_label.codename).
+  // Mapeamos para o modelo de módulo/ação do frontend como melhor esforço.
+  // Admins sempre passam.
+
+  const hasDjangoPerm = (perm: string): boolean => {
+    if (isAdmin()) return true;
+
+    // Mapeamento: 'app_label.action_model' → { module, action }
+    const djangoPermMap: Record<string, { module: string; page: string; action: string }> = {
+      'accounts.view_rolepermission':   { module: 'gestao_pessoas', page: 'permissoes', action: 'view'   },
+      'accounts.change_rolepermission': { module: 'gestao_pessoas', page: 'permissoes', action: 'edit'   },
+      'accounts.add_rolepermission':    { module: 'gestao_pessoas', page: 'permissoes', action: 'create' },
+      'accounts.delete_rolepermission': { module: 'gestao_pessoas', page: 'permissoes', action: 'delete' },
+    };
+
+    const mapped = djangoPermMap[perm];
+    if (mapped) return hasPermission(mapped.module, mapped.page, mapped.action);
+
+    // Para permissões não mapeadas, deriva action do codename (view_*, change_*, etc.)
+    const [, codename] = perm.split('.');
+    if (!codename) return false;
+    const action = codename.startsWith('view')   ? 'view'
+                 : codename.startsWith('add')    ? 'create'
+                 : codename.startsWith('change') ? 'edit'
+                 : codename.startsWith('delete') ? 'delete'
+                 : codename;
+    return hasPermission('all', 'all', action);
+  };
+
+  // ── hasMenuAccess ─────────────────────────────────────────────────────────────
+
   const hasMenuAccess = (menuPath: string): boolean => {
-    // Mapeia paths do menu para módulos
     const menuModuleMap: Record<string, { module: string; page: string }> = {
-      '/cadastro/pessoas': { module: 'cadastro_pessoas', page: 'all' },
-      '/gestao-pessoas': { module: 'gestao_pessoas', page: 'all' },
-      '/calendario': { module: 'calendario', page: 'all' },
-      '/chat': { module: 'chat', page: 'all' },
-      '/kanban': { module: 'kanban', page: 'all' },
+      '/cadastro/pessoas':  { module: 'cadastro_pessoas', page: 'all' },
+      '/gestao-pessoas':    { module: 'gestao_pessoas',   page: 'all' },
+      '/calendario':        { module: 'calendario',       page: 'all' },
+      '/chat':              { module: 'chat',             page: 'all' },
+      '/kanban':            { module: 'kanban',           page: 'all' },
     };
 
     const mapping = menuModuleMap[menuPath];
-    if (!mapping) return true; // Menus não mapeados são acessíveis por padrão
-
+    if (!mapping) return true;
     return hasPermission(mapping.module, mapping.page, 'view');
   };
+
+  // ── hasDashboardAccess ────────────────────────────────────────────────────────
 
   const hasDashboardAccess = (dashboardId: string, sensitive = false): boolean => {
     const access = currentUser.dashboardAccess.find(d => d.dashboardId === dashboardId);
@@ -173,43 +259,40 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return access.canView;
   };
 
-  const getScope = (module: string, page: string): PermissionScope => {
-    const roles = getUserRoles();
-    let highestScope: PermissionScope = 'self';
-    const scopePriority: PermissionScope[] = ['self', 'team', 'area', 'all'];
+  // ── getScope ──────────────────────────────────────────────────────────────────
 
-    for (const role of roles) {
-      for (const permission of role.permissions) {
-        if (
-          (permission.module === 'all' || permission.module === module) &&
-          (permission.page === 'all' || permission.page === page)
-        ) {
-          const currentPriority = scopePriority.indexOf(permission.scope);
-          const highestPriority = scopePriority.indexOf(highestScope);
-          if (currentPriority > highestPriority) {
-            highestScope = permission.scope;
-          }
+  const getScope = (module: string, page: string): PermissionScope => {
+    const scopePriority: PermissionScope[] = ['self', 'team', 'area', 'all'];
+    let highest: PermissionScope = 'self';
+
+    for (const p of allPermissions) {
+      if (
+        (p.module === 'all' || p.module === module) &&
+        (p.page === 'all' || p.page === page)
+      ) {
+        if (scopePriority.indexOf(p.scope) > scopePriority.indexOf(highest)) {
+          highest = p.scope;
         }
       }
     }
-    return highestScope;
-  };
-
-  const setUserRole = (roleId: string) => {
-    setCurrentUser(prev => ({
-      ...prev,
-      roles: [roleId]
-    }));
+    return highest;
   };
 
   return (
     <PermissionsContext.Provider value={{
       currentUser,
+      isLoadingUser,
       hasPermission,
+      hasDjangoPerm,
       hasMenuAccess,
       hasDashboardAccess,
       getScope,
-      setUserRole
+      isStaff,
+      isMedico,
+      isOnlyMedico,
+      setUserPermissions,
+      login,
+      logout,
     }}>
       {children}
     </PermissionsContext.Provider>

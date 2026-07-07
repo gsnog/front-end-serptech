@@ -8,31 +8,49 @@ import { FilterSection } from "@/components/FilterSection";
 import { TableActions } from "@/components/TableActions";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Plus, FileText } from "lucide-react";
+import { Plus } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
-
-const mockCentrosReceita = [
-  { id: 1, nome: "Centro de Receita A", diretoria: "Diretoria Comercial", gerencia: "Gerência de Vendas", departamento: "Vendas" },
-  { id: 2, nome: "Centro de Receita B", diretoria: "Diretoria de Serviços", gerencia: "Gerência de Projetos", departamento: "Consultoria" },
-];
-type CR = typeof mockCentrosReceita[0];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  fetchCentrosReceita, updateCentroReceita, deleteCentroReceita,
+  centrosReceitaQueryKey, type CentroReceita as CR,
+} from "@/services/financeiro";
 
 const CentroReceita = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(mockCentrosReceita);
+  const queryClient = useQueryClient();
   const [searchCentro, setSearchCentro] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewItem, setViewItem] = useState<CR | null>(null);
   const [editItem, setEditItem] = useState<CR | null>(null);
-  const [editData, setEditData] = useState({ nome: "", diretoria: "", gerencia: "", departamento: "" });
+  const [editData, setEditData] = useState<Partial<CR>>({});
 
-  const filterFields = [{ type: "text" as const, label: "Centro de Receita", placeholder: "Buscar centro de receita...", value: searchCentro, onChange: setSearchCentro, width: "flex-1 min-w-[200px]" }];
-  const filtered = items.filter(c => c.nome.toLowerCase().includes(searchCentro.toLowerCase()));
-  const getExportData = () => filtered.map(c => ({ "Centro de Receita": c.nome, Diretoria: c.diretoria, Gerência: c.gerencia, Departamento: c.departamento }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removido", description: "Centro de receita excluído." }); } };
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...centrosReceitaQueryKey, currentPage],
+    queryFn: () => fetchCentrosReceita(currentPage),
+  });
+  const items: CR[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
+
+  const updateMut = useMutation({
+    mutationFn: (d: { id: number; payload: Partial<CR> }) => updateCentroReceita(d.id, d.payload),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: centrosReceitaQueryKey }); setEditItem(null); toast({ title: "Salvo", description: "Centro de receita atualizado." }); },
+    onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: deleteCentroReceita,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: centrosReceitaQueryKey }); setDeleteId(null); toast({ title: "Removido", description: "Centro de receita excluído." }); },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  });
+
+  const filtered = items.filter(c => (c.centro_id || "").toLowerCase().includes(searchCentro.toLowerCase()) || (c.setor_nome || "").toLowerCase().includes(searchCentro.toLowerCase()));
+  const getExportData = () => filtered.map(c => ({ "ID Centro": c.centro_id, Setor: c.setor_nome, Área: c.area_nome }));
   const deleteItem = items.find(i => i.id === deleteId);
-  const openEdit = (c: CR) => { setEditItem(c); setEditData({ nome: c.nome, diretoria: c.diretoria, gerencia: c.gerencia, departamento: c.departamento }); };
+  const openEdit = (c: CR) => { setEditItem(c); setEditData({ centro_id: c.centro_id, setor: c.setor, area: c.area }); };
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -41,52 +59,69 @@ const CentroReceita = () => {
           <Button onClick={() => navigate("/cadastro/financeiro/centro-receita/novo")} className="gap-2"><Plus className="w-4 h-4" />Novo Centro de Receita</Button>
           <ExportButton getData={getExportData} fileName="centros-receita" />
         </div>
-        <FilterSection fields={filterFields} resultsCount={filtered.length} />
+        <FilterSection fields={[{ type: "text" as const, label: "Centro de Receita", placeholder: "Buscar por ID ou setor...", value: searchCentro, onChange: setSearchCentro, width: "flex-1 min-w-[200px]" }]} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">Centro de Receita</TableHead>
-              <TableHead className="text-center font-semibold">Diretoria</TableHead>
-              <TableHead className="text-center font-semibold">Gerência</TableHead>
-              <TableHead className="text-center font-semibold">Departamento</TableHead>
+              <TableHead className="font-semibold">ID Centro</TableHead>
+              <TableHead className="font-semibold">Setor</TableHead>
+              <TableHead className="font-semibold">Área</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum centro de receita encontrado.</TableCell></TableRow>) : (
-                filtered.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center font-medium">{c.nome}</TableCell>
-                    <TableCell className="text-center">{c.diretoria}</TableCell>
-                    <TableCell className="text-center">{c.gerencia}</TableCell>
-                    <TableCell className="text-center">{c.departamento}</TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
-                  </TableRow>
-                ))
-              )}
+              {isLoading ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum centro de receita encontrado.</TableCell></TableRow>
+              ) : filtered.map((c) => (
+                <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
+                  <TableCell className="font-medium">{c.centro_id || "—"}</TableCell>
+                  <TableCell >{c.setor_nome || "—"}</TableCell>
+                  <TableCell >{c.area_nome || "—"}</TableCell>
+                  <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>{viewItem?.nome}</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Diretoria" value={viewItem.diretoria} /><InfoRow label="Gerência" value={viewItem.gerencia} /><InfoRow label="Departamento" value={viewItem.departamento} /></div>}</DialogContent>
+        <DialogContent><DialogHeader><DialogTitle>Centro de Receita {viewItem?.centro_id}</DialogTitle></DialogHeader>
+          {viewItem && <div className="space-y-2 py-2">
+            <InfoRow label="ID Centro" value={viewItem.centro_id || "—"} />
+            <InfoRow label="Setor" value={viewItem.setor_nome || "—"} />
+            <InfoRow label="Área" value={viewItem.area_nome || "—"} />
+          </div>}
+        </DialogContent>
       </Dialog>
+
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Editar Centro de Receita</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2"><Label>Nome</Label><Input value={editData.nome} onChange={e => setEditData(p => ({ ...p, nome: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Diretoria</Label><Input value={editData.diretoria} onChange={e => setEditData(p => ({ ...p, diretoria: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Gerência</Label><Input value={editData.gerencia} onChange={e => setEditData(p => ({ ...p, gerencia: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Departamento</Label><Input value={editData.departamento} onChange={e => setEditData(p => ({ ...p, departamento: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>ID Centro</Label><Input value={editData.centro_id || ""} onChange={e => setEditData(p => ({ ...p, centro_id: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
-            <Button onClick={() => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Centro de receita atualizado." }); } }}>Salvar</Button>
+            <Button onClick={() => { if (editItem) updateMut.mutate({ id: editItem.id, payload: editData }); }} disabled={updateMut.isPending}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Deseja excluir <strong>{deleteItem?.nome}</strong>?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Deseja excluir o centro <strong>{deleteItem?.centro_id}</strong>?</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { if (deleteId) deleteMut.mutate(deleteId); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleteMut.isPending}>Excluir</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
     </div>
   );

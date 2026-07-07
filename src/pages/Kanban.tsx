@@ -1,4 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+import { todayStr } from '@/lib/utils';
 import {
   LayoutGrid,
   Search,
@@ -14,6 +18,7 @@ import {
   ClipboardList,
   Clock,
   AlertCircle,
+  List,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -44,144 +49,184 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { pessoasMock } from '@/data/pessoas-mock';
-import {
-  KanbanBoard,
-  KanbanList,
-  KanbanCard,
-  kanbanBoardsMock,
-  kanbanListsMock,
-  kanbanCardsMock,
-} from '@/data/kanban-mock';
+// Kanban types (previously from kanban-mock — defined locally)
+// Items accept both API naming (texto/concluido) and UI naming (text/completed)
+interface KanbanChecklist { id: number | string; titulo?: string; title?: string; items: any[] }
+interface KanbanCard {
+  id: number; titulo?: string; title?: string; descricao?: string; description?: string;
+  responsavel_ids?: number[]; assignee?: string; prioridade?: string;
+  data_entrega?: string; due_date?: string; tags?: string[];
+  checklists?: KanbanChecklist[]; list?: number | string; observations?: string;
+}
+interface KanbanList { id: number; titulo?: string; title?: string; cards: KanbanCard[]; ordem: number; cor?: string; }
+interface KanbanBoard { id: number; titulo: string; descricao?: string; listas: KanbanList[]; }
+
 
 type ViewMode = 'home' | 'board';
 
 export default function Kanban() {
   const [viewMode, setViewMode] = useState<ViewMode>('home');
-  const [selectedBoard, setSelectedBoard] = useState<KanbanBoard | null>(null);
+  const [selectedBoardId, setSelectedBoardId] = useState<number | null>(null);
   const [selectedCard, setSelectedCard] = useState<KanbanCard | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCardModal, setShowCardModal] = useState(false);
   const [showNewBoardModal, setShowNewBoardModal] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  // State
-  const [boards, setBoards] = useState<KanbanBoard[]>(kanbanBoardsMock);
-  const [lists, setLists] = useState<KanbanList[]>(kanbanListsMock);
-  const [cards, setCards] = useState<KanbanCard[]>(kanbanCardsMock);
+  // Fetch Boards
+  const { data: boards = [], isLoading: isLoadingBoards } = useQuery({
+    queryKey: ['kanbanBoards'],
+    queryFn: async () => {
+      const response = await api.get('/api/kanban/boards/');
+      return response.data;
+    },
+  });
+
+  // Fetch all system users for assignee / member dropdowns
+  const { data: systemUsers = [] } = useQuery({
+    queryKey: ['systemUsers'],
+    queryFn: async () => {
+      const response = await api.get('/api/pessoas/lookup/');
+      const list = Array.isArray(response.data) ? response.data : (response.data.results ?? []);
+      return list.map((u: any) => ({
+        id: String(u.id),
+        nome: u.nome || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username,
+        iniciais: (u.iniciais || (u.nome || u.first_name || u.username || '').slice(0, 2)).toUpperCase(),
+        cargo: u.cargo || '',
+        setor: u.setor || '',
+        status: 'Ativo',
+      }));
+    },
+  });
+
+  const selectedBoard = useMemo(() => boards.find((b: any) => Number(b.id) === selectedBoardId) || null, [boards, selectedBoardId]);
+  const lists = selectedBoard?.lists || [];
 
   // Drag and drop - cards
-  const [draggedCard, setDraggedCard] = useState<KanbanCard | null>(null);
-  const [dragOverListId, setDragOverListId] = useState<string | null>(null);
+  const [draggedCard, setDraggedCard] = useState<any | null>(null);
+  const [dragOverListId, setDragOverListId] = useState<number | null>(null);
 
   // Drag and drop - lists
-  const [draggedList, setDraggedList] = useState<KanbanList | null>(null);
-  const [dragOverListTarget, setDragOverListTarget] = useState<string | null>(null);
+  const [draggedList, setDraggedList] = useState<any | null>(null);
+  const [dragOverListTarget, setDragOverListTarget] = useState<number | null>(null);
 
   const filteredBoards = useMemo(() => {
     if (!searchQuery.trim()) return boards;
     const q = searchQuery.toLowerCase();
     return boards.filter(
-      (b) =>
-        b.title.toLowerCase().includes(q) ||
-        b.description.toLowerCase().includes(q)
+      (b: any) =>
+        (b.titulo || b.title || '').toLowerCase().includes(q) ||
+        ((b.descricao || b.description || '') && (b.descricao || b.description || '').toLowerCase().includes(q))
     );
   }, [boards, searchQuery]);
 
   const currentBoardLists = useMemo(() => {
     if (!selectedBoard) return [];
-    return lists
-      .filter((l) => l.boardId === selectedBoard.id)
-      .sort((a, b) => a.position - b.position);
+    return [...lists].sort((a: any, b: any) => a.position - b.position);
   }, [selectedBoard, lists]);
 
-  const getCardsForList = (listId: string) => {
-    return cards
-      .filter((c) => c.listId === listId && !c.archived)
-      .sort((a, b) => a.position - b.position);
+  const updateCardListMutation = useMutation({
+    mutationFn: async ({ cardId, listId, position }: { cardId: number; listId: number; position: number }) => {
+      return await api.patch(`/api/kanban/cards/${cardId}/`, { list: listId, position });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao mover card', variant: 'destructive' });
+    }
+  });
+
+  const updateListPositionMutation = useMutation({
+    mutationFn: async ({ listId, position }: { listId: number; position: number }) => {
+      return await api.patch(`/api/kanban/lists/${listId}/`, { position });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao mover lista', variant: 'destructive' });
+    }
+  });
+
+  const getCardsForList = (listId: number) => {
+    const list = lists.find((l: any) => l.id === listId);
+    return list?.cards || [];
   };
 
   // Navigation
-  const openBoard = (board: KanbanBoard) => {
-    setSelectedBoard(board);
+  // ...
+  const openBoard = (board: any) => {
+    setSelectedBoardId(Number(board.id));
     setViewMode('board');
   };
 
   const goBack = () => {
     setViewMode('home');
-    setSelectedBoard(null);
+    setSelectedBoardId(null);
   };
 
-  const openCardModal = (card: KanbanCard) => {
+  const openCardModal = (card: any) => {
     setSelectedCard({ ...card });
     setShowCardModal(true);
   };
 
   // Drag and Drop
-  const handleDragStart = (e: React.DragEvent, card: KanbanCard) => {
+  const handleDragStart = (e: React.DragEvent, card: any) => {
     e.stopPropagation();
     setDraggedCard(card);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', 'card');
   };
 
-  const handleDragOver = (e: React.DragEvent, listId: string) => {
+  const handleDragOver = (e: React.DragEvent, listId: number) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverListId(listId);
   };
 
-  const handleDrop = (e: React.DragEvent, targetListId: string) => {
+  const handleDrop = (e: React.DragEvent, targetListId: number) => {
     e.preventDefault();
     setDragOverListId(null);
-    if (draggedCard && draggedCard.listId !== targetListId) {
-      setCards((prev) =>
-        prev.map((c) =>
-          c.id === draggedCard.id
-            ? { ...c, listId: targetListId, position: getCardsForList(targetListId).length }
-            : c
-        )
-      );
+    if (draggedCard && draggedCard.list !== targetListId) {
+      updateCardListMutation.mutate({
+        cardId: draggedCard.id,
+        listId: targetListId,
+        position: getCardsForList(targetListId).length
+      });
     }
     setDraggedCard(null);
   };
 
   // Drag and Drop - Lists
-  const handleListDragStart = (e: React.DragEvent, list: KanbanList) => {
+  const handleListDragStart = (e: React.DragEvent, list: any) => {
     setDraggedList(list);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', 'list'); // mark as list drag
   };
 
-  const handleListDragOver = (e: React.DragEvent, targetListId: string) => {
+  const handleListDragOver = (e: React.DragEvent, targetListId: number) => {
     e.preventDefault();
     if (!draggedList || draggedList.id === targetListId) return;
     setDragOverListTarget(targetListId);
   };
 
-  const handleListDrop = (e: React.DragEvent, targetListId: string) => {
+  const handleListDrop = (e: React.DragEvent, targetListId: number) => {
     e.preventDefault();
     setDragOverListTarget(null);
+
     if (!draggedList || draggedList.id === targetListId) {
       setDraggedList(null);
       return;
     }
 
-    setLists((prev) => {
-      const boardLists = prev
-        .filter((l) => l.boardId === draggedList.boardId)
-        .sort((a, b) => a.position - b.position);
-      const otherLists = prev.filter((l) => l.boardId !== draggedList.boardId);
+    const boardLists = [...lists];
+    const fromIdx = boardLists.findIndex((l: any) => l.id === draggedList.id);
+    const toIdx = boardLists.findIndex((l: any) => l.id === targetListId);
 
-      const fromIdx = boardLists.findIndex((l) => l.id === draggedList.id);
-      const toIdx = boardLists.findIndex((l) => l.id === targetListId);
-
-      const reordered = [...boardLists];
-      const [moved] = reordered.splice(fromIdx, 1);
-      reordered.splice(toIdx, 0, moved);
-
-      const updated = reordered.map((l, i) => ({ ...l, position: i }));
-      return [...otherLists, ...updated];
-    });
+    // Update API position
+    updateListPositionMutation.mutate({ listId: draggedList.id, position: toIdx });
 
     setDraggedList(null);
   };
@@ -192,86 +237,126 @@ export default function Kanban() {
   };
 
 
+  const createBoardMutation = useMutation({
+    mutationFn: async (data: { title: string, description: string, members: number[] }) => {
+      return await api.post('/api/kanban/boards/', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+      setShowNewBoardModal(false);
+      toast({ title: 'Quadro criado com sucesso' });
+    }
+  });
+
+  const deleteBoardMutation = useMutation({
+    mutationFn: async (id: string) => await api.delete(`/api/kanban/boards/${id}/`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+      toast({ title: 'Quadro excluido' });
+      if (selectedBoardId) setSelectedBoardId(null);
+    }
+  });
+
+  const createListMutation = useMutation({
+    mutationFn: async (data: { title: string, board: number, position: number }) => {
+      return await api.post('/api/kanban/lists/', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+      toast({ title: 'Lista criada', description: 'A coluna foi adicionada com sucesso.' });
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+      toast({ title: 'Erro ao criar lista', description: msg, variant: 'destructive' });
+      console.error('Create list error:', error.response?.data || error);
+    }
+  });
+
+  const renameListMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: string, title: string }) => {
+      return await api.patch(`/api/kanban/lists/${id}/`, { title });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] })
+  });
+
+  const deleteListMutation = useMutation({
+    mutationFn: async (id: string) => await api.delete(`/api/kanban/lists/${id}/`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] })
+  });
+
+  const createCardMutation = useMutation({
+    mutationFn: async (data: { title: string, list: string, position: number }) => {
+      return await api.post('/api/kanban/cards/', data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] })
+  });
+
+  const updateCardMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return await api.patch(`/api/kanban/cards/${data.id}/`, data);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] })
+  });
+
+  const deleteCardMutation = useMutation({
+    mutationFn: async (id: string) => await api.delete(`/api/kanban/cards/${id}/`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+      setShowCardModal(false);
+    }
+  });
+
   const handleCreateBoard = (title: string, description: string, memberIds: string[]) => {
-    const newBoard: KanbanBoard = {
-      id: `b_${Date.now()}`,
-      title,
-      description,
-      members: memberIds,
-      createdAt: new Date().toISOString().split('T')[0],
-      createdBy: '9',
-    };
-    setBoards((prev) => [...prev, newBoard]);
-    setShowNewBoardModal(false);
+    createBoardMutation.mutate({ title, description, members: memberIds.map(Number) });
   };
 
   const handleDeleteBoard = (boardId: string) => {
-    setBoards((prev) => prev.filter((b) => b.id !== boardId));
-    setLists((prev) => prev.filter((l) => l.boardId !== boardId));
-    const listIds = lists.filter((l) => l.boardId === boardId).map((l) => l.id);
-    setCards((prev) => prev.filter((c) => !listIds.includes(c.listId)));
+    deleteBoardMutation.mutate(boardId);
   };
 
   // CRUD - Lists
   const handleAddList = (title: string) => {
     if (!selectedBoard || !title.trim()) return;
-    const newList: KanbanList = {
-      id: `list_${Date.now()}`,
-      boardId: selectedBoard.id,
+    createListMutation.mutate({
       title: title.trim(),
-      position: currentBoardLists.length,
-    };
-    setLists((prev) => [...prev, newList]);
+      board: selectedBoard.id,
+      position: currentBoardLists.length
+    });
   };
 
   const handleRenameList = (listId: string, newTitle: string) => {
-    setLists((prev) =>
-      prev.map((l) => (l.id === listId ? { ...l, title: newTitle } : l))
-    );
+    renameListMutation.mutate({ id: listId, title: newTitle });
   };
 
   const handleDeleteList = (listId: string) => {
-    setLists((prev) => prev.filter((l) => l.id !== listId));
-    setCards((prev) => prev.filter((c) => c.listId !== listId));
+    deleteListMutation.mutate(listId);
   };
 
   // CRUD - Cards
   const handleAddCard = (listId: string, title: string) => {
     if (!title.trim()) return;
-    const newCard: KanbanCard = {
-      id: `c_${Date.now()}`,
-      listId,
+    createCardMutation.mutate({
       title: title.trim(),
-      description: '',
-      position: getCardsForList(listId).length,
-      assigneeId: null,
-      dueDate: null,
-      checklists: [],
-      observations: '',
-      archived: false,
-      createdAt: new Date().toISOString().split('T')[0],
-      createdBy: '9',
-    };
-    setCards((prev) => [...prev, newCard]);
+      list: listId,
+      position: getCardsForList(Number(listId)).length
+    });
   };
 
-  const handleUpdateCard = (updatedCard: KanbanCard) => {
-    setCards((prev) =>
-      prev.map((c) => (c.id === updatedCard.id ? updatedCard : c))
-    );
+  const handleUpdateCard = (updatedCard: any) => {
+    updateCardMutation.mutate(updatedCard);
     setSelectedCard(updatedCard);
   };
 
   const handleDeleteCard = (cardId: string) => {
-    setCards((prev) => prev.filter((c) => c.id !== cardId));
-    setShowCardModal(false);
-    setSelectedCard(null);
+    deleteCardMutation.mutate(cardId);
   };
 
   // Get board members for assignee selection
   const getBoardMembers = () => {
-    if (!selectedBoard) return pessoasMock;
-    return pessoasMock.filter((p) => selectedBoard.members.includes(p.id));
+    if (!selectedBoard) return systemUsers;
+    const memberIds: string[] = selectedBoard.members?.map(String) || [];
+    if (memberIds.length === 0) return systemUsers;
+    return systemUsers.filter((p: any) => memberIds.includes(p.id));
   };
 
   // HOME VIEW
@@ -342,10 +427,10 @@ export default function Kanban() {
                   <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                     <Users className="h-3 w-3" />
                     <span>{board.members.length} participantes</span>
-                    <span>-</span>
-                    <span>
-                      {lists.filter((l) => l.boardId === board.id).length} listas
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <List className="h-3 w-3" />
+                      {board.lists?.length || 0} listas
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -710,18 +795,18 @@ function KanbanCardItem({
   onDragEnd: () => void;
   onClick: () => void;
 }) {
-  const assignee = card.assigneeId
-    ? pessoasMock.find((p) => p.id === card.assigneeId)
+  const assignee = card.assignee
+    ? null // resolved from parent context via tooltip/tooltip, not needed in mini card
     : null;
-  const totalChecklistItems = card.checklists.reduce(
+  const totalChecklistItems = (card.checklists || []).reduce(
     (acc, cl) => acc + cl.items.length,
     0
   );
-  const completedChecklistItems = card.checklists.reduce(
+  const completedChecklistItems = (card.checklists || []).reduce(
     (acc, cl) => acc + cl.items.filter((i) => i.completed).length,
     0
   );
-  const isOverdue = card.dueDate && new Date(card.dueDate) < new Date();
+  const isOverdue = card.due_date && card.due_date < todayStr();
 
   return (
     <Card
@@ -736,7 +821,7 @@ function KanbanCardItem({
 
         {/* Info badges */}
         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
-          {card.dueDate && (
+          {card.due_date && (
             <Badge
               variant={isOverdue ? 'destructive' : 'outline'}
               className="text-xs gap-1"
@@ -746,7 +831,7 @@ function KanbanCardItem({
               ) : (
                 <Calendar className="h-3 w-3" />
               )}
-              {new Date(card.dueDate).toLocaleDateString('pt-BR', {
+              {new Date(card.due_date + 'T00:00:00').toLocaleDateString('pt-BR', {
                 day: '2-digit',
                 month: 'short',
               })}
@@ -793,50 +878,55 @@ function CardDetailModal({
   onClose: () => void;
   onUpdate: (card: KanbanCard) => void;
   onDelete: (cardId: string) => void;
-  boardMembers: typeof pessoasMock;
+  boardMembers: { id: string; nome: string; iniciais: string; cargo?: string; setor?: string }[];
   lists: KanbanList[];
 }) {
   const [editingField, setEditingField] = useState<string | null>(null);
   const [newChecklistTitle, setNewChecklistTitle] = useState('');
-  const [newChecklistItemText, setNewChecklistItemText] = useState<Record<string, string>>({});
+  const [newChecklistItemText, setNewChecklistItemText] = useState<Record<string | number, string>>({});
   const [showAddChecklist, setShowAddChecklist] = useState(false);
+  // Debounce ref for checklist toggle — prevents API call on every rapid click
+  const checklistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const list = lists.find((l) => l.id === card.listId);
-  const assignee = card.assigneeId
-    ? pessoasMock.find((p) => p.id === card.assigneeId)
+  const list = lists.find((l) => l.id === card.list);
+  const assignee = card.assignee
+    ? boardMembers.find((p) => p.id === String(card.assignee))
     : null;
-  const isOverdue = card.dueDate && new Date(card.dueDate) < new Date();
+  const isOverdue = card.due_date && card.due_date < todayStr();
 
   const updateField = (field: keyof KanbanCard, value: any) => {
     onUpdate({ ...card, [field]: value });
   };
 
-  const toggleChecklistItem = (checklistId: string, itemId: string) => {
-    const updatedChecklists = card.checklists.map((cl) =>
+  const toggleChecklistItem = (checklistId: number | string, itemId: number | string) => {
+    const updatedChecklists = (card.checklists || []).map((cl) =>
       cl.id === checklistId
         ? {
-            ...cl,
-            items: cl.items.map((item) =>
-              item.id === itemId ? { ...item, completed: !item.completed } : item
-            ),
-          }
+          ...cl,
+          items: cl.items.map((item) =>
+            item.id === itemId ? { ...item, completed: !item.completed } : item
+          ),
+        }
         : cl
     );
-    onUpdate({ ...card, checklists: updatedChecklists });
+    const updatedCard = { ...card, checklists: updatedChecklists };
+    // Debounce API call by 500ms to avoid firing on every rapid click
+    if (checklistDebounceRef.current) clearTimeout(checklistDebounceRef.current);
+    checklistDebounceRef.current = setTimeout(() => onUpdate(updatedCard), 500);
   };
 
-  const addChecklistItem = (checklistId: string) => {
+  const addChecklistItem = (checklistId: number | string) => {
     const text = newChecklistItemText[checklistId]?.trim();
     if (!text) return;
-    const updatedChecklists = card.checklists.map((cl) =>
+    const updatedChecklists = (card.checklists || []).map((cl) =>
       cl.id === checklistId
         ? {
-            ...cl,
-            items: [
-              ...cl.items,
-              { id: `cki_${Date.now()}`, text, completed: false },
-            ],
-          }
+          ...cl,
+          items: [
+            ...cl.items,
+            { id: `cki_${Date.now()}`, text, completed: false },
+          ],
+        }
         : cl
     );
     onUpdate({ ...card, checklists: updatedChecklists });
@@ -850,20 +940,20 @@ function CardDetailModal({
       title: newChecklistTitle.trim(),
       items: [],
     };
-    onUpdate({ ...card, checklists: [...card.checklists, newChecklist] });
+    onUpdate({ ...card, checklists: [...(card.checklists || []), newChecklist] });
     setNewChecklistTitle('');
     setShowAddChecklist(false);
   };
 
-  const deleteChecklist = (checklistId: string) => {
+  const deleteChecklist = (checklistId: number | string) => {
     onUpdate({
       ...card,
-      checklists: card.checklists.filter((cl) => cl.id !== checklistId),
+      checklists: (card.checklists || []).filter((cl) => cl.id !== checklistId),
     });
   };
 
-  const deleteChecklistItem = (checklistId: string, itemId: string) => {
-    const updatedChecklists = card.checklists.map((cl) =>
+  const deleteChecklistItem = (checklistId: number | string, itemId: number | string) => {
+    const updatedChecklists = (card.checklists || []).map((cl) =>
       cl.id === checklistId
         ? { ...cl, items: cl.items.filter((item) => item.id !== itemId) }
         : cl
@@ -952,7 +1042,7 @@ function CardDetailModal({
                 </div>
               )}
 
-              {card.checklists.map((checklist) => {
+              {(card.checklists || []).map((checklist) => {
                 const completed = checklist.items.filter((i) => i.completed).length;
                 const total = checklist.items.length;
                 const percent = total > 0 ? (completed / total) * 100 : 0;
@@ -1071,9 +1161,9 @@ function CardDetailModal({
                 Responsavel
               </Label>
               <Select
-                value={card.assigneeId || ''}
+                value={card.assignee ? String(card.assignee) : ''}
                 onValueChange={(value) =>
-                  updateField('assigneeId', value || null)
+                  updateField('assignee', value ? Number(value) : null)
                 }
               >
                 <SelectTrigger className="h-9">
@@ -1104,9 +1194,9 @@ function CardDetailModal({
               </Label>
               <Input
                 type="date"
-                value={card.dueDate || ''}
+                value={card.due_date || ''}
                 onChange={(e) =>
-                  updateField('dueDate', e.target.value || null)
+                  updateField('due_date', e.target.value || null)
                 }
                 className="h-9"
               />
@@ -1141,15 +1231,15 @@ function CardDetailModal({
                 Mover para
               </Label>
               <Select
-                value={card.listId}
-                onValueChange={(value) => updateField('listId', value)}
+                value={String(card.list)}
+                onValueChange={(value) => updateField('list', Number(value))}
               >
                 <SelectTrigger className="h-9">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-popover">
                   {lists.map((l) => (
-                    <SelectItem key={l.id} value={l.id}>
+                    <SelectItem key={l.id} value={String(l.id)}>
                       {l.title}
                     </SelectItem>
                   ))}
@@ -1163,7 +1253,7 @@ function CardDetailModal({
                 variant="outline"
                 size="sm"
                 className="w-full justify-start gap-2 text-destructive hover:text-destructive"
-                onClick={() => onDelete(card.id)}
+                onClick={() => onDelete(String(card.id))}
               >
                 <Trash2 className="h-4 w-4" />
                 Excluir card
@@ -1189,6 +1279,20 @@ function NewBoardModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ['systemUsers'],
+    queryFn: async () => {
+      const response = await api.get('/api/chat/contacts/');
+      return response.data.map((u: any) => ({
+        id: String(u.id),
+        nome: `${u.first_name} ${u.last_name}`.trim() || u.username,
+        iniciais: (u.first_name || u.username).slice(0, 2).toUpperCase(),
+        cargo: u.cargo || '',
+        setor: u.setor || '',
+      }));
+    },
+  });
 
   const toggleMember = (id: string) => {
     setSelectedMembers((prev) =>
@@ -1239,8 +1343,7 @@ function NewBoardModal({
             <Label className="text-sm font-medium">Participantes</Label>
             <ScrollArea className="h-48 border rounded p-2">
               <div className="space-y-1">
-                {pessoasMock
-                  .filter((p) => p.status === 'Ativo')
+                {allUsers
                   .map((pessoa) => (
                     <div
                       key={pessoa.id}

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
 import { motion } from "framer-motion";
 
 export interface GradientCardProps {
@@ -94,7 +94,7 @@ const variantConfig: Record<string, VariantConfig> = {
   },
 };
 
-export const GradientCard = ({ title, value, icon: Icon, trend, variant, delay = 0 }: GradientCardProps) => {
+export const GradientCard = ({ title, value, icon: Icon, helpText, trend, variant, delay = 0 }: GradientCardProps) => {
   const config = variantConfig[variant];
 
   if (config.isHero) {
@@ -113,7 +113,14 @@ export const GradientCard = ({ title, value, icon: Icon, trend, variant, delay =
         </div>
         
         <p className={`text-3xl font-bold tracking-tight leading-none mb-3 ${config.valueColor}`}>{value}</p>
-        
+
+        {helpText && (
+          <div className={`flex items-center gap-1 text-[11px] font-normal ${config.trendMuted} mt-1`}>
+            <Info className="h-3 w-3 shrink-0" />
+            <span>{helpText}</span>
+          </div>
+        )}
+
         {trend && (
           <div className={`flex items-center gap-1.5 text-xs font-semibold ${config.trendColor}`}>
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${config.trendBg}`}>
@@ -145,7 +152,14 @@ export const GradientCard = ({ title, value, icon: Icon, trend, variant, delay =
       </div>
       
       <p className="text-3xl font-bold tracking-tight text-foreground leading-none mb-3">{value}</p>
-      
+
+      {helpText && (
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-normal mt-1">
+          <Info className="h-3 w-3 shrink-0" />
+          <span>{helpText}</span>
+        </div>
+      )}
+
       {trend && (
         <div className={`flex items-center gap-1.5 text-xs font-semibold ${config.trendColor}`}>
           {trend.positive ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}

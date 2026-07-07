@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'react';
-import { 
-  X, 
-  MessageSquare, 
-  Users, 
-  ChevronUp, 
+import {
+  X,
+  MessageSquare,
+  Users,
+  ChevronUp,
   ChevronDown,
   Building2,
   User
@@ -13,19 +13,15 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Collapsible, 
-  CollapsibleContent, 
-  CollapsibleTrigger 
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
 } from '@/components/ui/collapsible';
-import { 
-  Pessoa, 
-  pessoasMock, 
-  getCadeiaGestores, 
-  getSubordinados 
-} from '@/data/pessoas-mock';
 import { usePermissions } from '@/contexts/PermissionsContext';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { Pessoa, fetchPessoas, pessoasQueryKey } from '@/services/pessoas';
 
 interface PersonHierarchyPanelProps {
   pessoa: Pessoa;
@@ -49,87 +45,105 @@ export function PersonHierarchyPanel({
   const [subordinadosOpen, setSubordinadosOpen] = useState(true);
   const [equipeOpen, setEquipeOpen] = useState(true);
 
-  // Verificar permissões de visualização
+  // Fetch real list of users
+  const { data: pessoasDbResponse } = useQuery({
+    queryKey: pessoasQueryKey,
+    queryFn: () => fetchPessoas(1, '', 200),
+    staleTime: 5 * 60 * 1000,
+  });
+  const pessoasDb = pessoasDbResponse?.results ?? [];
+
   const scope = getScope('chat', 'all');
-  
-  // Obter cadeia de gestores
-  const gestores = useMemo(() => {
-    const cadeia = getCadeiaGestores(pessoa.id);
-    // Filtrar baseado em permissões
-    if (scope === 'self') {
-      return cadeia.filter(g => g.id === pessoa.gestorId);
+
+  const getCadeiaGestores = (pessoaId: number): Pessoa[] => {
+    const cadeia: Pessoa[] = [];
+    let currentId: number | null = pessoaId;
+    while (currentId) {
+      const p = pessoasDb.find(p => p.id === currentId);
+      if (p && p.supervisor_id && p.supervisor_id !== currentId) {
+        const gestor = pessoasDb.find(g => g.id === p.supervisor_id);
+        if (gestor && !cadeia.some(c => c.id === gestor.id)) {
+          cadeia.unshift(gestor);
+          currentId = gestor.id;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
     }
     return cadeia;
-  }, [pessoa.id, pessoa.gestorId, scope]);
+  };
 
-  // Obter subordinados diretos
+  const getSubordinados = (pessoaId: number): Pessoa[] => {
+    return pessoasDb.filter(p => p.supervisor_id === pessoaId);
+  };
+
+  const gestores = useMemo(() => {
+    const cadeia = getCadeiaGestores(pessoa.id);
+    if (scope === 'self') {
+      return cadeia.filter(g => g.id === pessoa.supervisor_id);
+    }
+    return cadeia;
+  }, [pessoa.id, pessoa.supervisor_id, scope, pessoasDb]);
+
   const subordinados = useMemo(() => {
     const subs = getSubordinados(pessoa.id);
-    // Filtrar baseado em permissões
     if (scope === 'self') {
       return [];
     }
-    return subs.filter(s => s.status === 'Ativo');
-  }, [pessoa.id, scope]);
+    return subs;
+  }, [pessoa.id, scope, pessoasDb]);
 
-  // Obter pessoas da mesma área/setor
   const pessoasArea = useMemo(() => {
-    const mesmaArea = pessoasMock.filter(
-      p => p.setorId === pessoa.setorId && 
-           p.id !== pessoa.id && 
-           p.status === 'Ativo'
+    const mesmaArea = pessoasDb.filter(
+      p => p.setor_id === pessoa.setor_id && p.id !== pessoa.id
     );
-    // Remover duplicados (gestores e subordinados já mostrados)
     const idsJaMostrados = new Set([
       pessoa.id,
       ...gestores.map(g => g.id),
       ...subordinados.map(s => s.id)
     ]);
     return mesmaArea.filter(p => !idsJaMostrados.has(p.id));
-  }, [pessoa, gestores, subordinados]);
+  }, [pessoa, gestores, subordinados, pessoasDb]);
 
-  // Verificar se pode iniciar conversa com uma pessoa
-  const canChatWith = (targetId: string) => {
-    if (targetId === currentUserId) return false;
+  const canChatWith = (targetId: number | string) => {
+    if (String(targetId) === String(currentUserId)) return false;
     if (!hasPermission('chat', 'all', 'view')) {
-      // Verificar escopo
       if (scope === 'self') return false;
       if (scope === 'team') {
-        // Pode conversar com pessoas da mesma equipe
-        const target = pessoasMock.find(p => p.id === targetId);
-        return target?.gestorId === pessoa.gestorId || target?.id === pessoa.gestorId;
+        const target = pessoasDb.find(p => String(p.id) === String(targetId));
+        return target?.supervisor_id === pessoa.supervisor_id || target?.id === pessoa.supervisor_id;
       }
     }
     return true;
   };
 
-  // Status online mockado
-  const getOnlineStatus = (pessoaId: string) => {
-    return onlineStatus[pessoaId] ?? Math.random() > 0.5;
+  const getOnlineStatus = (pessoaId: number | string) => {
+    return onlineStatus[String(pessoaId)] ?? Math.random() > 0.5;
   };
 
-  // Handlers para grupos rápidos
   const handleCreateGestoresGroup = () => {
-    const ids = gestores.filter(g => canChatWith(g.id)).map(g => g.id);
+    const ids = gestores.filter(g => canChatWith(g.id)).map(g => String(g.id));
     if (ids.length > 0) {
-      onCreateGroupChat([currentUserId, ...ids], `Gestores de ${pessoa.nome}`);
+      onCreateGroupChat([String(currentUserId), ...ids], `Gestores de ${pessoa.nome}`);
     }
   };
 
   const handleCreateSubordinadosGroup = () => {
-    const ids = subordinados.filter(s => canChatWith(s.id)).map(s => s.id);
+    const ids = subordinados.filter(s => canChatWith(s.id)).map(s => String(s.id));
     if (ids.length > 0) {
-      onCreateGroupChat([currentUserId, pessoa.id, ...ids], `Equipe ${pessoa.nome}`);
+      onCreateGroupChat([String(currentUserId), String(pessoa.id), ...ids], `Equipe ${pessoa.nome}`);
     }
   };
 
   const handleCreateAreaGroup = () => {
     const allIds = [
-      ...pessoasArea.filter(p => canChatWith(p.id)).map(p => p.id),
-      pessoa.id
-    ].filter(id => id !== currentUserId);
+      ...pessoasArea.filter(p => canChatWith(p.id)).map(p => String(p.id)),
+      String(pessoa.id)
+    ].filter(id => id !== String(currentUserId));
     if (allIds.length > 0) {
-      onCreateGroupChat([currentUserId, ...allIds], `Área ${pessoa.setor}`);
+      onCreateGroupChat([String(currentUserId), ...allIds], `Área ${pessoa.setor}`);
     }
   };
 
@@ -138,9 +152,9 @@ export function PersonHierarchyPanel({
       {/* Header */}
       <div className="p-4 border-b flex items-center justify-between">
         <h3 className="font-medium text-sm">Perfil e Hierarquia</h3>
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="h-8 w-8"
           onClick={onClose}
         >
@@ -167,7 +181,7 @@ export function PersonHierarchyPanel({
             <p className="text-sm text-muted-foreground">{pessoa.cargo}</p>
             <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground mt-1">
               <Building2 className="h-3 w-3" />
-              {pessoa.setor}
+              {pessoa.setor || 'Sem setor'}
             </div>
             <Badge variant="outline" className="mt-2">
               {getOnlineStatus(pessoa.id) ? 'Online' : 'Offline'}
@@ -175,25 +189,30 @@ export function PersonHierarchyPanel({
           </div>
 
           {/* Gestor Direto */}
-          {pessoa.gestorNome && pessoa.gestorId && (
+          {pessoa.supervisor_nome && pessoa.supervisor_id && (
             <div className="p-3 bg-muted/30 rounded border">
               <div className="text-xs font-medium text-muted-foreground mb-2">
                 Gestor Direto
               </div>
               <PersonRow
-                pessoa={pessoasMock.find(p => p.id === pessoa.gestorId)!}
-                isOnline={getOnlineStatus(pessoa.gestorId)}
-                showChatButton={canChatWith(pessoa.gestorId)}
-                onChat={() => onStartChat(pessoa.gestorId!)}
+                pessoa={pessoasDb.find(p => p.id === pessoa.supervisor_id) || {
+                  id: pessoa.supervisor_id,
+                  nome: pessoa.supervisor_nome,
+                  cargo: 'Gestor',
+                  iniciais: pessoa.supervisor_nome.slice(0, 2).toUpperCase()
+                } as Pessoa}
+                isOnline={getOnlineStatus(pessoa.supervisor_id)}
+                showChatButton={canChatWith(pessoa.supervisor_id)}
+                onChat={() => onStartChat(String(pessoa.supervisor_id))}
               />
             </div>
           )}
 
           {/* Ação rápida: Conversar com esta pessoa */}
-          {pessoa.id !== currentUserId && canChatWith(pessoa.id) && (
-            <Button 
-              className="w-full" 
-              onClick={() => onStartChat(pessoa.id)}
+          {String(pessoa.id) !== String(currentUserId) && canChatWith(pessoa.id) && (
+            <Button
+              className="w-full"
+              onClick={() => onStartChat(String(pessoa.id))}
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               Conversar com {pessoa.nome.split(' ')[0]}
@@ -223,8 +242,8 @@ export function PersonHierarchyPanel({
                 </CollapsibleTrigger>
                 <CollapsibleContent className="space-y-1 mt-1">
                   {gestores.map((gestor, idx) => (
-                    <div 
-                      key={gestor.id} 
+                    <div
+                      key={gestor.id}
                       className="ml-4"
                       style={{ opacity: 1 - (idx * 0.15) }}
                     >
@@ -232,15 +251,15 @@ export function PersonHierarchyPanel({
                         pessoa={gestor}
                         isOnline={getOnlineStatus(gestor.id)}
                         showChatButton={canChatWith(gestor.id)}
-                        onChat={() => onStartChat(gestor.id)}
+                        onChat={() => onStartChat(String(gestor.id))}
                         level={idx}
                       />
                     </div>
                   ))}
                   {gestores.filter(g => canChatWith(g.id)).length > 1 && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full mt-2"
                       onClick={handleCreateGestoresGroup}
                     >
@@ -295,14 +314,14 @@ export function PersonHierarchyPanel({
                         pessoa={sub}
                         isOnline={getOnlineStatus(sub.id)}
                         showChatButton={canChatWith(sub.id)}
-                        onChat={() => onStartChat(sub.id)}
+                        onChat={() => onStartChat(String(sub.id))}
                       />
                     </div>
                   ))}
                   {subordinados.filter(s => canChatWith(s.id)).length > 1 && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       className="w-full mt-2"
                       onClick={handleCreateSubordinadosGroup}
                     >
@@ -344,13 +363,13 @@ export function PersonHierarchyPanel({
                         pessoa={p}
                         isOnline={getOnlineStatus(p.id)}
                         showChatButton={canChatWith(p.id)}
-                        onChat={() => onStartChat(p.id)}
+                        onChat={() => onStartChat(String(p.id))}
                       />
                     ))}
                     {pessoasArea.filter(p => canChatWith(p.id)).length > 1 && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="w-full mt-2"
                         onClick={handleCreateAreaGroup}
                       >
@@ -373,7 +392,6 @@ export function PersonHierarchyPanel({
   );
 }
 
-// Componente auxiliar para exibir uma pessoa na lista
 interface PersonRowProps {
   pessoa: Pessoa;
   isOnline: boolean;
@@ -387,7 +405,7 @@ function PersonRow({ pessoa, isOnline, showChatButton, onChat, level = 0 }: Pers
     <div className="flex items-center gap-2 p-2 rounded hover:bg-muted/50 transition-colors group">
       <div className="relative shrink-0">
         <Avatar className="h-8 w-8">
-          <AvatarFallback className="text-xs">
+          <AvatarFallback className="text-xs bg-card border">
             {pessoa.iniciais}
           </AvatarFallback>
         </Avatar>
@@ -405,9 +423,9 @@ function PersonRow({ pessoa, isOnline, showChatButton, onChat, level = 0 }: Pers
         </div>
       </div>
       {showChatButton && (
-        <Button 
-          variant="ghost" 
-          size="icon" 
+        <Button
+          variant="ghost"
+          size="icon"
           className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
           onClick={(e) => {
             e.stopPropagation();
@@ -421,3 +439,4 @@ function PersonRow({ pessoa, isOnline, showChatButton, onChat, level = 0 }: Pers
     </div>
   );
 }
+

@@ -1,202 +1,653 @@
-import { useNavigate } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useState, useMemo } from "react";
-import { FilterSection } from "@/components/FilterSection";
-import { Plus, FileText, ClipboardCheck, RefreshCw } from "lucide-react";
-import { TableActions } from "@/components/TableActions";
-import { StatusBadge } from "@/components/StatusBadge";
-import { ExportButton } from "@/components/ExportButton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { FilterSection } from "@/components/FilterSection";
+import { SortableHead } from "@/components/SortableHead";
+import { todayStr } from "@/lib/utils";
+import { StatusBadge } from "@/components/StatusBadge";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { SearchableSelect } from "@/components/SearchableSelect";
+import { Plus, ChevronDown, ChevronRight, Eye, Edit, Trash2, CheckCircle, XCircle, ShoppingCart, PackageCheck, FileUp } from "lucide-react";
+import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
+import { useSortable } from "@/hooks/useSortable";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
+import api from "@/lib/api";
+import {
+  fetchOrdensCompra, deleteOrdemCompra, aprovarOrdemCompra, negarOrdemCompra,
+  registrarCompraOrdem, registrarEntregaOrdem,
+  ordensCompraQueryKey, type OrdemCompra,
+  fetchFornecedores, fetchItensEstoque, fetchUnidades,
+  fornecedoresQueryKey, itensEstoqueQueryKey, unidadesQueryKey,
+} from "@/services/estoque";
 
-const mockOrdens = [
-  { id: 1, data: "19/12/2024", dataCompra: "20/12/2024", dataEntrega: "25/12/2024", item: "Papel A4", marca: "Chamex", quantidade: 100, requisitante: "João Silva", setor: "Administrativo", status: "Aprovado" },
-  { id: 2, data: "18/12/2024", dataCompra: "19/12/2024", dataEntrega: "24/12/2024", item: "Toner HP", marca: "HP Original", quantidade: 5, requisitante: "Maria Santos", setor: "TI", status: "Aguardando Aprovação" },
-  { id: 3, data: "17/12/2024", dataCompra: "-", dataEntrega: "-", item: "Parafusos M8", marca: "Ciser", quantidade: 500, requisitante: "Carlos Pereira", setor: "Produção", status: "Negado" },
-]
+interface ItemEntrada {
+  id: number;
+  itemId: string;
+  itemNome: string;
+  quantidade: string;
+  custoUnitario: string;
+}
 
-type Ordem = typeof mockOrdens[0];
-
-export default function OrdemCompra() {
+const OrdemCompraPage = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(mockOrdens);
-  const [filterStatus, setFilterStatus] = useState("");
-  const [filterData, setFilterData] = useState("");
-  const [filterItem, setFilterItem] = useState("");
-  const [viewItem, setViewItem] = useState<Ordem | null>(null);
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const { currentUser, getScope, hasPermission } = usePermissions();
+  const scope = getScope('estoque', 'est_ordens_compra');
+  const currentUserId = currentUser?.userId ? Number(currentUser.userId) : null;
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") ?? "");
+  const [filterFornecedor, setFilterFornecedor] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editItem, setEditItem] = useState<Ordem | null>(null);
-  const [editData, setEditData] = useState({ item: "", marca: "", quantidade: "", requisitante: "", setor: "" });
+  const [viewItem, setViewItem] = useState<OrdemCompra | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+  const [negarTarget, setNegarTarget] = useState<OrdemCompra | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
 
-  const [approvalItem, setApprovalItem] = useState<Ordem | null>(null);
-  const [rejectItem, setRejectItem] = useState<Ordem | null>(null);
-  const [rejectJustificativa, setRejectJustificativa] = useState("");
+  // Delivery dialog state
+  const [entregaTarget, setEntregaTarget] = useState<OrdemCompra | null>(null);
+  const [entregaFornecedorId, setEntregaFornecedorId] = useState("");
+  const [entregaDestinoId, setEntregaDestinoId] = useState("");
+  const [entregaData, setEntregaData] = useState(todayStr());
+  const [entregaNfNumero, setEntregaNfNumero] = useState("");
+  const [entregaDataEmissao, setEntregaDataEmissao] = useState("");
+  const [entregaObservacao, setEntregaObservacao] = useState("");
+  const [entregaItens, setEntregaItens] = useState<ItemEntrada[]>([]);
+  const [entregaXmlFile, setEntregaXmlFile] = useState<File | null>(null);
 
-  const filtered = useMemo(() => {
-    return items.filter(ordem => {
-      const matchStatus = filterStatus && filterStatus !== "todos" ? ordem.status.toLowerCase() === filterStatus : true
-      const matchData = filterData ? ordem.data.includes(filterData.split("-").reverse().join("/")) : true
-      const matchItem = ordem.item.toLowerCase().includes(filterItem.toLowerCase())
-      return matchStatus && matchData && matchItem
-    })
-  }, [items, filterStatus, filterData, filterItem])
+  // Reference data
+  const { data: fornecedoresRaw = [] } = useQuery({ queryKey: fornecedoresQueryKey, queryFn: fetchFornecedores });
+  const fornecedoresArray = (Array.isArray(fornecedoresRaw) ? fornecedoresRaw : (fornecedoresRaw as any)?.results ?? []) as any[];
 
-  const getExportData = () => filtered.map(o => ({ ID: o.id, Data: o.data, "Data Compra": o.dataCompra, "Data Entrega": o.dataEntrega, Item: o.item, Marca: o.marca, Qtd: o.quantidade, Requisitante: o.requisitante, Setor: o.setor, Status: o.status }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Ordem de compra excluída." }); } };
-  const openEdit = (o: Ordem) => { setEditItem(o); setEditData({ item: o.item, marca: o.marca, quantidade: String(o.quantidade), requisitante: o.requisitante, setor: o.setor }); };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData, quantidade: Number(editData.quantidade) } : i)); setEditItem(null); toast({ title: "Salvo", description: "Ordem atualizada." }); } };
-  const deleteItemData = items.find(i => i.id === deleteId);
+  const { data: itensRaw = [] } = useQuery({ queryKey: itensEstoqueQueryKey, queryFn: fetchItensEstoque });
+  const itensEstoque = (Array.isArray(itensRaw) ? itensRaw : (itensRaw as any)?.results ?? []) as any[];
 
-  const handleApprove = (ordem: Ordem) => {
-    setItems(prev => prev.map(i => i.id === ordem.id ? { ...i, status: "Aprovado" } : i));
-    setApprovalItem(null);
-    toast({ title: "Aprovada", description: `Ordem de compra "${ordem.item}" aprovada.` });
+  const { data: unidadesRaw = [] } = useQuery({ queryKey: unidadesQueryKey, queryFn: fetchUnidades });
+  const unidades = (Array.isArray(unidadesRaw) ? unidadesRaw : (unidadesRaw as any)?.results ?? []) as any[];
+
+  const fornecedorFilterOptions = [
+    { value: "todos", label: "Todos" },
+    ...fornecedoresArray.map((f: any) => ({ value: String(f.id), label: f.nome }))
+  ];
+  const fornecedorSelectOptions = fornecedoresArray.map((f: any) => ({ value: String(f.id), label: f.nome }));
+  const itemOptions = itensEstoque.map((i: any) => ({ value: String(i.id), label: i.itens_do_estoque }));
+
+  useRealtimeUpdates([[...ordensCompraQueryKey]]);
+
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterFornecedor]);
+
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...ordensCompraQueryKey, page],
+    queryFn: () => fetchOrdensCompra(page),
+  });
+  const allItems = response?.results ?? [];
+  const serverTotal = response?.count ?? 0;
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ordensCompraQueryKey });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteOrdemCompra,
+    onSuccess: () => { invalidate(); setDeleteId(null); toast({ title: "Removido", description: "Ordem de compra excluída." }); },
+    onError: () => toast({ title: "Erro", description: "Não foi possível excluir.", variant: "destructive" }),
+  });
+
+  const aprovarMutation = useMutation({
+    mutationFn: aprovarOrdemCompra,
+    onSuccess: () => { invalidate(); toast({ title: "Aprovada", description: "Ordem de compra aprovada." }); },
+    onError: () => toast({ title: "Erro", description: "Não foi possível aprovar.", variant: "destructive" }),
+  });
+
+  const negarMutation = useMutation({
+    mutationFn: ({ id, feedback }: { id: number; feedback: string }) => negarOrdemCompra(id, feedback),
+    onSuccess: () => { invalidate(); setNegarTarget(null); setFeedbackText(""); toast({ title: "Negada", description: "Ordem de compra negada." }); },
+    onError: () => toast({ title: "Erro", description: "Não foi possível negar.", variant: "destructive" }),
+  });
+
+  const comprarMutation = useMutation({
+    mutationFn: registrarCompraOrdem,
+    onSuccess: () => { invalidate(); toast({ title: "Compra registrada", description: "Status de compra atualizado para Efetuada." }); },
+    onError: () => toast({ title: "Erro", description: "Não foi possível registrar a compra.", variant: "destructive" }),
+  });
+
+  const entregarMutation = useMutation({
+    mutationFn: registrarEntregaOrdem,
+    onSuccess: () => { invalidate(); toast({ title: "Entrega registrada", description: "Entrega e entrada registradas com sucesso." }); },
+    onError: () => toast({ title: "Erro", description: "Não foi possível registrar a entrega.", variant: "destructive" }),
+  });
+
+  const criarEntradaMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      if (payload._xmlFile) {
+        const formData = new FormData();
+        formData.append('xml_file', payload._xmlFile);
+        formData.append('unidade', String(payload._unidade));
+        if (payload._ordemId) formData.append('ordem_compra', String(payload._ordemId));
+        return (await api.post('/api/estoque/entradas/importar-xml/', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })).data;
+      }
+      const { _ordemId, ...rest } = payload;
+      return (await api.post('/api/estoque/entradas/', rest)).data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['entradas_estoque'] });
+      entregarMutation.mutate(variables._ordemId);
+      setEntregaTarget(null);
+      setEntregaXmlFile(null);
+    },
+    onError: (error: any) => {
+      const errData = error.response?.data;
+      const msgs = errData && typeof errData === "object"
+        ? Object.entries(errData).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Erro ao criar entrada.";
+      toast({ title: "Erro ao registrar entrada", description: msgs, variant: "destructive" });
+    },
+  });
+
+  const openEntregaDialog = (o: OrdemCompra) => {
+    setEntregaTarget(o);
+    setEntregaData(todayStr());
+    setEntregaFornecedorId("");
+    setEntregaDestinoId(o.unidade ? String(o.unidade) : "");
+    setEntregaNfNumero("");
+    setEntregaDataEmissao("");
+    setEntregaObservacao("");
+    setEntregaXmlFile(null);
+
+    // Pre-populate items from order, matching names to IDs
+    const preItens: ItemEntrada[] = (o.itens ?? []).map((oi, idx) => {
+      const matched = itensEstoque.find(
+        (it: any) => it.itens_do_estoque?.toLowerCase() === oi.item?.toLowerCase()
+      );
+      return {
+        id: Date.now() + idx,
+        itemId: matched ? String(matched.id) : "",
+        itemNome: oi.item,
+        quantidade: String(oi.quantidade ?? 1),
+        custoUnitario: "0",
+      };
+    });
+    setEntregaItens(preItens);
   };
 
-  const handleReject = () => {
-    if (rejectItem) {
-      setItems(prev => prev.map(i => i.id === rejectItem.id ? { ...i, status: "Negado" } : i));
-      setRejectItem(null);
-      setRejectJustificativa("");
-      toast({ title: "Negada", description: `Ordem de compra "${rejectItem.item}" foi negada.` });
+  const handleEntregaCustoChange = (id: number, value: string) => {
+    setEntregaItens(prev => prev.map(i => i.id === id ? { ...i, custoUnitario: value } : i));
+  };
+
+  const handleSubmitEntrega = () => {
+    if (!entregaTarget) return;
+    if (!entregaDestinoId) {
+      toast({ title: "Selecione o estoque de destino", variant: "destructive" });
+      return;
     }
+
+    // Se XML fornecido, usa endpoint importar-xml (que cria NF, fornecedor e contas a pagar automaticamente)
+    if (entregaXmlFile) {
+      criarEntradaMutation.mutate({
+        _xmlFile: entregaXmlFile,
+        _unidade: parseInt(entregaDestinoId),
+        _ordemId: entregaTarget.id,
+      });
+      return;
+    }
+
+    if (entregaItens.length === 0) {
+      toast({ title: "Adicione pelo menos um item", variant: "destructive" });
+      return;
+    }
+
+    const itensCadastrados = entregaItens
+      .filter(i => i.itemId)
+      .map(i => ({ item_id: parseInt(i.itemId), quantidade: parseFloat(i.quantidade) || 1, custo_unitario: parseFloat(i.custoUnitario) || 0 }));
+
+    const itensNovos = entregaItens
+      .filter(i => !i.itemId)
+      .map(i => ({ nome_item: i.itemNome, quantidade: parseFloat(i.quantidade) || 1, custo_unitario: parseFloat(i.custoUnitario) || 0 }));
+
+    const valorTotal = entregaItens.reduce(
+      (acc, i) => acc + (parseFloat(i.quantidade) || 0) * (parseFloat(i.custoUnitario) || 0), 0
+    );
+
+    const payload: any = {
+      data: entregaData || todayStr(),
+      estoque_destino: parseInt(entregaDestinoId),
+      custo_total: valorTotal,
+      observacao: entregaObservacao || "",
+      itens: itensCadastrados,
+      itens_precadastro: itensNovos,
+      ordem_compra: entregaTarget.id,
+      _ordemId: entregaTarget.id,
+    };
+    if (entregaFornecedorId) payload.fornecedor = parseInt(entregaFornecedorId);
+    if (entregaNfNumero) {
+      payload.nota_fiscal_numero = entregaNfNumero;
+      payload.nota_fiscal_data_emissao = entregaDataEmissao || entregaData || todayStr();
+    }
+
+    criarEntradaMutation.mutate(payload);
   };
 
-  const handlePedirNovamente = (ordem: Ordem) => {
-    const novaOrdem = { ...ordem, id: Date.now(), status: "Aguardando Aprovação", data: new Date().toLocaleDateString("pt-BR"), dataCompra: "-", dataEntrega: "-" };
-    setItems(prev => [...prev, novaOrdem]);
-    toast({ title: "Novo pedido criado", description: `Nova ordem baseada em "${ordem.item}" criada para aprovação.` });
+  const entregaValorTotal = useMemo(() =>
+    entregaItens.reduce((acc, i) => acc + (parseFloat(i.quantidade) || 0) * (parseFloat(i.custoUnitario) || 0), 0),
+    [entregaItens]
+  );
+
+  const filtered = useMemo(() => allItems.filter(o => {
+    const matchSearch = o.descricao_material?.toLowerCase().includes(search.toLowerCase()) ||
+      o.setor_nome?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus && filterStatus !== "todos" ? o.status === filterStatus : true;
+    const matchFornecedor = filterFornecedor && filterFornecedor !== "todos" ? String(o.setor) === filterFornecedor : true;
+    const matchScope = scope === 'self' && currentUserId != null ? o.gestor === currentUserId : true;
+    return matchSearch && matchStatus && matchFornecedor && matchScope;
+  }), [allItems, search, filterStatus, filterFornecedor, scope, currentUserId]);
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered);
+  const total = serverTotal;
+  const totalPages = Math.max(1, Math.ceil(serverTotal / 20));
+  const hasNext = page < totalPages;
+  const hasPrev = page > 1;
+  const goToPage = (p: number) => setPage(Math.max(1, Math.min(p, totalPages)));
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
+
+  const getExportData = () => filtered.map(o => ({ Setor: o.setor_nome, Status: o.status, "Status Compra": o.status_da_compra, Descrição: o.descricao_material }));
+  const deleteItemObj = allItems.find(i => i.id === deleteId);
 
   return (
     <div className="flex flex-col h-full bg-background">
       <div className="space-y-6">
-        <div className="bg-muted/30 border border-border rounded-lg p-4">
-          <p className="text-sm text-muted-foreground">
-            Abra ordens de compra para solicitar a aquisição de itens, materiais ou equipamentos necessários para a operação. Acompanhe o status de aprovação e entrega de cada pedido.
-          </p>
-        </div>
-
         <div className="flex flex-wrap gap-3 items-center">
-          <Button className="gap-2" onClick={() => navigate("/estoque/ordem-compra/nova")}><Plus className="w-4 h-4" />Nova Ordem</Button>
-          <Button variant="outline" className="gap-2 border-border" onClick={() => navigate("/estoque/ordem-compra/relatorio")}><FileText className="w-4 h-4" />Relatório</Button>
-          <ExportButton getData={getExportData} fileName="ordem-compra" />
+          <Button onClick={() => navigate("/estoque/ordem-compra/nova")} className="gap-2"><Plus className="w-4 h-4" />Nova Ordem de Compra</Button>
+          <ExportButton getData={getExportData} fileName="ordens-compra" />
         </div>
-
+        <p className="text-sm text-muted-foreground">
+          Utilize para abrir solicitações de compra de novos itens para o estoque.
+        </p>
         <FilterSection
           fields={[
-            { type: "text", label: "Item", placeholder: "Buscar item...", value: filterItem, onChange: setFilterItem, width: "flex-1 min-w-[200px]" },
-            { type: "select", label: "Status", placeholder: "Selecione...", value: filterStatus, onChange: setFilterStatus, options: [{ value: "todos", label: "Todos" }, { value: "aguardando aprovação", label: "Aguardando Aprovação" }, { value: "aprovado", label: "Aprovado" }, { value: "negado", label: "Negado" }], width: "min-w-[180px]" },
-            { type: "date", label: "Data", value: filterData, onChange: setFilterData, width: "min-w-[160px]" }
+            { type: "text" as const, label: "Buscar", placeholder: "Buscar por setor ou material...", value: search, onChange: setSearch, width: "flex-1 min-w-[200px]" },
+            { type: "select" as const, label: "Status", placeholder: "Todos", value: filterStatus, onChange: setFilterStatus, options: [{ value: "todos", label: "Todos" }, { value: "Análise", label: "Análise" }, { value: "Aprovado", label: "Aprovado" }, { value: "Negado", label: "Negado" }, { value: "Entregue", label: "Entregue" }], width: "min-w-[160px]" },
+            { type: "select" as const, label: "Fornecedor", placeholder: "Todos", value: filterFornecedor, onChange: setFilterFornecedor, options: fornecedorFilterOptions, width: "min-w-[180px]" }
           ]}
           resultsCount={filtered.length}
         />
-
-        <div className="rounded overflow-hidden">
+        <div className="rounded border border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow><TableHead className="text-center">ID</TableHead><TableHead className="text-center">Data</TableHead><TableHead className="text-center">Data Compra</TableHead><TableHead className="text-center">Data Entrega</TableHead><TableHead className="text-center">Item</TableHead><TableHead className="text-center">Marca</TableHead><TableHead className="text-center">Qtd</TableHead><TableHead className="text-center">Requisitante</TableHead><TableHead className="text-center">Setor</TableHead><TableHead className="text-center">Status</TableHead><TableHead className="text-center">Aprovação</TableHead><TableHead className="text-center">Repetir Pedido</TableHead><TableHead className="text-center">Ações</TableHead></TableRow></TableHeader>
+            <TableHeader>
+              <TableRow className="bg-table-header">
+                <TableHead className="w-8" />
+                <SortableHead label="Setor" field="setor_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Unidade" field="unidade_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Material" field="descricao_material" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Status Compra" field="status_da_compra" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <TableHead className="text-center font-semibold">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={13} className="text-center py-8 text-muted-foreground">Nenhuma ordem encontrada.</TableCell></TableRow>) : (
-                filtered.map((ordem) => (
-                  <TableRow key={ordem.id}>
-                    <TableCell className="text-center">{ordem.id}</TableCell><TableCell className="text-center">{ordem.data}</TableCell><TableCell className="text-center">{ordem.dataCompra}</TableCell><TableCell className="text-center">{ordem.dataEntrega}</TableCell><TableCell className="text-center">{ordem.item}</TableCell><TableCell className="text-center">{ordem.marca}</TableCell><TableCell className="text-center">{ordem.quantidade}</TableCell><TableCell className="text-center">{ordem.requisitante}</TableCell><TableCell className="text-center">{ordem.setor}</TableCell>
-                    <TableCell className="text-center"><StatusBadge status={ordem.status} /></TableCell>
-                    <TableCell className="text-center">
-                      {ordem.status === "Aguardando Aprovação" ? (
-                        <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setApprovalItem(ordem)}>
-                          <ClipboardCheck className="w-3.5 h-3.5" /> Analisar
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+              {isLoading ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : sorted.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma ordem de compra encontrada.</TableCell></TableRow>
+              ) : (
+                sorted.map(o => {
+                  const isExpanded = expandedIds.has(o.id);
+                  const itens = o.itens ?? [];
+                  const canAprovar = o.status === 'Análise' && hasPermission('estoque', 'est_ordens_compra', 'approve');
+                  const canComprar = o.status === 'Aprovado' && o.status_da_compra !== 'Efetuada';
+                  const canEntregar = o.status === 'Aprovado' && !o.data_de_entrega && hasPermission('estoque', 'est_ordens_compra', 'deliver');
+                  const hasStatusActions = canAprovar || canComprar || canEntregar;
+
+                  return (
+                    <>
+                      <TableRow key={o.id}>
+                        <TableCell className="px-2">
+                          {itens.length > 0 && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleExpand(o.id)}>
+                              {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </Button>
+                          )}
+                        </TableCell>
+                        <TableCell >{o.setor_nome}</TableCell>
+                        <TableCell >{o.unidade_nome}</TableCell>
+                        <TableCell className="font-medium">{o.descricao_material}</TableCell>
+                        <TableCell className="text-center"><StatusBadge status={o.status || ''} /></TableCell>
+                        <TableCell className="text-center"><StatusBadge status={o.status_da_compra || 'Não efetuada'} /></TableCell>
+                        <TableCell >
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm" className="gap-1 border-border">
+                                Ações <ChevronDown className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="bg-popover border border-border z-50">
+                              <DropdownMenuItem onClick={() => setViewItem(o)} className="gap-2 cursor-pointer">
+                                <Eye className="h-4 w-4" /> Visualizar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => navigate(`/estoque/ordem-compra/${o.id}`)} className="gap-2 cursor-pointer">
+                                <Edit className="h-4 w-4" /> Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setDeleteId(o.id)} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+                                <Trash2 className="h-4 w-4" /> Excluir
+                              </DropdownMenuItem>
+
+                              {hasStatusActions && <DropdownMenuSeparator />}
+
+                              {canAprovar && (
+                                <DropdownMenuItem onClick={() => aprovarMutation.mutate(o.id)} className="gap-2 cursor-pointer text-green-600 focus:text-green-600">
+                                  <CheckCircle className="h-4 w-4" /> Aprovar
+                                </DropdownMenuItem>
+                              )}
+                              {canAprovar && (
+                                <DropdownMenuItem onClick={() => { setNegarTarget(o); setFeedbackText(""); }} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+                                  <XCircle className="h-4 w-4" /> Negar
+                                </DropdownMenuItem>
+                              )}
+                              {canComprar && (
+                                <DropdownMenuItem onClick={() => comprarMutation.mutate(o.id)} className="gap-2 cursor-pointer">
+                                  <ShoppingCart className="h-4 w-4" /> Registrar Compra
+                                </DropdownMenuItem>
+                              )}
+                              {canEntregar && (
+                                <DropdownMenuItem onClick={() => openEntregaDialog(o)} className="gap-2 cursor-pointer">
+                                  <PackageCheck className="h-4 w-4" /> Registrar Entrega
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+
+                      {isExpanded && (
+                        <TableRow key={`${o.id}-itens`} className="bg-muted/30">
+                          <TableCell colSpan={7} className="py-0 px-8">
+                            <div className="py-3">
+                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                                Itens da Ordem #{o.id}
+                              </p>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-muted/50">
+                                    <TableHead className="text-xs h-8">Item</TableHead>
+                                    <TableHead className="text-xs h-8">Marca</TableHead>
+                                    <TableHead className="text-right text-xs h-8">Quantidade</TableHead>
+                                    <TableHead className="text-xs h-8">Especificações</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {itens.map((item, idx) => (
+                                    <TableRow key={idx} className="border-0">
+                                      <TableCell className="text-sm py-1">{item.item}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.marca || "—"}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.quantidade}</TableCell>
+                                      <TableCell className="text-sm py-1">{item.especificacoes || "—"}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => handlePedirNovamente(ordem)}>
-                        <RefreshCw className="w-3.5 h-3.5" /> Repetir
-                      </Button>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <TableActions onView={() => setViewItem(ordem)} onEdit={() => openEdit(ordem)} onDelete={() => setDeleteId(ordem.id)} />
-                    </TableCell>
-                  </TableRow>
-                ))
+                    </>
+                  );
+                })
               )}
             </TableBody>
           </Table>
-        </div>
-      </div>
-
-      {/* Analysis / Approval Dialog */}
-      <Dialog open={!!approvalItem} onOpenChange={() => setApprovalItem(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Análise — Ordem de Compra</DialogTitle></DialogHeader>
-          {approvalItem && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Item:</span><p className="font-medium">{approvalItem.item}</p></div>
-                <div><span className="text-muted-foreground">Marca:</span><p className="font-medium">{approvalItem.marca}</p></div>
-                <div><span className="text-muted-foreground">Quantidade:</span><p className="font-medium">{approvalItem.quantidade}</p></div>
-                <div><span className="text-muted-foreground">Requisitante:</span><p className="font-medium">{approvalItem.requisitante}</p></div>
-                <div><span className="text-muted-foreground">Setor:</span><p className="font-medium">{approvalItem.setor}</p></div>
-                <div><span className="text-muted-foreground">Data:</span><p className="font-medium">{approvalItem.data}</p></div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page - 1) * 20 + 1}–{Math.min(page * 20, total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page - 1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page + 1)} disabled={!hasNext}>Próxima</Button>
               </div>
             </div>
           )}
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setApprovalItem(null)}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => { setRejectItem(approvalItem); setApprovalItem(null); }}>Negar</Button>
-            <Button onClick={() => approvalItem && handleApprove(approvalItem)}>Aprovar</Button>
-          </DialogFooter>
+        </div>
+      </div>
+
+      {/* Dialog: Visualizar */}
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Ordem de Compra #{viewItem?.id}</DialogTitle></DialogHeader>
+          {viewItem && (
+            <div className="space-y-2 py-2">
+              <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Setor</span><span className="text-sm font-medium">{viewItem.setor_nome}</span></div>
+              <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Unidade</span><span className="text-sm font-medium">{viewItem.unidade_nome}</span></div>
+              <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Status</span><StatusBadge status={viewItem.status || ''} /></div>
+              <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Status Compra</span><StatusBadge status={viewItem.status_da_compra || 'Não efetuada'} /></div>
+              <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Material</span><span className="text-sm font-medium">{viewItem.descricao_material}</span></div>
+              <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Justificativa</span><span className="text-sm font-medium">{viewItem.justificativa}</span></div>
+              {viewItem.feedback && (
+                <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Feedback</span><span className="text-sm font-medium">{viewItem.feedback}</span></div>
+              )}
+              {viewItem.data_de_compra && (
+                <div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Data Compra</span><span className="text-sm font-medium">{viewItem.data_de_compra}</span></div>
+              )}
+              {viewItem.data_de_entrega && (
+                <div className="flex justify-between py-1"><span className="text-sm text-muted-foreground">Data Entrega</span><span className="text-sm font-medium">{viewItem.data_de_entrega}</span></div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Reject Dialog */}
-      <Dialog open={!!rejectItem} onOpenChange={() => { setRejectItem(null); setRejectJustificativa(""); }}>
+      {/* Dialog: Negar com feedback */}
+      <Dialog open={!!negarTarget} onOpenChange={() => setNegarTarget(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Negar Ordem de Compra</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Informe a justificativa para negar a ordem de <strong>{rejectItem?.item}</strong>.</p>
+          <DialogHeader><DialogTitle>Negar Ordem de Compra #{negarTarget?.id}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-muted-foreground">Informe a justificativa para negar a ordem de <strong>{negarTarget?.setor_nome}</strong>.</p>
             <div className="space-y-2">
               <Label>Justificativa <span className="text-destructive">*</span></Label>
-              <Textarea value={rejectJustificativa} onChange={e => setRejectJustificativa(e.target.value)} placeholder="Motivo da negação..." className="min-h-[100px]" />
+              <Textarea value={feedbackText} onChange={(e) => setFeedbackText(e.target.value)} placeholder="Motivo da negação..." className="min-h-[100px]" />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setRejectItem(null); setRejectJustificativa(""); }}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleReject} disabled={!rejectJustificativa.trim()}>Negar</Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setNegarTarget(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!feedbackText.trim() || negarMutation.isPending}
+              onClick={() => negarTarget && negarMutation.mutate({ id: negarTarget.id, feedback: feedbackText })}
+            >
+              Negar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Detalhes da Ordem de Compra</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ ID: viewItem.id, Data: viewItem.data, "Data Compra": viewItem.dataCompra, "Data Entrega": viewItem.dataEntrega, Item: viewItem.item, Marca: viewItem.marca, Quantidade: viewItem.quantidade, Requisitante: viewItem.requisitante, Setor: viewItem.setor, Status: viewItem.status }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
-        </DialogContent>
-      </Dialog>
+      {/* Dialog: Registrar Entrega */}
+      <Dialog open={!!entregaTarget} onOpenChange={() => setEntregaTarget(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackageCheck className="h-5 w-5" /> Registrar Entrega — Ordem #{entregaTarget?.id}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <p className="text-sm text-muted-foreground">
+              Preencha os dados da entrada de estoque gerada por esta entrega. Os itens foram pré-carregados a partir da ordem de compra.
+            </p>
 
-      <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Ordem de Compra</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div><Label>Item</Label><Input value={editData.item} onChange={e => setEditData({ ...editData, item: e.target.value })} /></div>
-            <div><Label>Marca</Label><Input value={editData.marca} onChange={e => setEditData({ ...editData, marca: e.target.value })} /></div>
-            <div><Label>Quantidade</Label><Input type="number" value={editData.quantidade} onChange={e => setEditData({ ...editData, quantidade: e.target.value })} /></div>
-            <div><Label>Requisitante</Label><Input value={editData.requisitante} onChange={e => setEditData({ ...editData, requisitante: e.target.value })} /></div>
-            <div><Label>Setor</Label><Input value={editData.setor} onChange={e => setEditData({ ...editData, setor: e.target.value })} /></div>
+            {/* Fornecedor + Destino */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Fornecedor</Label>
+                <SearchableSelect
+                  options={fornecedorSelectOptions}
+                  value={entregaFornecedorId}
+                  onValueChange={setEntregaFornecedorId}
+                  placeholder="Selecione o fornecedor"
+                  searchPlaceholder="Pesquisar fornecedor..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Estoque de Destino <span className="text-destructive">*</span></Label>
+                <Select value={entregaDestinoId} onValueChange={setEntregaDestinoId}>
+                  <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {unidades.map((u: any) => <SelectItem key={u.id} value={String(u.id)}>{u.unidade}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Data + NF */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Data de Entrada</Label>
+                <Input type="date" value={entregaData} onChange={(e) => setEntregaData(e.target.value)} className="form-input" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Número da NF</Label>
+                <Input type="text" value={entregaNfNumero} onChange={(e) => setEntregaNfNumero(e.target.value)} placeholder="Ex: 001234" className="form-input" />
+              </div>
+            </div>
+
+            {/* Data emissão + Observação */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Data de Emissão da NF</Label>
+                <Input type="date" value={entregaDataEmissao} onChange={(e) => setEntregaDataEmissao(e.target.value)} className="form-input" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Observação</Label>
+                <Input type="text" value={entregaObservacao} onChange={(e) => setEntregaObservacao(e.target.value)} placeholder="Observações..." className="form-input" />
+              </div>
+            </div>
+
+            {/* XML da NF-e */}
+            <div className="space-y-2 border rounded-md p-3 bg-muted/30">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <FileUp className="h-4 w-4" /> XML da NF-e (opcional)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Se informado, o XML será processado automaticamente — fornecedor, itens e contas a pagar serão criados a partir dele. Os campos manuais abaixo serão ignorados.
+              </p>
+              <div className="flex items-center gap-3">
+                <Input
+                  type="file"
+                  accept=".xml"
+                  className="form-input"
+                  onChange={(e) => setEntregaXmlFile(e.target.files?.[0] ?? null)}
+                />
+                {entregaXmlFile && (
+                  <Button variant="ghost" size="sm" onClick={() => setEntregaXmlFile(null)} className="shrink-0 text-destructive">
+                    Remover
+                  </Button>
+                )}
+              </div>
+              {entregaXmlFile && (
+                <p className="text-xs text-green-600 font-medium">Arquivo selecionado: {entregaXmlFile.name}</p>
+              )}
+            </div>
+
+            {/* Items */}
+            <div className={`border-t pt-4 space-y-3 ${entregaXmlFile ? "opacity-40 pointer-events-none" : ""}`}>
+              <h3 className="text-sm font-semibold">Itens da Entrada</h3>
+              <p className="text-xs text-muted-foreground">
+                {entregaXmlFile
+                  ? "Os itens serão extraídos automaticamente do XML."
+                  : "Os itens são os da ordem de compra. Informe o custo unitário de cada um."}
+              </p>
+
+              <div className="rounded border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-table-header">
+                      <TableHead>Item</TableHead>
+                      <TableHead className="text-right">Quantidade</TableHead>
+                      <TableHead className="text-right w-40">Custo Unit. (R$)</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {entregaItens.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-4 text-muted-foreground text-sm">Nenhum item na ordem</TableCell></TableRow>
+                    ) : (
+                      entregaItens.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>
+                            <div className="text-sm">{item.itemNome}</div>
+                            {!item.itemId && <span className="text-xs text-amber-600">Pré-cadastro (item novo)</span>}
+                          </TableCell>
+                          <TableCell className="text-sm">{item.quantidade}</TableCell>
+                          <TableCell >
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={item.custoUnitario}
+                              onChange={(e) => handleEntregaCustoChange(item.id, e.target.value)}
+                              className="form-input text-center w-32 mx-auto"
+                              placeholder="0,00"
+                            />
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            R$ {((parseFloat(item.quantidade) || 0) * (parseFloat(item.custoUnitario) || 0)).toFixed(2).replace(".", ",")}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {entregaValorTotal > 0 && (
+                <div className="flex justify-end">
+                  <span className="text-sm font-semibold">Valor Total: R$ {entregaValorTotal.toFixed(2).replace(".", ",")}</span>
+                </div>
+              )}
+            </div>
           </div>
-          <DialogFooter><Button onClick={handleSaveEdit}>Salvar</Button></DialogFooter>
+          <DialogFooter className="gap-2 pt-2 border-t">
+            <Button variant="outline" onClick={() => setEntregaTarget(null)} disabled={criarEntradaMutation.isPending}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmitEntrega}
+              disabled={criarEntradaMutation.isPending || entregarMutation.isPending}
+              className="gap-2"
+            >
+              <PackageCheck className="h-4 w-4" />
+              {criarEntradaMutation.isPending || entregarMutation.isPending ? "Registrando..." : "Confirmar Entrega"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Dialog: Excluir */}
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir ordem?</AlertDialogTitle><AlertDialogDescription>Deseja excluir a ordem "{deleteItemData?.item}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir ordem de compra?</AlertDialogTitle>
+            <AlertDialogDescription>Deseja excluir a ordem de compra <strong>#{deleteItemObj?.id}</strong>? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteId && deleteMutation.mutate(deleteId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>
   );
-}
+};
+export default OrdemCompraPage;

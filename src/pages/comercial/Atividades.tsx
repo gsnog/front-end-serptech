@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { fmtDate, todayStr } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,55 +10,79 @@ import { ExportButton } from "@/components/ExportButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Calendar, Phone, Mail, FileText, CheckCircle, Clock, AlertTriangle, Eye, Edit, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { atividadesMock as initialAtividades, oportunidadesMock, leadsMock } from "@/data/comercial-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
+import { fetchAtividades, fetchOportunidades, fetchLeads, atividadesQueryKey } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
+import { usePagination } from "@/hooks/usePagination";
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import { toast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// --- Mocks removidos ---
+
+
+
 export default function Atividades() {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [tipoFilter, setTipoFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [filterResponsavel, setFilterResponsavel] = useState("");
+  const [filterDataInicio, setFilterDataInicio] = useState("");
+  const [filterDataFim, setFilterDataFim] = useState("");
   const [view, setView] = useState<"meu-dia" | "pendencias" | "todas">("meu-dia");
-  const [atividades, setAtividades] = useState(initialAtividades);
-  const [viewItem, setViewItem] = useState<typeof initialAtividades[0] | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [editItem, setEditItem] = useState<typeof initialAtividades[0] | null>(null);
+
+  useRealtimeUpdates([[...atividadesQueryKey]]);
+
+  const { data: atividadesResponse, isLoading } = useQuery({
+    queryKey: atividadesQueryKey,
+    queryFn: () => fetchAtividades(),
+  });
+  const atividades = Array.isArray(atividadesResponse) ? atividadesResponse : (atividadesResponse?.results ?? []);
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
+  const { data: leads = [] } = useQuery({ queryKey: ['crm_leads'], queryFn: fetchLeads });
+
+  const [viewItem, setViewItem] = useState<any | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [editItem, setEditItem] = useState<any | null>(null);
   const [editData, setEditData] = useState({ titulo: "", tipo: "", data: "", hora: "" });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayStr();
 
-  const handleStatusChange = (id: string, newStatus: string) => {
-    setAtividades(prev => prev.map(a => a.id === id ? { ...a, status: newStatus as any } : a));
-    const statusLabels: Record<string, string> = { pendente: "Pendente", concluida: "Concluída", cancelada: "Cancelada" };
-    toast({ title: "Status atualizado", description: `Atividade marcada como ${statusLabels[newStatus]}` });
+  const handleStatusChange = (id: number, newStatus: string) => {
+    toast({ title: "Informaçao", description: "Alteração de status via API ainda não implementada." });
   };
 
-  const handleCheckboxToggle = (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'concluida' ? 'pendente' : 'concluida';
-    handleStatusChange(id, newStatus);
+  const handleCheckboxToggle = (id: number, currentStatus: string) => {
+    handleStatusChange(id, currentStatus === 'concluida' ? 'pendente' : 'concluida');
   };
 
-  const filteredAtividades = atividades.filter(atividade => {
+  const responsaveisUnicos = Array.from(new Set(atividades.map((a: any) => String(a.responsavel)).filter(Boolean)));
+  const responsavelOptions = [
+    { value: "todos", label: "Todos" },
+    ...responsaveisUnicos.map(r => ({ value: r, label: r }))
+  ];
+
+  const filteredAtividades = useMemo(() => atividades.filter(atividade => {
     const matchSearch = !searchTerm || atividade.titulo.toLowerCase().includes(searchTerm.toLowerCase());
     const matchTipo = !tipoFilter || atividade.tipo === tipoFilter;
     const matchStatus = !statusFilter || atividade.status === statusFilter;
+    const matchResponsavel = !filterResponsavel || filterResponsavel === "todos" || String(atividade.responsavel) === filterResponsavel;
+    const matchDataInicio = filterDataInicio ? atividade.data >= filterDataInicio : true;
+    const matchDataFim = filterDataFim ? atividade.data <= filterDataFim : true;
     let matchView = true;
-    if (view === "meu-dia") matchView = atividade.data === today || atividade.data === '2026-02-04';
+    if (view === "meu-dia") matchView = atividade.data === today;
     else if (view === "pendencias") matchView = atividade.status === 'pendente';
-    return matchSearch && matchTipo && matchStatus && matchView;
-  });
+    return matchSearch && matchTipo && matchStatus && matchResponsavel && matchDataInicio && matchDataFim && matchView;
+  }), [atividades, searchTerm, tipoFilter, statusFilter, filterResponsavel, filterDataInicio, filterDataFim, view, today]);
 
-  const getOwnerName = (ownerId: string) => pessoasMock.find(p => p.id === ownerId)?.nome.split(' ')[0] || 'N/A';
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(filteredAtividades);
 
-  const getRelacionadoLabel = (tipo?: string, id?: string) => {
-    if (!tipo || !id) return null;
-    if (tipo === 'oportunidade') return oportunidadesMock.find(o => o.id === id)?.titulo;
-    if (tipo === 'lead') return leadsMock.find(l => l.id === id)?.nome;
+  const getRelacionadoLabel = (atividade: any) => {
+    if (atividade.oportunidade) return oportunidades.find(o => o.id === atividade.oportunidade)?.titulo;
+    if (atividade.lead) return leads.find(l => l.id === atividade.lead)?.nome;
     return null;
   };
 
@@ -82,20 +107,20 @@ export default function Atividades() {
   };
 
   const getStatusIcon = (status: string, data: string) => {
-    const isOverdue = status === 'pendente' && new Date(data) < new Date();
+    const isOverdue = status === 'pendente' && data < todayStr();
     if (status === 'concluida') return <CheckCircle className="h-4 w-4 text-success" />;
     if (isOverdue) return <AlertTriangle className="h-4 w-4 text-destructive" />;
     return <Clock className="h-4 w-4 text-warning" />;
   };
 
-  const atividadesVencidas = atividades.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
-  const atividadesHoje = atividades.filter(a => a.data === today || a.data === '2026-02-04').length;
+  const atividadesVencidas = atividades.filter(a => a.status === 'pendente' && a.data < todayStr()).length;
+  const atividadesHoje = atividades.filter(a => a.data === today).length;
 
-  const getExportData = () => filteredAtividades.map(a => ({ Título: a.titulo, Tipo: a.tipo, Status: a.status, Data: a.data, Hora: a.hora || '-', Responsável: getOwnerName(a.responsavelId), Relacionado: getRelacionadoLabel(a.relacionadoTipo, a.relacionadoId) || '-' }));
+  const getExportData = () => filteredAtividades.map(a => ({ Título: a.titulo, Tipo: a.tipo, Status: a.status, Data: a.data, Hora: a.hora || '-', Responsável: a.responsavel }));
 
-  const openEdit = (a: typeof initialAtividades[0]) => { setEditItem(a); setEditData({ titulo: a.titulo, tipo: a.tipo, data: a.data, hora: a.hora || "" }); };
-  const handleSaveEdit = () => { if (editItem) { setAtividades(prev => prev.map(i => i.id === editItem.id ? { ...i, titulo: editData.titulo, tipo: editData.tipo as any, data: editData.data, hora: editData.hora } : i)); setEditItem(null); toast({ title: "Salvo", description: "Atividade atualizada." }); } };
-  const handleDelete = () => { if (deleteId) { setAtividades(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Atividade excluída." }); } };
+  const openEdit = (a: any) => { setEditItem(a); setEditData({ titulo: a.titulo, tipo: a.tipo, data: a.data, hora: a.hora || "" }); };
+  const handleSaveEdit = () => { toast({ title: "Informação", description: "Edição via API ainda não implementada." }); setEditItem(null); };
+  const handleDelete = () => { toast({ title: "Informação", description: "Exclusão via API ainda não implementada." }); setDeleteId(null); };
   const deleteItemData = atividades.find(i => i.id === deleteId);
 
   return (
@@ -148,21 +173,28 @@ export default function Atividades() {
       <FilterSection
         fields={[
           { type: "text", label: "Buscar", placeholder: "Buscar atividades...", value: searchTerm, onChange: setSearchTerm, width: "flex-1 min-w-[200px]" },
-          { type: "select", label: "Tipo", placeholder: "Todos", value: tipoFilter, onChange: setTipoFilter, options: [
-            { value: "reuniao", label: "Reunião" }, { value: "ligacao", label: "Ligação" },
-            { value: "email", label: "Email" }, { value: "tarefa", label: "Tarefa" }, { value: "follow-up", label: "Follow-up" }
-          ], width: "min-w-[140px]" },
-          { type: "select", label: "Status", placeholder: "Todos", value: statusFilter, onChange: setStatusFilter, options: [
-            { value: "pendente", label: "Pendente" }, { value: "concluida", label: "Concluída" }, { value: "cancelada", label: "Cancelada" }
-          ], width: "min-w-[140px]" }
+          {
+            type: "select", label: "Tipo", placeholder: "Todos", value: tipoFilter, onChange: setTipoFilter, options: [
+              { value: "reuniao", label: "Reunião" }, { value: "ligacao", label: "Ligação" },
+              { value: "email", label: "Email" }, { value: "tarefa", label: "Tarefa" }, { value: "follow-up", label: "Follow-up" }
+            ], width: "min-w-[140px]"
+          },
+          {
+            type: "select", label: "Status", placeholder: "Todos", value: statusFilter, onChange: setStatusFilter, options: [
+              { value: "pendente", label: "Pendente" }, { value: "concluida", label: "Concluída" }, { value: "cancelada", label: "Cancelada" }
+            ], width: "min-w-[140px]"
+          },
+          { type: "select", label: "Responsável", placeholder: "Todos", value: filterResponsavel, onChange: setFilterResponsavel, options: responsavelOptions, width: "min-w-[160px]" },
+          { type: "date", label: "Data de", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[155px]" },
+          { type: "date", label: "Data até", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[155px]" }
         ]}
         resultsCount={filteredAtividades.length}
       />
 
       <div className="space-y-3">
-        {filteredAtividades.map((atividade) => {
+        {paginatedItems.map((atividade) => {
           const isOverdue = atividade.status === 'pendente' && new Date(atividade.data) < new Date();
-          const relacionado = getRelacionadoLabel(atividade.relacionadoTipo, atividade.relacionadoId);
+          const relacionado = getRelacionadoLabel(atividade);
           return (
             <Card key={atividade.id} className={`border rounded p-4 hover:shadow-md transition-shadow ${isOverdue ? 'border-destructive/50' : 'border-border'}`}>
               <div className="flex items-start gap-4">
@@ -185,12 +217,12 @@ export default function Atividades() {
                     <div className="flex items-center gap-2">
                       {getStatusIcon(atividade.status, atividade.data)}
                       <Badge variant="outline" className={isOverdue ? 'border-destructive text-destructive' : ''}>
-                        {atividade.data} {atividade.hora && `às ${atividade.hora}`}
+                        {fmtDate(atividade.data)} {atividade.hora && `às ${atividade.hora}`}
                       </Badge>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                    <span>Responsável: {getOwnerName(atividade.responsavelId)}</span>
+                    <span>Responsável: {atividade.responsavel}</span>
                     <Badge variant="secondary" className="capitalize">{atividade.tipo}</Badge>
                     <Select value={atividade.status} onValueChange={(v) => handleStatusChange(atividade.id, v)}>
                       <SelectTrigger className="h-7 w-[130px] text-xs">
@@ -215,9 +247,19 @@ export default function Atividades() {
         })}
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+          <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+            <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+          </div>
+        </div>
+      )}
+
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes da Atividade</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Título: viewItem.titulo, Tipo: viewItem.tipo, Status: viewItem.status, Data: viewItem.data, Hora: viewItem.hora || '-', Responsável: getOwnerName(viewItem.responsavelId), Relacionado: getRelacionadoLabel(viewItem.relacionadoTipo, viewItem.relacionadoId) || '-' }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium capitalize">{v}</span></div>))}</div>}
+          {viewItem && <div className="space-y-2">{Object.entries({ Título: viewItem.titulo, Tipo: viewItem.tipo, Status: viewItem.status, Data: viewItem.data, Hora: viewItem.hora || '-', Responsável: viewItem.responsavel, Relacionado: getRelacionadoLabel(viewItem) || '-' }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium capitalize">{v as string}</span></div>))}</div>}
         </DialogContent>
       </Dialog>
 

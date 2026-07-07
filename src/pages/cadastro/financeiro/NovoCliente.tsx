@@ -1,59 +1,68 @@
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Users, Loader2 } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { useFormValidation } from "@/hooks/useFormValidation";
-import { ValidatedInput } from "@/components/ui/validated-input";
-import { ValidatedTextarea } from "@/components/ui/validated-textarea";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { createCliente, clientesQueryKey } from "@/services/financeiro";
 import { useCnpjLookup, formatCnpj } from "@/hooks/useCnpjLookup";
-
-const validationFields = [
-  { name: "cnpj", label: "CNPJ", required: true },
-  { name: "cpf", label: "CPF", required: false },
-  { name: "nome", label: "Nome", required: true, minLength: 2, maxLength: 100 },
-  { name: "razaoSocial", label: "Razão Social", required: false },
-  { name: "endereco", label: "Endereço", required: true, minLength: 5 },
-  { 
-    name: "email", 
-    label: "Email", 
-    required: true, 
-    pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    patternMessage: "Email inválido"
-  },
-  { name: "telefone", label: "Telefone", required: true },
-];
 
 const NovoCliente = () => {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
+  const queryClient = useQueryClient();
 
-  const {
-    formData,
-    setFieldValue,
-    setFieldTouched,
-    validateAll,
-    getFieldError,
-    touched,
-  } = useFormValidation(
-    { cnpj: "", cpf: "", nome: "", razaoSocial: "", endereco: "", email: "", telefone: "" },
-    validationFields
-  );
+  const [tipo, setTipo] = useState<"convenio" | "procedencia" | "">("");
+  const [nome, setNome] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [email, setEmail] = useState("");
+  const [telefone, setTelefone] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: createCliente,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: clientesQueryKey });
+      toast({ title: "Cliente salvo!", description: "O registro foi salvo com sucesso." });
+      navigate("/cadastro/financeiro/clientes");
+    },
+    onError: (error: any) => {
+      const data = error?.response?.data;
+      if (data) {
+        const msgs = Object.entries(data)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`)
+          .join(" | ");
+        toast({ title: "Erro ao salvar", description: msgs, variant: "destructive" });
+      } else {
+        toast({ title: "Erro ao salvar cliente.", variant: "destructive" });
+      }
+    },
+  });
+
+  const setFieldValue = (field: string, value: string) => {
+    if (field === "nome") setNome(value);
+    else if (field === "endereco") setEndereco(value);
+    else if (field === "email") setEmail(value);
+    else if (field === "telefone") setTelefone(value);
+  };
 
   const { consultarCnpj, isSearching } = useCnpjLookup(setFieldValue);
 
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      await handleSave("/cadastro/financeiro/clientes", "Cliente salvo com sucesso!");
-    }
-  };
+  const handleSalvar = () => {
+    if (!tipo) { toast({ title: "Selecione o tipo.", variant: "destructive" }); return; }
+    if (!nome.trim()) { toast({ title: "Informe o nome.", variant: "destructive" }); return; }
+    if (!cnpj.trim()) { toast({ title: "Informe o CNPJ.", variant: "destructive" }); return; }
+    if (!endereco.trim()) { toast({ title: "Informe o endereço.", variant: "destructive" }); return; }
+    if (!email.trim()) { toast({ title: "Informe o e-mail.", variant: "destructive" }); return; }
+    if (!telefone.trim()) { toast({ title: "Informe o telefone.", variant: "destructive" }); return; }
 
-  const handleCancelar = () => {
-    navigate("/cadastro/financeiro/clientes");
+    mutation.mutate({ tipo, nome, cnpj, endereco, email, telefone });
   };
 
   return (
@@ -73,19 +82,43 @@ const NovoCliente = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
+                <Label className="text-sm font-medium">Tipo <span className="text-destructive">*</span></Label>
+                <Select value={tipo} onValueChange={(v) => setTipo(v as "convenio" | "procedencia")}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar tipo" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    <SelectItem value="convenio">Convênio</SelectItem>
+                    <SelectItem value="procedencia">Procedência</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Nome <span className="text-destructive">*</span></Label>
+                <Input
+                  placeholder="Nome do cliente"
+                  className="form-input"
+                  value={nome}
+                  onChange={(e) => setNome(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
                 <Label className="text-sm font-medium">CNPJ <span className="text-destructive">*</span></Label>
                 <div className="flex gap-3 items-center">
                   <Input
                     placeholder="00.000.000/0000-00"
                     className="form-input"
-                    value={formData.cnpj}
-                    onChange={(e) => setFieldValue("cnpj", formatCnpj(e.target.value))}
-                    onBlur={() => setFieldTouched("cnpj")}
+                    value={cnpj}
+                    onChange={(e) => setCnpj(formatCnpj(e.target.value))}
                     maxLength={18}
                   />
                   <Button
                     className="btn-action px-6"
-                    onClick={() => consultarCnpj(formData.cnpj)}
+                    onClick={() => consultarCnpj(cnpj)}
                     disabled={isSearching}
                     type="button"
                   >
@@ -94,76 +127,45 @@ const NovoCliente = () => {
                 </div>
               </div>
 
-              <ValidatedInput
-                label="CPF"
-                value={formData.cpf}
-                onChange={(e) => setFieldValue("cpf", e.target.value)}
-                onBlur={() => setFieldTouched("cpf")}
-                error={getFieldError("cpf")}
-                touched={touched.cpf}
-              />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">E-mail <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="email@exemplo.com"
+                  className="form-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ValidatedInput
-                label="Nome"
-                required
-                value={formData.nome}
-                onChange={(e) => setFieldValue("nome", e.target.value)}
-                onBlur={() => setFieldTouched("nome")}
-                error={getFieldError("nome")}
-                touched={touched.nome}
-              />
-
-              <ValidatedInput
-                label="Razão Social"
-                value={formData.razaoSocial}
-                onChange={(e) => setFieldValue("razaoSocial", e.target.value)}
-                onBlur={() => setFieldTouched("razaoSocial")}
-                error={getFieldError("razaoSocial")}
-                touched={touched.razaoSocial}
-              />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Telefone <span className="text-destructive">*</span></Label>
+                <Input
+                  placeholder="(99) 9999-9999"
+                  className="form-input"
+                  value={telefone}
+                  onChange={(e) => setTelefone(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-              <ValidatedTextarea
-                label="Endereço"
-                required
-                value={formData.endereco}
-                onChange={(e) => setFieldValue("endereco", e.target.value)}
-                onBlur={() => setFieldTouched("endereco")}
-                error={getFieldError("endereco")}
-                touched={touched.endereco}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ValidatedInput
-                label="Email"
-                type="email"
-                required
-                value={formData.email}
-                onChange={(e) => setFieldValue("email", e.target.value)}
-                onBlur={() => setFieldTouched("email")}
-                error={getFieldError("email")}
-                touched={touched.email}
-              />
-
-              <ValidatedInput
-                label="Telefone"
-                required
-                value={formData.telefone}
-                onChange={(e) => setFieldValue("telefone", e.target.value)}
-                onBlur={() => setFieldTouched("telefone")}
-                error={getFieldError("telefone")}
-                touched={touched.telefone}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Endereço <span className="text-destructive">*</span></Label>
+              <Textarea
+                placeholder="Endereço completo"
+                className="form-input"
+                value={endereco}
+                onChange={(e) => setEndereco(e.target.value)}
+                rows={3}
               />
             </div>
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/financeiro/clientes")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

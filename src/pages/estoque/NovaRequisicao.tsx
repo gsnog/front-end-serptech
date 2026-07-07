@@ -1,145 +1,203 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
-import { DropdownWithAdd } from "@/components/DropdownWithAdd";
-import { ClipboardList, Trash2, ExternalLink } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { useFormValidation } from "@/hooks/useFormValidation";
-import { ValidatedTextarea } from "@/components/ui/validated-textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ClipboardList, Trash2 } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { ValidatedSelect } from "@/components/ui/validated-select";
 import { toast } from "@/hooks/use-toast";
+import api from "@/lib/api";
 
-interface ItemRequisicao {
-  id: number;
-  item: string;
-  marca: string;
+interface ItemRow {
+  _key: number;
+  itemId: string;
+  itemNome: string;
   quantidade: string;
-  especificacoes: string;
 }
 
-const validationFields = [
-  { name: "setor", label: "Setor", required: true },
-  { name: "projeto", label: "Projeto", required: false },
-  { name: "observacoes", label: "Observações", required: false },
-];
-
-const itensCadastradosBase = [
-  { value: "parafuso-m8", label: "Parafuso M8" },
-  { value: "parafuso-m10", label: "Parafuso M10" },
-  { value: "cabo-hdmi", label: "Cabo HDMI" },
-  { value: "oleo-lubrificante", label: "Óleo Lubrificante" },
-  { value: "papel-a4", label: "Papel A4" },
-  { value: "toner-hp", label: "Toner HP" },
-];
-
-function loadItensCadastrados() {
-  const novos = JSON.parse(sessionStorage.getItem("novos_itens_cadastrados") || "[]");
-  const extras = novos.map((n: any) => ({ value: n.value, label: n.label }));
-  const allValues = new Set(itensCadastradosBase.map(i => i.value));
-  const merged = [...itensCadastradosBase];
-  for (const e of extras) {
-    if (!allValues.has(e.value)) {
-      merged.push(e);
-      allValues.add(e.value);
-    }
-  }
-  return merged;
+interface MyFuncionario {
+  id: number;
+  nome: string;
+  setor_ids: number[];
+  unidade_id: number | null;
+  role: string;
 }
 
 export default function NovaRequisicao() {
   const navigate = useNavigate();
-  const { handleSave, isSaving } = useSaveWithDelay();
-  const [itens, setItens] = useState<ItemRequisicao[]>([]);
-  const [itensCadastrados, setItensCadastrados] = useState(loadItensCadastrados);
-  const [itemForm, setItemForm] = useState({ itemCadastrado: "", marca: "", quantidade: "", especificacoes: "" });
-  const [showNoItemDialog, setShowNoItemDialog] = useState(false);
 
-  const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
-    { setor: "", projeto: "", observacoes: "" },
-    validationFields
-  );
+  const [form, setForm] = useState({
+    requisitante: "",   // funcionario ID as string
+    setor: "",
+    unidade: "",
+    observacao: "",
+  });
+  const setField = (key: keyof typeof form, value: string) =>
+    setForm((p) => ({ ...p, [key]: value }));
 
-  const [setorOptions, setSetorOptions] = useState([
-    { value: "setor1", label: "Setor 1" }, { value: "setor2", label: "Setor 2" }
-  ]);
-  const [projetoOptions, setProjetoOptions] = useState([
-    { value: "projeto1", label: "Projeto 1" }, { value: "projeto2", label: "Projeto 2" }
-  ]);
+  const [itens, setItens] = useState<ItemRow[]>([]);
+  const [itemForm, setItemForm] = useState({ itemId: "", itemNome: "", quantidade: "" });
 
-  const handleAddItem = () => {
-    const itemName = itensCadastrados.find(i => i.value === itemForm.itemCadastrado)?.label || "";
+  // ── Funcionário logado ──────────────────────────────────────────────────────
+  const { data: myFuncionario } = useQuery<MyFuncionario>({
+    queryKey: ["funcionario_me"],
+    queryFn: () => api.get("/api/funcionarios/me/").then((r) => r.data),
+    onSuccess: (data) => {
+      setForm((p) => ({ ...p, requisitante: String(data.id) }));
+    },
+  } as any);
 
-    if (!itemName || !itemForm.quantidade) {
-      toast({ title: "Campos obrigatórios", description: "Selecione um item e informe a quantidade.", variant: "destructive" });
-      return;
-    }
-    setItens([...itens, { id: Date.now(), item: itemName, marca: itemForm.marca, quantidade: itemForm.quantidade, especificacoes: itemForm.especificacoes }]);
-    setItemForm({ itemCadastrado: "", marca: "", quantidade: "", especificacoes: "" });
-  };
-
-  const handleRemoveItem = (id: number) => setItens(itens.filter((item) => item.id !== id));
-
-  const handleSalvar = async () => {
-    if (validateAll()) {
-      if (itens.length === 0) {
-        toast({ title: "Itens obrigatórios", description: "Adicione pelo menos um item ao pedido", variant: "destructive" });
-        return;
-      }
-      await handleSave("/estoque/pedidos-internos", "Pedido interno salvo com sucesso!");
-    }
-  };
-
-  const handleGoToCadastroItem = () => {
-    const stateToSave = {
-      formData,
-      itens,
-      itemForm,
-      setorOptions,
-      projetoOptions,
-    };
-    sessionStorage.setItem("novaRequisicao_state", JSON.stringify(stateToSave));
-    setShowNoItemDialog(false);
-    navigate("/cadastro/estoque/itens/novo?returnTo=/estoque/pedidos-internos/nova");
-  };
-
-  // Restore state from sessionStorage on mount
-  useState(() => {
-    const saved = sessionStorage.getItem("novaRequisicao_state");
-    if (saved) {
-      try {
-        const state = JSON.parse(saved);
-        if (state.itens) setItens(state.itens);
-        if (state.itemForm) setItemForm(state.itemForm);
-        if (state.formData) {
-          const fd = state.formData as Record<string, string>;
-          if (fd.setor) setFieldValue("setor", fd.setor);
-          if (fd.projeto) setFieldValue("projeto", fd.projeto);
-          if (fd.observacoes) setFieldValue("observacoes", fd.observacoes);
-        }
-        if (state.setorOptions) setSetorOptions(state.setorOptions);
-        if (state.projetoOptions) setProjetoOptions(state.projetoOptions);
-        sessionStorage.removeItem("novaRequisicao_state");
-      } catch (e) {
-        console.error("Erro ao restaurar estado:", e);
-      }
-    }
+  // ── Lista de funcionários disponíveis ───────────────────────────────────────
+  const { data: allFuncionarios = [] } = useQuery<any[]>({
+    queryKey: ["funcionarios_list"],
+    queryFn: () =>
+      api.get("/api/funcionarios/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
   });
 
-  // Reload items list when window regains focus
+  const requisitanteOptions = useMemo(() => {
+    if (!myFuncionario) return [];
+    const bypass = ["admin", "suprimentos"].includes(myFuncionario.role);
+    const list = bypass
+      ? allFuncionarios
+      : allFuncionarios.filter((f: any) =>
+        (f.setor_ids ?? []).some((sid: number) => myFuncionario.setor_ids.includes(sid))
+      );
+    return list.map((f: any) => ({ value: String(f.id), label: f.nome }));
+  }, [allFuncionarios, myFuncionario]);
+
+  // ── Dados externos ──────────────────────────────────────────────────────────
+  const { data: setores = [] } = useQuery({
+    queryKey: ["setores_estoque_req"],
+    queryFn: () =>
+      api.get("/api/setores-estoque/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
+  });
+
+  const { data: unidades = [] } = useQuery({
+    queryKey: ["unidades_req"],
+    queryFn: () =>
+      api.get("/api/estoque/unidades/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
+  });
+
+  const { data: itensEstoque = [] } = useQuery({
+    queryKey: ["itens_req"],
+    queryFn: () =>
+      api.get("/api/estoque/itens/").then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
+  });
+
+  const setorOptions = (setores as any[]).map((s: any) => ({
+    value: String(s.id),
+    label: s.setor || s.nome || String(s.id),
+  }));
+
+  const unidadeOptions = (unidades as any[]).map((u: any) => ({
+    value: String(u.id),
+    label: u.unidade,
+  }));
+
+  // ── Derivar setor/unidade ao trocar requisitante ─────────────────────────────
+  const selectedFuncionario = useMemo(
+    () => (form.requisitante ? (allFuncionarios as any[]).find((f) => String(f.id) === form.requisitante) : null),
+    [form.requisitante, allFuncionarios]
+  );
+
+  const filteredSetorOptions = useMemo(() => {
+    if (!selectedFuncionario || !selectedFuncionario.setor_ids?.length) return setorOptions;
+    return setorOptions.filter((opt) => selectedFuncionario.setor_ids.includes(Number(opt.value)));
+  }, [selectedFuncionario, setorOptions]);
+
   useEffect(() => {
-    const handleFocus = () => {
-      setItensCadastrados(loadItensCadastrados());
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, []);
+    if (!selectedFuncionario) return;
+
+    // Auto-preenche unidade se o funcionário tiver uma
+    if (selectedFuncionario.unidade_id) {
+      setForm((p) => ({ ...p, unidade: String(selectedFuncionario.unidade_id) }));
+    }
+
+    // Auto-preenche setor se só tiver um; limpa se o atual não pertencer ao funcionário
+    const ids: number[] = selectedFuncionario.setor_ids ?? [];
+    if (ids.length === 1) {
+      setForm((p) => ({ ...p, setor: String(ids[0]) }));
+    } else {
+      setForm((p) => ({
+        ...p,
+        setor: ids.includes(Number(p.setor)) ? p.setor : "",
+      }));
+    }
+  }, [selectedFuncionario]);
+
+  const itemOptions = (itensEstoque as any[]).map((i: any) => ({
+    value: String(i.id),
+    label: i.itens_do_estoque,
+  }));
+
+  // ── Mutation ────────────────────────────────────────────────────────────────
+  const mutation = useMutation({
+    mutationFn: (payload: any) =>
+      api.post("/api/estoque/requisicoes/", payload).then((r) => r.data),
+    onSuccess: () => {
+      toast({ title: "Pedido interno criado com sucesso!" });
+      navigate("/estoque/pedidos-internos");
+    },
+    onError: (error: any) => {
+      const data = error.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${v}`).join(" | ")
+        : "Verifique os dados e tente novamente.";
+      toast({ title: "Erro ao salvar", description: msg, variant: "destructive" });
+    },
+  });
+
+  // ── Itens ───────────────────────────────────────────────────────────────────
+  const handleAddItem = () => {
+    if (!itemForm.itemId || !itemForm.quantidade) {
+      toast({ title: "Campos obrigatórios", description: "Selecione o item e informe a quantidade.", variant: "destructive" });
+      return;
+    }
+    setItens((prev) => [...prev, { _key: Date.now(), ...itemForm }]);
+    setItemForm({ itemId: "", itemNome: "", quantidade: "" });
+  };
+
+  const handleRemoveItem = (key: number) =>
+    setItens((prev) => prev.filter((i) => i._key !== key));
+
+  // ── Salvar ──────────────────────────────────────────────────────────────────
+  const handleSalvar = () => {
+    if (!form.setor || !form.unidade) {
+      toast({ title: "Campos obrigatórios", description: "Selecione o setor e a unidade.", variant: "destructive" });
+      return;
+    }
+    if (itens.length === 0) {
+      toast({ title: "Itens obrigatórios", description: "Adicione pelo menos um item ao pedido.", variant: "destructive" });
+      return;
+    }
+    const requisitanteNome =
+      requisitanteOptions.find((o) => o.value === form.requisitante)?.label ?? "";
+
+    mutation.mutate({
+      setor_requisicao: parseInt(form.setor),
+      unidade: parseInt(form.unidade),
+      requisitante_nome: requisitanteNome || null,
+      observacao: form.observacao || null,
+      itens: itens.map((it) => ({
+        item: parseInt(it.itemId),
+        quantidade: parseInt(it.quantidade),
+      })),
+    });
+  };
 
   return (
     <SimpleFormWizard title="Novo Pedido Interno">
@@ -157,79 +215,112 @@ export default function NovaRequisicao() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DropdownWithAdd label="Setor" required value={formData.setor} onChange={(v) => setFieldValue("setor", v)}
-                options={setorOptions} onAddNew={(item) => setSetorOptions(prev => [...prev, { value: item.toLowerCase().replace(/\s+/g, '_'), label: item }])} />
-              <DropdownWithAdd label="Projeto" value={formData.projeto} onChange={(v) => setFieldValue("projeto", v)}
-                options={projetoOptions} onAddNew={(item) => setProjetoOptions(prev => [...prev, { value: item.toLowerCase().replace(/\s+/g, '_'), label: item }])} />
+
+              <ValidatedSelect
+                label="Requisitante"
+                required
+                value={form.requisitante}
+                onValueChange={(v) => setField("requisitante", v)}
+                placeholder="Selecione o requisitante"
+                options={requisitanteOptions}
+                searchable
+                searchPlaceholder="Buscar funcionário..."
+              />
+
+              {myFuncionario && !["admin", "suprimentos"].includes(myFuncionario.role) && (
+                <p className="text-xs text-muted-foreground -mt-4">
+                  Exibindo apenas funcionários do mesmo setor. Integrantes dos grupos <strong>Admin</strong> ou <strong>Suprimentos</strong> podem solicitar para qualquer funcionário.
+                </p>
+              )}
+
+              <ValidatedSelect
+                label="Setor"
+                required
+                value={form.setor}
+                onValueChange={(v) => setField("setor", v)}
+                placeholder="Selecione o setor"
+                options={filteredSetorOptions}
+                searchable
+                searchPlaceholder="Buscar setor..."
+              />
+              <ValidatedSelect
+                label="Unidade"
+                required
+                value={form.unidade}
+                onValueChange={(v) => setField("unidade", v)}
+                placeholder="Selecione a unidade"
+                options={unidadeOptions}
+                searchable
+                searchPlaceholder="Buscar unidade..."
+              />
             </div>
 
-            <ValidatedTextarea label="Observações" className="min-h-[100px]" value={formData.observacoes}
-              onChange={(e) => setFieldValue("observacoes", e.target.value)} onBlur={() => setFieldTouched("observacoes")}
-              error={getFieldError("observacoes")} touched={touched.observacoes} />
 
-            {/* Lista de Itens */}
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Observações</Label>
+              <Textarea
+                placeholder="Observações adicionais..."
+                className="form-input min-h-[80px]"
+                value={form.observacao}
+                onChange={(e) => setField("observacao", e.target.value)}
+              />
+            </div>
+
+            {/* Itens */}
             <div className="border-t pt-6">
               <h3 className="text-lg font-semibold text-foreground mb-4">Itens</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Item</Label>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <Select value={itemForm.itemCadastrado} onValueChange={(v) => setItemForm(p => ({ ...p, itemCadastrado: v }))}>
-                        <SelectTrigger className="form-input"><SelectValue placeholder="Selecione um item cadastrado" /></SelectTrigger>
-                        <SelectContent className="bg-popover">
-                          {itensCadastrados.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={() => setShowNoItemDialog(true)} title="Item não encontrado? Cadastre um novo">
-                      <ExternalLink className="h-4 w-4" />
-                    </Button>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2">
+                  <ValidatedSelect
+                    label="Item"
+                    value={itemForm.itemId}
+                    onValueChange={(v) => {
+                      const found = itemOptions.find((o) => o.value === v);
+                      setItemForm((p) => ({ ...p, itemId: v, itemNome: found?.label ?? "" }));
+                    }}
+                    placeholder="Selecionar item"
+                    options={itemOptions}
+                    searchable
+                    searchPlaceholder="Buscar item..."
+                  />
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Marca</Label>
-                  <Input value={itemForm.marca} onChange={(e) => setItemForm(p => ({ ...p, marca: e.target.value }))} placeholder="Marca" className="form-input" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Quantidade</Label>
-                  <Input type="number" value={itemForm.quantidade} onChange={(e) => setItemForm(p => ({ ...p, quantidade: e.target.value }))} placeholder="Qtd" className="form-input" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Especificações</Label>
-                  <Input value={itemForm.especificacoes} onChange={(e) => setItemForm(p => ({ ...p, especificacoes: e.target.value }))} placeholder="Specs" className="form-input" />
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="form-input"
+                    value={itemForm.quantidade}
+                    onChange={(e) => setItemForm((p) => ({ ...p, quantidade: e.target.value }))}
+                    placeholder="Qtd"
+                  />
                 </div>
               </div>
               <div className="flex gap-3 mt-4">
-                <Button type="button" variant="outline" onClick={handleAddItem}>Adicionar Item</Button>
+                <Button type="button" onClick={handleAddItem}>Adicionar Item</Button>
               </div>
             </div>
 
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Item</TableHead>
-                  <TableHead className="text-center">Marca</TableHead>
-                  <TableHead className="text-center">Quantidade</TableHead>
-                  <TableHead className="text-center">Especificações</TableHead>
+                  <TableHead >Item</TableHead>
+                  <TableHead className="text-right">Quantidade Solicitada</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {itens.length === 0 ? (
-                  <TableRow><TableCell className="text-center text-muted-foreground" colSpan={5}>Nenhum item adicionado</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={3} className="text-center text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
                 ) : (
                   itens.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center">{item.item}</TableCell>
-                      <TableCell className="text-center">{item.marca}</TableCell>
-                      <TableCell className="text-center">{item.quantidade}</TableCell>
-                      <TableCell className="text-center">{item.especificacoes}</TableCell>
-                      <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive">
+                    <TableRow key={item._key}>
+                      <TableCell >{item.itemNome}</TableCell>
+                      <TableCell >{item.quantidade}</TableCell>
+                      <TableCell >
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item._key)} className="text-destructive hover:text-destructive">
                           <Trash2 size={16} />
                         </Button>
                       </TableCell>
@@ -239,33 +330,14 @@ export default function NovaRequisicao() {
               </TableBody>
             </Table>
 
-            <FormActionBar onSave={handleSalvar} onCancel={() => navigate("/estoque/pedidos-internos")} isSaving={isSaving} />
+            <FormActionBar
+              onSave={handleSalvar}
+              onCancel={() => navigate("/estoque/pedidos-internos")}
+              isSaving={mutation.isPending}
+            />
           </div>
         </CardContent>
       </Card>
-
-      {/* Dialog: Item não encontrado */}
-      <Dialog open={showNoItemDialog} onOpenChange={setShowNoItemDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Item não encontrado?</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              O item que você precisa não está cadastrado no sistema. Deseja ir para a página de cadastro de itens?
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Suas informações preenchidas neste formulário serão <strong>salvas automaticamente</strong> e restauradas quando você voltar.
-            </p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setShowNoItemDialog(false)}>Cancelar</Button>
-            <Button onClick={handleGoToCadastroItem} className="gap-2">
-              <ExternalLink className="w-4 h-4" /> Ir para Cadastro de Itens
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </SimpleFormWizard>
   );
 }

@@ -9,7 +9,8 @@ import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
-import { contasMock, etapasFunil, leadsMock } from "@/data/comercial-mock";
+import { fetchContas, etapasFunil, fetchLeads } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
 
 const validationFields = [
   { name: "titulo", label: "Título", required: true, minLength: 2 },
@@ -23,6 +24,9 @@ const validationFields = [
 export default function NovaOportunidade() {
   const navigate = useNavigate();
   const { handleSave, isSaving } = useSaveWithDelay();
+
+  const { data: contas = [] } = useQuery({ queryKey: ['crm_contas'], queryFn: fetchContas });
+  const { data: leads = [] } = useQuery({ queryKey: ['crm_leads'], queryFn: fetchLeads });
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { titulo: "", contaId: "", valorEstimado: "", dataPrevisao: "", etapa: "", origem: "", concorrente: "" },
@@ -59,7 +63,7 @@ export default function NovaOportunidade() {
                 onBlur={() => setFieldTouched("titulo")} error={getFieldError("titulo")} touched={touched.titulo} />
               <ValidatedSelect label="Conta" required value={formData.contaId} onChange={(v) => setFieldValue("contaId", v)}
                 onBlur={() => setFieldTouched("contaId")} error={getFieldError("contaId")} touched={touched.contaId}
-                options={contasMock.map(c => ({ value: c.id, label: c.nomeFantasia }))} />
+                options={contas.map((c: any) => ({ value: String(c.id), label: c.nome_fantasia }))} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -76,7 +80,7 @@ export default function NovaOportunidade() {
                 options={etapaOptions} onAddNew={(item) => setEtapaOptions(prev => [...prev, { value: item.toLowerCase().replace(/\s+/g, '_'), label: item }])} />
               <ValidatedSelect label="Origem (Lead)" value={formData.origem} onChange={(v) => setFieldValue("origem", v)}
                 onBlur={() => setFieldTouched("origem")} error={getFieldError("origem")} touched={touched.origem}
-                options={leadsMock.map(l => ({ value: l.id, label: `${l.nome} - ${l.empresa}` }))} />
+                options={leads.map((l: any) => ({ value: String(l.id), label: `${l.nome} - ${l.empresa}` }))} />
             </div>
 
             <ValidatedInput label="Concorrente" value={formData.concorrente} onChange={(e) => setFieldValue("concorrente", e.target.value)}

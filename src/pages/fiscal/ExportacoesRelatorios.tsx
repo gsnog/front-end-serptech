@@ -8,7 +8,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FileDown, BarChart3, FileText, FileSpreadsheet, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { mockNotasFiscais } from "@/data/fiscal-mock";
+// Fiscal-mock removed — stub until /api/fiscal/ endpoints exist
+const mockNotasFiscais: any[] = [];
 import { exportData } from "@/lib/exportData";
 
 const ExportacoesRelatorios = () => {
@@ -221,30 +222,30 @@ const ExportacoesRelatorios = () => {
                   <div className="rounded border border-border overflow-hidden">
                     <Table>
                       <TableHeader><TableRow className="bg-table-header">
-                        <TableHead className="font-semibold">Tipo</TableHead>
-                        <TableHead className="text-center font-semibold">Nº</TableHead>
+                        <TableHead className="text-center font-semibold">Tipo</TableHead>
+                        <TableHead className="font-semibold">Nº</TableHead>
                         <TableHead className="font-semibold">Cliente</TableHead>
                         <TableHead className="text-center font-semibold">Data</TableHead>
                         <TableHead className="text-center font-semibold">Status</TableHead>
                         <TableHead className="text-right font-semibold">Total</TableHead>
-                        <TableHead className="text-right font-semibold">Tributos</TableHead>
+                        <TableHead className="font-semibold">Tributos</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
                         {reportNotas.map(n => (
                           <TableRow key={n.id} className="hover:bg-table-hover">
                             <TableCell className="text-sm">{n.tipo}</TableCell>
-                            <TableCell className="text-center font-mono font-bold">{n.numero}</TableCell>
+                            <TableCell className="font-mono font-bold">{n.numero}</TableCell>
                             <TableCell className="font-medium">{n.cliente}</TableCell>
-                            <TableCell className="text-center text-sm">{n.dataEmissao}</TableCell>
+                            <TableCell className="text-sm">{n.dataEmissao}</TableCell>
                             <TableCell className="text-center"><StatusBadge status={n.status} /></TableCell>
-                            <TableCell className="text-right font-semibold">{fmt(n.totalFinal)}</TableCell>
-                            <TableCell className="text-right text-sm">{fmt(n.tributos.reduce((s, t) => s + t.valorFinal, 0))}</TableCell>
+                            <TableCell className="font-semibold">{fmt(n.totalFinal)}</TableCell>
+                            <TableCell className="text-sm">{fmt(n.tributos.reduce((s, t) => s + t.valorFinal, 0))}</TableCell>
                           </TableRow>
                         ))}
                         <TableRow className="bg-muted/50 font-bold">
                           <TableCell colSpan={5} className="text-right">Totais</TableCell>
-                          <TableCell className="text-right text-primary">{fmt(totalFaturado)}</TableCell>
-                          <TableCell className="text-right">{fmt(totalTributos)}</TableCell>
+                          <TableCell className="text-primary">{fmt(totalFaturado)}</TableCell>
+                          <TableCell >{fmt(totalTributos)}</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>

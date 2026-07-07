@@ -11,33 +11,55 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchSetores, createSetor, updateSetor, deleteSetor, setoresQueryKey, type Setor as SetorType } from "@/services/pessoas";
 
-const initialSetores = [
-  { id: 1, nome: "Motor" },
-  { id: 2, nome: "Pintura" },
-  { id: 3, nome: "Elétrica" },
-  { id: 4, nome: "Fibra" },
-  { id: 5, nome: "Acabamento" },
-]
-
-type SetorType = typeof initialSetores[0];
 
 const Setor = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(initialSetores);
+  const queryClient = useQueryClient();
   const [filterNome, setFilterNome] = useState("");
   const [viewItem, setViewItem] = useState<SetorType | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editItem, setEditItem] = useState<SetorType | null>(null);
   const [editData, setEditData] = useState({ nome: "" });
 
-  const filtered = useMemo(() => items.filter(s => s.nome.toLowerCase().includes(filterNome.toLowerCase())), [items, filterNome]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: [...setoresQueryKey, currentPage],
+    queryFn: () => fetchSetores(currentPage, 20),
+  });
+  const items: SetorType[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
-  const getExportData = () => filtered.map(s => ({ Setor: s.nome }));
-  const openEdit = (s: SetorType) => { setEditItem(s); setEditData({ nome: s.nome }) };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Setor atualizado." }) } };
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removido", description: "Setor excluído." }) } };
-  const deleteItemData = items.find(i => i.id === deleteId);
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: number; payload: Partial<SetorType> }) => updateSetor(data.id, data.payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: setoresQueryKey });
+      setEditItem(null);
+      toast({ title: "Salvo", description: "Setor atualizado." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteSetor,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: setoresQueryKey });
+      setDeleteId(null);
+      toast({ title: "Removido", description: "Setor excluído." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  });
+
+  const filtered = useMemo(() => items.filter((s: SetorType) => (String(s.nome || "")).toLowerCase().includes(filterNome.toLowerCase())), [items, filterNome]);
+
+  const getExportData = () => filtered.map((s: SetorType) => ({ Setor: String(s.nome || "") }));
+  const openEdit = (s: SetorType) => { setEditItem(s); setEditData({ nome: s.nome || "" }) };
+  const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: { nome: editData.nome } }); } };
+  const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
+  const deleteItemData = items.find((i: SetorType) => i.id === deleteId);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -47,43 +69,56 @@ const Setor = () => {
           <ExportButton getData={getExportData} fileName="setores-operacional" />
         </div>
 
-        <FilterSection fields={[{ type: "text", label: "Setor", placeholder: "Buscar setor...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" }]} resultsCount={filtered.length} />
+        <FilterSection fields={[{ type: "text", label: "Setor", placeholder: "Buscar setor...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" }]} resultsCount={totalCount} />
 
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Setor</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead >Setor</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Nenhum setor encontrado.</TableCell></TableRow>) : (
-                filtered.map((setor) => (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={2} className="text-center py-8 text-muted-foreground">Nenhum setor encontrado.</TableCell></TableRow>
+              ) : (
+                filtered.map((setor: SetorType) => (
                   <TableRow key={setor.id}>
-                    <TableCell className="text-center">{setor.nome}</TableCell>
+                    <TableCell >{setor.nome || "—"}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(setor)} onEdit={() => openEdit(setor)} onDelete={() => setDeleteId(setor.id)} /></TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes do Setor</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2"><div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Setor</span><span className="text-sm font-medium">{viewItem.nome}</span></div></div>}
+          {viewItem && <div className="space-y-2"><div className="flex justify-between py-1 border-b border-border"><span className="text-sm text-muted-foreground">Setor</span><span className="text-sm font-medium">{String(viewItem.nome || viewItem.setor || "")}</span></div></div>}
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Editar Setor</DialogTitle></DialogHeader>
           <div className="space-y-3"><div><Label>Nome</Label><Input value={editData.nome} onChange={e => setEditData({ nome: e.target.value })} /></div></div>
-          <DialogFooter><Button onClick={handleSaveEdit}>Salvar</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir setor?</AlertDialogTitle><AlertDialogDescription>Deseja excluir "{deleteItemData?.nome}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir setor?</AlertDialogTitle><AlertDialogDescription>Deseja excluir "{String(deleteItemData?.nome || deleteItemData?.setor || "")}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "Excluindo..." : "Excluir"}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

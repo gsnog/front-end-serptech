@@ -2,79 +2,27 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Bell, 
-  Check, 
-  CheckCheck, 
-  Trash2, 
-  AlertCircle, 
-  Package, 
-  DollarSign, 
+import {
+  Bell,
+  Check,
+  CheckCheck,
+  Trash2,
+  AlertCircle,
+  Package,
+  DollarSign,
   FileText,
   Clock
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-
-interface Notificacao {
-  id: string;
-  tipo: "alerta" | "estoque" | "financeiro" | "documento";
-  titulo: string;
-  descricao: string;
-  data: string;
-  lida: boolean;
-}
-
-const notificacoesIniciais: Notificacao[] = [
-  {
-    id: "1",
-    tipo: "alerta",
-    titulo: "Estoque Crítico",
-    descricao: "O item 'Óleo Lubrificante 20W50' está com estoque abaixo do mínimo (5 unidades).",
-    data: "Há 10 minutos",
-    lida: false,
-  },
-  {
-    id: "2",
-    tipo: "financeiro",
-    titulo: "Conta a Pagar Vencendo",
-    descricao: "A fatura #2024-0892 vence amanhã. Valor: R$ 15.750,00",
-    data: "Há 1 hora",
-    lida: false,
-  },
-  {
-    id: "3",
-    tipo: "estoque",
-    titulo: "Entrada Registrada",
-    descricao: "Nova entrada de materiais registrada. NF-e: 000.123.456 - Fornecedor: ABC Ltda.",
-    data: "Há 2 horas",
-    lida: false,
-  },
-  {
-    id: "4",
-    tipo: "documento",
-    titulo: "Ordem de Serviço Concluída",
-    descricao: "A OS #2024-0156 foi finalizada com sucesso. Embarcação: Maria Helena.",
-    data: "Há 5 horas",
-    lida: true,
-  },
-  {
-    id: "5",
-    tipo: "financeiro",
-    titulo: "Pagamento Recebido",
-    descricao: "Recebido pagamento de R$ 32.500,00 referente à fatura #2024-0845.",
-    data: "Ontem",
-    lida: true,
-  },
-  {
-    id: "6",
-    tipo: "alerta",
-    titulo: "Manutenção Programada",
-    descricao: "Lembrete: Manutenção preventiva da embarcação 'São Jorge' agendada para amanhã.",
-    data: "Ontem",
-    lida: true,
-  },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  fetchNotificacoes,
+  marcarLida,
+  marcarTodasLidas,
+  limparTodasNotificacoes,
+  Notificacao
+} from "@/services/notificacoes";
 
 const tipoIcone = {
   alerta: AlertCircle,
@@ -91,35 +39,56 @@ const tipoCores = {
 };
 
 export default function Notificacoes() {
-  const [notificacoes, setNotificacoes] = useState<Notificacao[]>(notificacoesIniciais);
+  const queryClient = useQueryClient();
   const [filtro, setFiltro] = useState<"todas" | "nao-lidas">("todas");
+
+  const { data: notificacoes = [], isLoading } = useQuery({
+    queryKey: ['notificacoes'],
+    queryFn: fetchNotificacoes
+  });
+
+  const mutationMarcarLida = useMutation({
+    mutationFn: marcarLida,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notificacoes'] })
+  });
+
+  const mutationMarcarTodasLidas = useMutation({
+    mutationFn: marcarTodasLidas,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificacoes'] });
+      toast.success("Todas as notificações foram marcadas como lidas.");
+    }
+  });
+
+  const mutationLimparTodas = useMutation({
+    mutationFn: limparTodasNotificacoes,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificacoes'] });
+      toast.success("Todas as notificações foram removidas.");
+    }
+  });
 
   const naoLidas = notificacoes.filter(n => !n.lida).length;
 
-  const notificacoesFiltradas = filtro === "nao-lidas" 
+  const notificacoesFiltradas = filtro === "nao-lidas"
     ? notificacoes.filter(n => !n.lida)
     : notificacoes;
 
-  const marcarComoLida = (id: string) => {
-    setNotificacoes(prev => 
-      prev.map(n => n.id === id ? { ...n, lida: true } : n)
-    );
+  const handleMarcarLida = (id: number) => {
+    mutationMarcarLida.mutate(id);
   };
 
-  const marcarTodasComoLidas = () => {
-    setNotificacoes(prev => prev.map(n => ({ ...n, lida: true })));
-    toast.success("Todas as notificações foram marcadas como lidas.");
+  const handleMarcarTodasLidas = () => {
+    mutationMarcarTodasLidas.mutate();
   };
 
-  const excluirNotificacao = (id: string) => {
-    setNotificacoes(prev => prev.filter(n => n.id !== id));
-    toast.success("Notificação excluída.");
+  const handleLimparTodas = () => {
+    mutationLimparTodas.mutate();
   };
 
-  const limparTodas = () => {
-    setNotificacoes([]);
-    toast.success("Todas as notificações foram removidas.");
-  };
+  if (isLoading) {
+    return <div className="flex justify-center p-8">Carregando notificações...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -150,7 +119,7 @@ export default function Notificacoes() {
           <Button
             variant="outline"
             size="sm"
-            onClick={marcarTodasComoLidas}
+            onClick={handleMarcarTodasLidas}
             disabled={naoLidas === 0}
             className="gap-2 transition-all duration-200"
           >
@@ -160,7 +129,7 @@ export default function Notificacoes() {
           <Button
             variant="outline"
             size="sm"
-            onClick={limparTodas}
+            onClick={handleLimparTodas}
             disabled={notificacoes.length === 0}
             className="gap-2 text-destructive hover:text-white hover:bg-destructive transition-all duration-200"
           >
@@ -182,8 +151,8 @@ export default function Notificacoes() {
                 Nenhuma notificação
               </h3>
               <p className="text-muted-foreground">
-                {filtro === "nao-lidas" 
-                  ? "Você leu todas as suas notificações." 
+                {filtro === "nao-lidas"
+                  ? "Você leu todas as suas notificações."
                   : "Você não tem notificações no momento."}
               </p>
             </CardContent>
@@ -192,7 +161,7 @@ export default function Notificacoes() {
           notificacoesFiltradas.map((notificacao) => {
             const Icone = tipoIcone[notificacao.tipo];
             return (
-              <Card 
+              <Card
                 key={notificacao.id}
                 className={cn(
                   "border-border transition-all hover:shadow-md",
@@ -224,37 +193,35 @@ export default function Notificacoes() {
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground mt-1">
-                            {notificacao.descricao}
+                            {notificacao.mensagem}
                           </p>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center justify-between mt-3">
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                           <Clock className="h-3 w-3" />
-                          {notificacao.data}
+                          {new Date(notificacao.criado_em).toLocaleString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
                         </div>
-                        
+
                         <div className="flex gap-1">
                           {!notificacao.lida && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => marcarComoLida(notificacao.id)}
+                              onClick={() => handleMarcarLida(notificacao.id)}
                               className="h-8 px-2 text-xs gap-1"
                             >
                               <Check className="h-3 w-3" />
                               Marcar como lida
                             </Button>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => excluirNotificacao(notificacao.id)}
-                            className="h-8 px-2 text-xs text-destructive hover:text-white hover:bg-destructive"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
                         </div>
                       </div>
                     </div>

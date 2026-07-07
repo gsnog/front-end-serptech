@@ -10,7 +10,8 @@ import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
-import { contasMock, oportunidadesMock } from "@/data/comercial-mock";
+import { fetchContas, fetchOportunidades } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
 
 const validationFields = [
   { name: "contaId", label: "Conta", required: true },
@@ -25,6 +26,9 @@ const validationFields = [
 export default function NovaProposta() {
   const navigate = useNavigate();
   const { handleSave, isSaving } = useSaveWithDelay();
+
+  const { data: contas = [] } = useQuery({ queryKey: ['crm_contas'], queryFn: fetchContas });
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { contaId: "", oportunidadeId: "", valor: "", validade: "", status: "", prazoEntrega: "", formaPagamento: "", observacoes: "" },
@@ -60,10 +64,10 @@ export default function NovaProposta() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ValidatedSelect label="Conta" required value={formData.contaId} onChange={(v) => setFieldValue("contaId", v)}
                 onBlur={() => setFieldTouched("contaId")} error={getFieldError("contaId")} touched={touched.contaId}
-                options={contasMock.map(c => ({ value: c.id, label: c.nomeFantasia }))} />
+                options={contas.map((c: any) => ({ value: String(c.id), label: c.nome_fantasia }))} />
               <ValidatedSelect label="Oportunidade" required value={formData.oportunidadeId} onChange={(v) => setFieldValue("oportunidadeId", v)}
                 onBlur={() => setFieldTouched("oportunidadeId")} error={getFieldError("oportunidadeId")} touched={touched.oportunidadeId}
-                options={oportunidadesMock.map(o => ({ value: o.id, label: o.titulo }))} />
+                options={oportunidades.map((o: any) => ({ value: String(o.id), label: o.titulo }))} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

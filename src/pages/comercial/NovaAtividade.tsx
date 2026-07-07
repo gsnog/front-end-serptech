@@ -10,8 +10,14 @@ import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
 import { ValidatedTextarea } from "@/components/ui/validated-textarea";
-import { oportunidadesMock, leadsMock } from "@/data/comercial-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
+import { fetchOportunidades, fetchLeads } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMeuTime } from "@/services/pessoas";
+
+// --- Mocks removidos ---
+
+
+
 
 const validationFields = [
   { name: "titulo", label: "Título", required: true, minLength: 2 },
@@ -24,6 +30,10 @@ export default function NovaAtividade() {
   const navigate = useNavigate();
   const { handleSave, isSaving } = useSaveWithDelay();
 
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
+  const { data: leads = [] } = useQuery({ queryKey: ['crm_leads'], queryFn: fetchLeads });
+  const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
+
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { titulo: "", tipo: "", data: "", hora: "", responsavelId: "", relacionadoTipo: "", relacionadoId: "", descricao: "" },
     validationFields
@@ -35,8 +45,8 @@ export default function NovaAtividade() {
   ]);
 
   const getRelacionadoOptions = () => {
-    if (formData.relacionadoTipo === 'oportunidade') return oportunidadesMock.map(o => ({ value: o.id, label: o.titulo }));
-    if (formData.relacionadoTipo === 'lead') return leadsMock.map(l => ({ value: l.id, label: l.nome }));
+    if (formData.relacionadoTipo === 'oportunidade') return oportunidades.map((o: any) => ({ value: String(o.id), label: o.titulo }));
+    if (formData.relacionadoTipo === 'lead') return leads.map((l: any) => ({ value: String(l.id), label: l.nome }));
     return [];
   };
 
@@ -78,7 +88,7 @@ export default function NovaAtividade() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ValidatedSelect label="Responsável" required value={formData.responsavelId} onChange={(v) => setFieldValue("responsavelId", v)}
                 onBlur={() => setFieldTouched("responsavelId")} error={getFieldError("responsavelId")} touched={touched.responsavelId}
-                options={pessoasMock.map(p => ({ value: p.id, label: p.nome }))} />
+                options={time.map((p: any) => ({ value: String(p.id), label: p.nome }))} />
               <ValidatedSelect label="Relacionado a" value={formData.relacionadoTipo} onChange={(v) => { setFieldValue("relacionadoTipo", v); setFieldValue("relacionadoId", ""); }}
                 onBlur={() => setFieldTouched("relacionadoTipo")} error={getFieldError("relacionadoTipo")} touched={touched.relacionadoTipo}
                 options={[{ value: "oportunidade", label: "Oportunidade" }, { value: "lead", label: "Lead" }]} />

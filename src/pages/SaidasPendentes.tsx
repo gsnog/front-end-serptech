@@ -62,10 +62,10 @@ const SaidasPendentes = () => {
           <TableHeader>
             <TableRow>
               <TableHead className="text-center">Data Lançamento</TableHead>
-              <TableHead className="text-center">Beneficiário</TableHead>
-              <TableHead className="text-center">Documento</TableHead>
-              <TableHead className="text-center">Valor Título</TableHead>
-              <TableHead className="text-center">Valor Total</TableHead>
+              <TableHead >Beneficiário</TableHead>
+              <TableHead >Documento</TableHead>
+              <TableHead className="text-right">Valor Título</TableHead>
+              <TableHead className="text-right">Valor Total</TableHead>
               <TableHead className="text-center">Ações</TableHead>
             </TableRow>
           </TableHeader>
@@ -79,12 +79,12 @@ const SaidasPendentes = () => {
             ) : (
               filteredSaidas.map((saida, index) => (
                 <TableRow key={index}>
-                  <TableCell className="text-center">{saida.dataLancamento}</TableCell>
-                  <TableCell className="text-center">{saida.beneficiario}</TableCell>
-                  <TableCell className="text-center">{saida.documento}</TableCell>
-                  <TableCell className="text-center">{saida.valorTitulo}</TableCell>
-                  <TableCell className="text-center">{saida.valorTotal}</TableCell>
-                  <TableCell className="text-center">
+                  <TableCell >{saida.dataLancamento}</TableCell>
+                  <TableCell >{saida.beneficiario}</TableCell>
+                  <TableCell >{saida.documento}</TableCell>
+                  <TableCell >{saida.valorTitulo}</TableCell>
+                  <TableCell >{saida.valorTotal}</TableCell>
+                  <TableCell >
                     <Button size="sm" className="rounded-md bg-primary hover:bg-primary/90 text-primary-foreground text-xs">Ações</Button>
                   </TableCell>
                 </TableRow>

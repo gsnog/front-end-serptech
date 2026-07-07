@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ChevronDown, Plus, FileText } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { FilterSection } from "@/components/FilterSection";
 import { TableActions } from "@/components/TableActions";
@@ -12,32 +12,43 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ExportButton } from "@/components/ExportButton";
 import { toast } from "@/hooks/use-toast";
-
-const mockContas = [
-  { id: 1, codigoBanco: "001", banco: "Banco do Brasil", agencia: "1234-5", numeroConta: "12345-6", tipo: "Corrente", saldo: "R$ 50.000,00" },
-  { id: 2, codigoBanco: "341", banco: "Itaú", agencia: "0987-6", numeroConta: "98765-4", tipo: "Poupança", saldo: "R$ 25.000,00" },
-];
-type Conta = typeof mockContas[0];
+import { fetchContasBancarias, updateContaBancaria, deleteContaBancaria, type ContaBancaria as CB } from "@/services/financeiro";
 
 const ContaBancaria = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(mockContas);
+  const queryClient = useQueryClient();
   const [searchBanco, setSearchBanco] = useState("");
   const [searchConta, setSearchConta] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [viewItem, setViewItem] = useState<Conta | null>(null);
-  const [editItem, setEditItem] = useState<Conta | null>(null);
-  const [editData, setEditData] = useState({ codigoBanco: "", banco: "", agencia: "", numeroConta: "", tipo: "", saldo: "" });
+  const [viewItem, setViewItem] = useState<CB | null>(null);
+  const [editItem, setEditItem] = useState<CB | null>(null);
+  const [editData, setEditData] = useState<Partial<CB>>({});
 
-  const filterFields = [
-    { type: "text" as const, label: "Nome do Banco", placeholder: "Buscar banco...", value: searchBanco, onChange: setSearchBanco, width: "flex-1 min-w-[200px]" },
-    { type: "text" as const, label: "Número da Conta", placeholder: "Buscar por conta...", value: searchConta, onChange: setSearchConta, width: "min-w-[180px]" }
-  ];
-  const filtered = items.filter(c => c.banco.toLowerCase().includes(searchBanco.toLowerCase()) && c.numeroConta.includes(searchConta));
-  const getExportData = () => filtered.map(c => ({ "Código Banco": c.codigoBanco, Banco: c.banco, Agência: c.agencia, Conta: c.numeroConta, Tipo: c.tipo, Saldo: c.saldo }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Conta excluída." }); } };
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({ queryKey: ["contas_bancarias", currentPage], queryFn: () => fetchContasBancarias(currentPage) });
+  const items: CB[] = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
+
+  const updateMut = useMutation({
+    mutationFn: (d: { id: number; payload: Partial<CB> }) => updateContaBancaria(d.id, d.payload),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["contas_bancarias"] }); setEditItem(null); toast({ title: "Salvo", description: "Conta atualizada." }); },
+    onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: deleteContaBancaria,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["contas_bancarias"] }); setDeleteId(null); toast({ title: "Removida", description: "Conta excluída." }); },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  });
+
+  const filtered = items.filter(c =>
+    (c.banco || "").toLowerCase().includes(searchBanco.toLowerCase()) &&
+    (c.numero_conta || "").includes(searchConta)
+  );
+  const getExportData = () => filtered.map(c => ({ "Código Banco": c.codigo_banco, Banco: c.banco, Agência: c.agencia, Conta: c.numero_conta, Tipo: c.tipo, Saldo: c.saldo }));
+  const openEdit = (c: CB) => { setEditItem(c); setEditData({ codigo_banco: c.codigo_banco, banco: c.banco, agencia: c.agencia, numero_conta: c.numero_conta, tipo: c.tipo }); };
   const deleteItem = items.find(i => i.id === deleteId);
-  const openEdit = (c: Conta) => { setEditItem(c); setEditData({ codigoBanco: c.codigoBanco, banco: c.banco, agencia: c.agencia, numeroConta: c.numeroConta, tipo: c.tipo, saldo: c.saldo }); };
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -46,58 +57,84 @@ const ContaBancaria = () => {
           <Button onClick={() => navigate("/cadastro/financeiro/conta-bancaria/nova")} className="gap-2"><Plus className="w-4 h-4" />Nova Conta</Button>
           <ExportButton getData={getExportData} fileName="contas-bancarias" />
         </div>
-        <FilterSection fields={filterFields} resultsCount={filtered.length} />
+        <FilterSection fields={[
+          { type: "text" as const, label: "Nome do Banco", placeholder: "Buscar banco...", value: searchBanco, onChange: setSearchBanco, width: "flex-1 min-w-[200px]" },
+          { type: "text" as const, label: "Número da Conta", placeholder: "Buscar por conta...", value: searchConta, onChange: setSearchConta, width: "min-w-[180px]" }
+        ]} resultsCount={totalCount} />
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
-              <TableHead className="text-center font-semibold">Código do Banco</TableHead>
-              <TableHead className="text-center font-semibold">Banco</TableHead>
-              <TableHead className="text-center font-semibold">Agência</TableHead>
-              <TableHead className="text-center font-semibold">Número da Conta</TableHead>
+              <TableHead className="font-semibold">Código do Banco</TableHead>
+              <TableHead className="font-semibold">Banco</TableHead>
+              <TableHead className="font-semibold">Agência</TableHead>
+              <TableHead className="font-semibold">Número da Conta</TableHead>
               <TableHead className="text-center font-semibold">Tipo</TableHead>
-              <TableHead className="text-center font-semibold">Saldo</TableHead>
+              <TableHead className="text-right font-semibold">Saldo</TableHead>
               <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>) : (
-                filtered.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
-                    <TableCell className="text-center">{c.codigoBanco}</TableCell>
-                    <TableCell className="text-center font-medium">{c.banco}</TableCell>
-                    <TableCell className="text-center">{c.agencia}</TableCell>
-                    <TableCell className="text-center">{c.numeroConta}</TableCell>
-                    <TableCell className="text-center">{c.tipo}</TableCell>
-                    <TableCell className="text-center font-semibold">{c.saldo}</TableCell>
-                    <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
-                  </TableRow>
-                ))
-              )}
+              {isLoading ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+              ) : filtered.map((c) => (
+                <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
+                  <TableCell >{c.codigo_banco || "—"}</TableCell>
+                  <TableCell className="font-medium">{c.banco || "—"}</TableCell>
+                  <TableCell >{c.agencia || "—"}</TableCell>
+                  <TableCell >{c.numero_conta || "—"}</TableCell>
+                  <TableCell >{c.tipo || "—"}</TableCell>
+                  <TableCell className="text-right font-semibold">{c.saldo !== undefined ? `R$ ${Number(c.saldo).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</TableCell>
+                  <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => openEdit(c)} onDelete={() => setDeleteId(c.id)} /></TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>{viewItem?.banco}</DialogTitle></DialogHeader>{viewItem && <div className="space-y-2 py-2"><InfoRow label="Código" value={viewItem.codigoBanco} /><InfoRow label="Agência" value={viewItem.agencia} /><InfoRow label="Conta" value={viewItem.numeroConta} /><InfoRow label="Tipo" value={viewItem.tipo} /><InfoRow label="Saldo" value={viewItem.saldo} /></div>}</DialogContent>
+        <DialogContent><DialogHeader><DialogTitle>{viewItem?.banco}</DialogTitle></DialogHeader>
+          {viewItem && <div className="space-y-2 py-2">
+            <InfoRow label="Código" value={viewItem.codigo_banco || "—"} />
+            <InfoRow label="Agência" value={viewItem.agencia || "—"} />
+            <InfoRow label="Conta" value={viewItem.numero_conta || "—"} />
+            <InfoRow label="Tipo" value={viewItem.tipo || "—"} />
+            <InfoRow label="Saldo" value={viewItem.saldo !== undefined ? `R$ ${Number(viewItem.saldo).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"} />
+          </div>}
+        </DialogContent>
       </Dialog>
+
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Editar Conta Bancária</DialogTitle></DialogHeader>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            <div className="space-y-2"><Label>Código do Banco</Label><Input value={editData.codigoBanco} onChange={e => setEditData(p => ({ ...p, codigoBanco: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Banco</Label><Input value={editData.banco} onChange={e => setEditData(p => ({ ...p, banco: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Agência</Label><Input value={editData.agencia} onChange={e => setEditData(p => ({ ...p, agencia: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Número da Conta</Label><Input value={editData.numeroConta} onChange={e => setEditData(p => ({ ...p, numeroConta: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Tipo</Label><Input value={editData.tipo} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Saldo</Label><Input value={editData.saldo} disabled className="opacity-60 cursor-not-allowed" /><p className="text-xs text-muted-foreground">Saldo só pode ser alterado pelo sistema</p></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="space-y-2"><Label>Código do Banco</Label><Input value={editData.codigo_banco || ""} onChange={e => setEditData(p => ({ ...p, codigo_banco: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Banco</Label><Input value={editData.banco || ""} onChange={e => setEditData(p => ({ ...p, banco: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Agência</Label><Input value={editData.agencia || ""} onChange={e => setEditData(p => ({ ...p, agencia: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Número da Conta</Label><Input value={editData.numero_conta || ""} onChange={e => setEditData(p => ({ ...p, numero_conta: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Tipo</Label><Input value={editData.tipo || ""} onChange={e => setEditData(p => ({ ...p, tipo: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditItem(null)}>Cancelar</Button>
-            <Button onClick={() => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Conta atualizada." }); } }}>Salvar</Button>
+            <Button onClick={() => { if (editItem) updateMut.mutate({ id: editItem.id, payload: editData }); }}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Deseja excluir <strong>{deleteItem?.banco}</strong>?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
+        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Deseja excluir <strong>{deleteItem?.banco}</strong>?</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => { if (deleteId) deleteMut.mutate(deleteId); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
     </div>
   );

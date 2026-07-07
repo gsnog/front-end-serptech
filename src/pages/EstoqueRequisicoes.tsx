@@ -1,54 +1,45 @@
+import { fmtDate } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useNavigate } from "react-router-dom"
 import { useState, useMemo } from "react"
 import { FilterSection } from "@/components/FilterSection"
-import { Plus, FileText, ClipboardCheck, PackageCheck } from "lucide-react"
+import { SortableHead } from "@/components/SortableHead"
+import { Plus, FileText, ClipboardCheck, PackageCheck, ChevronDown, ChevronRight, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { TableActions } from "@/components/TableActions"
 import { StatusBadge } from "@/components/StatusBadge"
 import { ExportButton } from "@/components/ExportButton"
+import { usePagination } from "@/hooks/usePagination"
+import { useSortable } from "@/hooks/useSortable"
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/hooks/use-toast"
-
-interface RequisicaoItem {
-  id: number;
-  item: string;
-  quantidade: number;
-  quantidadeAprovada?: number;
-}
-
-interface Requisicao {
-  id: number;
-  data: string;
-  requisitante: string;
-  unidade: string;
-  setor: string;
-  status: string;
-  itens: RequisicaoItem[];
-}
-
-const mockRequisicoes: Requisicao[] = [
-  { id: 1, data: "12/05/2025", requisitante: "Ana F.", unidade: "DLC Diagnósticos", setor: "TI", status: "Aprovada", itens: [{ id: 1, item: "Cabo HDMI", quantidade: 1 }] },
-  { id: 2, data: "10/05/2025", requisitante: "Carlos M.", unidade: "Almoxarifado SP", setor: "Administrativo", status: "Aguardando Aprovação", itens: [{ id: 2, item: "Papel A4", quantidade: 5 }, { id: 3, item: "Toner HP", quantidade: 2 }] },
-  { id: 3, data: "08/05/2025", requisitante: "Pedro S.", unidade: "TI Central", setor: "TI", status: "Entregue", itens: [{ id: 4, item: "Toner HP", quantidade: 2 }] },
-  { id: 4, data: "05/05/2025", requisitante: "Lucas V.", unidade: "Depósito RJ", setor: "Produção", status: "Rejeitada", itens: [{ id: 5, item: "Parafuso M8", quantidade: 50 }] },
-];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { fetchRequisicoes, updateRequisicao, deleteRequisicao, aprovarRequisicao, negarRequisicao, entregarRequisicao, type RequisicaoSetor as Requisicao, requisicoesQueryKey } from "@/services/estoque"
+import { fetchSetores, setoresQueryKey } from "@/services/pessoas"
+import { usePermissions } from "@/contexts/PermissionsContext"
+import api from "@/lib/api"
 
 export default function EstoqueRequisicoes() {
   const navigate = useNavigate()
-  const [items, setItems] = useState<Requisicao[]>(mockRequisicoes)
+  const queryClient = useQueryClient()
+  const { currentUser, getScope, hasPermission } = usePermissions()
+  const scope = getScope('estoque', 'est_pedidos_internos')
+  const currentUserId = currentUser?.userId ? Number(currentUser.userId) : null
   const [filterItem, setFilterItem] = useState("")
   const [filterSetor, setFilterSetor] = useState("")
+  const [filterStatus, setFilterStatus] = useState("")
   const [filterDataInicio, setFilterDataInicio] = useState("")
   const [filterDataFim, setFilterDataFim] = useState("")
   const [viewItem, setViewItem] = useState<Requisicao | null>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [editItem, setEditItem] = useState<Requisicao | null>(null)
-  const [editData, setEditData] = useState({ requisitante: "", setor: "" })
+  const [editData, setEditData] = useState({ requisitante_nome: "", observacao: "" })
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
   // Approval
   const [approvalItem, setApprovalItem] = useState<Requisicao | null>(null)
@@ -57,64 +48,130 @@ export default function EstoqueRequisicoes() {
   const [rejectJustificativa, setRejectJustificativa] = useState("")
   const [entregarItem, setEntregarItem] = useState<Requisicao | null>(null)
 
-  const filtered = useMemo(() => {
-    return items.filter(req => {
-      const matchItem = req.itens.some(i => i.item.toLowerCase().includes(filterItem.toLowerCase())) || req.requisitante.toLowerCase().includes(filterItem.toLowerCase())
-      const matchSetor = filterSetor && filterSetor !== "todos" ? req.setor.toLowerCase().includes(filterSetor.toLowerCase()) : true
-      const matchDataInicio = filterDataInicio ? req.data >= filterDataInicio.split("-").reverse().join("/") : true
-      const matchDataFim = filterDataFim ? req.data <= filterDataFim.split("-").reverse().join("/") : true
-      return matchItem && matchSetor && matchDataInicio && matchDataFim
-    })
-  }, [items, filterItem, filterSetor, filterDataInicio, filterDataFim])
+  useRealtimeUpdates([[...requisicoesQueryKey]]);
 
-  const getExportData = () => filtered.map(r => ({ Data: r.data, Itens: r.itens.map(i => i.item).join(", "), Requisitante: r.requisitante, Setor: r.setor, Status: r.status }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Requisição excluída." }); } };
-  const openEdit = (r: Requisicao) => { setEditItem(r); setEditData({ requisitante: r.requisitante, setor: r.setor }); };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, requisitante: editData.requisitante, setor: editData.setor } : i)); setEditItem(null); toast({ title: "Salvo", description: "Pedido atualizado." }); } };
-  const deleteItemData = items.find(i => i.id === deleteId);
+  const { data: response, isLoading, isError } = useQuery({
+    queryKey: requisicoesQueryKey,
+    queryFn: () => fetchRequisicoes(),
+  });
+  const items = Array.isArray(response) ? response : (response?.results ?? []);
+
+  const { data: setoresResponse } = useQuery({ queryKey: setoresQueryKey, queryFn: fetchSetores })
+  const setores = Array.isArray(setoresResponse) ? setoresResponse : (setoresResponse?.results ?? [])
+
+  // Inventário da unidade da requisição em análise
+  const { data: inventarioUnidade = [] } = useQuery({
+    queryKey: ["inventario_aprovacao", approvalItem?.unidade],
+    queryFn: () =>
+      api.get(`/api/estoque/inventario/?unidade=${approvalItem!.unidade}`).then((r) =>
+        Array.isArray(r.data) ? r.data : r.data?.results ?? []
+      ),
+    enabled: !!approvalItem?.unidade,
+  })
+
+  // item_id → quantidade_disponivel
+  const inventarioMap = useMemo<Record<number, number>>(() => {
+    const map: Record<number, number> = {}
+    for (const inv of inventarioUnidade as any[]) {
+      map[inv.item] = inv.quantidade_disponivel ?? 0
+    }
+    return map
+  }, [inventarioUnidade])
+
+  const setorOptions = [
+    { value: "todos", label: "Todos" },
+    ...setores
+      .filter(s => s.nome.trim() !== '')
+      .map(s => ({ value: String(s.id), label: s.nome }))
+  ]
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: number; payload: Partial<Requisicao> }) => updateRequisicao(data.id, data.payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: requisicoesQueryKey });
+      setEditItem(null);
+      toast({ title: "Sucesso", description: "Pedido atualizado." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha na operação.", variant: "destructive" }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteRequisicao,
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: requisicoesQueryKey }); setDeleteId(null); toast({ title: "Removida" }); },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  })
+
+  const aprovaMutation = useMutation({
+    mutationFn: ({ id, itens }: { id: number; itens: { id: number; quantidade_aprovada: number }[] }) => aprovarRequisicao(id, itens),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: requisicoesQueryKey });
+      setApprovalItem(null); setApprovalQuantities({});
+      toast({ title: "Pedido aprovado!" });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao aprovar.", variant: "destructive" }),
+  })
+
+  const negaMutation = useMutation({
+    mutationFn: ({ id, observacao }: { id: number; observacao: string }) => negarRequisicao(id, observacao),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: requisicoesQueryKey });
+      setRejectItem(null); setRejectJustificativa("");
+      toast({ title: "Pedido negado." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao negar.", variant: "destructive" }),
+  })
+
+  const entregaMutation = useMutation({
+    mutationFn: (id: number) => entregarRequisicao(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: requisicoesQueryKey });
+      setEntregarItem(null);
+      toast({ title: "Entrega registrada!", description: "Saída de estoque gerada automaticamente." });
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.detail ?? "Falha ao registrar entrega.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
+  })
+
+  const filtered = useMemo(() => items.filter(req => {
+    const matchItem = req.itens?.some(i => i.item_nome?.toLowerCase().includes(filterItem.toLowerCase())) || req.requisitante_nome?.toLowerCase().includes(filterItem.toLowerCase())
+    const matchSetor = filterSetor && filterSetor !== "todos" ? String(req.setor_requisicao) === filterSetor : true
+    const matchStatus = filterStatus && filterStatus !== "todos" ? req.status === filterStatus : true
+    const matchDataInicio = filterDataInicio ? (req.data || "") >= filterDataInicio : true
+    const matchDataFim = filterDataFim ? (req.data || "") <= filterDataFim : true
+    const matchScope = scope === 'self' && currentUserId != null ? req.user_create === currentUserId : true
+    return matchItem && matchSetor && matchStatus && matchDataInicio && matchDataFim && matchScope
+  }), [items, filterItem, filterSetor, filterStatus, filterDataInicio, filterDataFim, scope, currentUserId])
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted)
+
+  const toggleRow = (id: number) => setExpandedRows(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  })
 
   const openApproval = (req: Requisicao) => {
     setApprovalItem(req);
-    // Pre-fill quantities with requested amounts
     const quantities: Record<number, string> = {};
-    req.itens.forEach(it => { quantities[it.id] = String(it.quantidade); });
+    req.itens?.forEach(it => { quantities[it.id] = String(it.quantidade); });
     setApprovalQuantities(quantities);
   };
 
   const handleApprove = () => {
     if (!approvalItem) return;
-    // Validate quantities
-    for (const it of approvalItem.itens) {
-      const qty = approvalQuantities[it.id];
-      if (!qty || isNaN(Number(qty)) || Number(qty) < 0) {
-        toast({ title: "Quantidade inválida", description: `Informe a quantidade aprovada para "${it.item}".`, variant: "destructive" });
-        return;
-      }
-    }
-    setItems(prev => prev.map(i => i.id === approvalItem.id ? {
-      ...i,
-      status: "Aprovada",
-      itens: i.itens.map(it => ({ ...it, quantidadeAprovada: Number(approvalQuantities[it.id]) || 0 }))
-    } : i));
-    setApprovalItem(null);
-    setApprovalQuantities({});
-    toast({ title: "Aprovado", description: `Pedido interno aprovado. O botão "Entregar" está agora disponível.` });
+    const itens = (approvalItem.itens ?? []).map(it => ({
+      id: it.id,
+      quantidade_aprovada: parseInt(approvalQuantities[it.id] ?? String(it.quantidade)) || 0,
+    }));
+    aprovaMutation.mutate({ id: approvalItem.id, itens });
   };
 
   const handleReject = () => {
-    if (rejectItem) {
-      setItems(prev => prev.map(i => i.id === rejectItem.id ? { ...i, status: "Rejeitada" } : i));
-      setRejectItem(null);
-      setRejectJustificativa("");
-      toast({ title: "Rejeitada", description: `Pedido interno rejeitado.` });
-    }
+    if (rejectItem) negaMutation.mutate({ id: rejectItem.id, observacao: rejectJustificativa });
   };
 
-  const handleEntregar = (req: Requisicao) => {
-    setItems(prev => prev.map(i => i.id === req.id ? { ...i, status: "Entregue" } : i));
-    setEntregarItem(null);
-    toast({ title: "Entregue", description: `Pedido entregue. Saída de estoque gerada automaticamente.` });
-  };
+  const getExportData = () => filtered.map(r => ({ Data: r.data, Itens: r.itens?.map(i => i.item_nome).join(", "), Requisitante: r.requisitante_nome, Setor: r.setor_nome, Status: r.status }));
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -128,199 +185,287 @@ export default function EstoqueRequisicoes() {
         <FilterSection
           fields={[
             { type: "text", label: "Buscar", placeholder: "Buscar item ou requisitante...", value: filterItem, onChange: setFilterItem, width: "flex-1 min-w-[200px]" },
-            { type: "select", label: "Setor", placeholder: "Selecione o setor", value: filterSetor, onChange: setFilterSetor, options: [{ value: "todos", label: "Todos" }, { value: "ti", label: "TI" }, { value: "producao", label: "Produção" }, { value: "administrativo", label: "Administrativo" }], width: "min-w-[180px]" },
+            { type: "select", label: "Setor", placeholder: "Todos", value: filterSetor, onChange: setFilterSetor, options: setorOptions, width: "min-w-[180px]" },
+            { type: "select", label: "Status", placeholder: "Todos", value: filterStatus, onChange: setFilterStatus, options: [{ value: "todos", label: "Todos" }, { value: "Análise", label: "Análise" }, { value: "Aprovado", label: "Aprovado" }, { value: "Negado", label: "Negado" }], width: "min-w-[160px]" },
             { type: "date", label: "Data Início", value: filterDataInicio, onChange: setFilterDataInicio, width: "min-w-[160px]" },
             { type: "date", label: "Data Fim", value: filterDataFim, onChange: setFilterDataFim, width: "min-w-[160px]" }
           ]}
           resultsCount={filtered.length}
         />
 
-        <div className="rounded overflow-hidden">
+        <div className="rounded border border-border overflow-hidden">
           <Table>
-            <TableHeader><TableRow>
-              <TableHead className="text-center">Data</TableHead>
-              <TableHead className="text-center">Itens</TableHead>
-              <TableHead className="text-center">Requisitante</TableHead>
-              <TableHead className="text-center">Setor</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-center">Aprovação</TableHead>
-              <TableHead className="text-center">Entrega</TableHead>
-              <TableHead className="text-center">Ações</TableHead>
+            <TableHeader><TableRow className="bg-table-header">
+              <TableHead className="w-[40px]" />
+              <SortableHead label="Data" field="data" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Requisitante" field="requisitante_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Setor" field="setor_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Unidade" field="unidade_nome" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Status" field="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="font-semibold">Aprovação</TableHead>
+              <TableHead className="text-center font-semibold">Entrega</TableHead>
+              <TableHead className="text-center font-semibold">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado.</TableCell></TableRow>) : (
-                filtered.map((req) => (
-                  <TableRow key={req.id}>
-                    <TableCell className="text-center">{req.data}</TableCell>
-                    <TableCell className="text-center">{req.itens.map(i => i.item).join(", ")}</TableCell>
-                    <TableCell className="text-center">{req.requisitante}</TableCell>
-                    <TableCell className="text-center">{req.setor}</TableCell>
-                    <TableCell className="text-center"><StatusBadge status={req.status} /></TableCell>
-                    <TableCell className="text-center">
-                      {req.status === "Aguardando Aprovação" ? (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando pedidos...</TableCell></TableRow>
+              ) : isError ? (
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-destructive">Erro ao carregar os dados.</TableCell></TableRow>
+              ) : paginatedItems.length === 0 ? (
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado.</TableCell></TableRow>
+              ) : paginatedItems.map((req) => (
+                <>
+                  <TableRow key={req.id} className="hover:bg-table-hover transition-colors">
+                    <TableCell >
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => toggleRow(req.id)}>
+                        {expandedRows.has(req.id) ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-center">{fmtDate(req.data)}</TableCell>
+                    <TableCell >{req.requisitante_nome || "—"}</TableCell>
+                    <TableCell >{req.setor_nome || "—"}</TableCell>
+                    <TableCell >{req.unidade_nome || "—"}</TableCell>
+                    <TableCell className="text-center"><StatusBadge status={req.status || ""} /></TableCell>
+                    <TableCell >
+                      {req.status === "Análise" && hasPermission('estoque', 'est_pedidos_internos', 'approve') ? (
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => openApproval(req)}>
                           <ClipboardCheck className="w-3.5 h-3.5" /> Analisar
                         </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      ) : <span className="text-xs text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell className="text-center">
-                      {req.status === "Aprovada" ? (
+                    <TableCell >
+                      {req.status === "Aprovado" && req.status_entrega !== "Efetuada" && hasPermission('estoque', 'est_pedidos_internos', 'deliver') ? (
                         <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => setEntregarItem(req)}>
                           <PackageCheck className="w-3.5 h-3.5" /> Entregar
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
+                        <span className="text-xs text-muted-foreground">{req.status_entrega === "Efetuada" ? "Entregue ✓" : "—"}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      <TableActions onView={() => setViewItem(req)} onEdit={() => openEdit(req)} onDelete={() => setDeleteId(req.id)} />
+                      <TableActions onView={() => setViewItem(req)} onEdit={() => { setEditItem(req); setEditData({ requisitante_nome: req.requisitante_nome || "", observacao: req.observacao || "" }); }} onDelete={() => setDeleteId(req.id)} />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+
+                  {expandedRows.has(req.id) && (
+                    <TableRow key={`${req.id}-items`} className="bg-muted/30">
+                      <TableCell colSpan={9} className="py-0 px-8">
+                        <div className="py-3">
+                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                            Itens da Requisição #{req.id}
+                          </p>
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/50">
+                                <TableHead className="text-xs h-8">Item</TableHead>
+                                <TableHead className="text-right text-xs h-8">Qtd Solicitada</TableHead>
+                                <TableHead className="text-right text-xs h-8">Qtd Aprovada</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(req.itens ?? []).length === 0 ? (
+                                <TableRow><TableCell colSpan={3} className="text-center text-sm py-2 text-muted-foreground">Sem itens</TableCell></TableRow>
+                              ) : (req.itens ?? []).map((it, idx) => (
+                                <TableRow key={idx} className="border-0">
+                                  <TableCell className="text-sm py-1">{it.item_nome || `Item #${it.item}`}</TableCell>
+                                  <TableCell className="text-sm py-1">{it.quantidade}</TableCell>
+                                  <TableCell className="text-sm py-1">
+                                    {it.quantidade_aprovada != null
+                                      ? <span className="font-medium text-green-600">{it.quantidade_aprovada}</span>
+                                      : <span className="text-muted-foreground">—</span>}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page - 1) * 20 + 1}–{Math.min(page * 20, total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page - 1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page + 1)} disabled={!hasNext}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Approval Dialog - with details and quantity approved */}
+      {/* Modal: Aprovar */}
       <Dialog open={!!approvalItem} onOpenChange={() => { setApprovalItem(null); setApprovalQuantities({}); }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Aprovar Pedido Interno</DialogTitle></DialogHeader>
           {approvalItem && (
             <div className="space-y-5">
-              <div className="border border-border rounded-lg p-4 space-y-3">
-                <p className="text-sm font-semibold text-foreground">Detalhes do Pedido</p>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div><span className="font-semibold">Requisitante:</span> {approvalItem.requisitante}</div>
-                  <div><span className="font-semibold">Unidade:</span> {approvalItem.unidade}</div>
-                  <div><span className="font-semibold">Setor:</span> {approvalItem.setor}</div>
-                  <div><span className="font-semibold">Data do Pedido:</span> {approvalItem.data}</div>
-                  <div><span className="font-semibold">Status Atual:</span> Análise</div>
+              <div className="border border-border rounded-lg p-4 space-y-2 text-sm">
+                <p className="font-semibold">Detalhes do Pedido</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-muted-foreground">Requisitante:</span> <span className="font-medium">{approvalItem.requisitante_nome || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Unidade:</span> <span className="font-medium">{approvalItem.unidade_nome || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Setor:</span> <span className="font-medium">{approvalItem.setor_nome || "—"}</span></div>
+                  <div><span className="text-muted-foreground">Data:</span> <span className="font-medium">{approvalItem.data || "—"}</span></div>
                 </div>
               </div>
 
               <div>
-                <p className="text-sm font-semibold mb-3">Itens do Pedido</p>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-center">Item</TableHead>
-                      <TableHead className="text-center">Quantidade Requisitada</TableHead>
-                      <TableHead className="text-center">Quantidade Aprovada</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {approvalItem.itens.map(it => (
-                      <TableRow key={it.id}>
-                        <TableCell className="text-center font-medium">{it.item}</TableCell>
-                        <TableCell className="text-center">{it.quantidade}</TableCell>
-                        <TableCell className="text-center">
-                          <Input
-                            type="number"
-                            min="0"
-                            max={it.quantidade}
-                            value={approvalQuantities[it.id] || ""}
-                            onChange={(e) => setApprovalQuantities(prev => ({ ...prev, [it.id]: e.target.value }))}
-                            className="form-input w-24 mx-auto text-center"
-                            placeholder="Qtd"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <p className="text-sm font-semibold mb-2">Itens — defina a quantidade a liberar</p>
+                <div className="rounded border border-border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left px-3 py-2 font-medium">Item</th>
+                        <th className="text-center px-3 py-2 font-medium">Qtd Solicitada</th>
+                        <th className="text-center px-3 py-2 font-medium">Disponível</th>
+                        <th className="text-center px-3 py-2 font-medium">Qtd a Liberar</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(approvalItem.itens ?? []).length === 0 ? (
+                        <tr><td colSpan={4} className="text-center py-4 text-muted-foreground">Sem itens</td></tr>
+                      ) : (approvalItem.itens ?? []).map((it) => {
+                        const disponivel = inventarioMap[it.item ?? 0] ?? null;
+                        const liberando = parseInt(approvalQuantities[it.id] ?? String(it.quantidade)) || 0;
+                        const semEstoque = disponivel !== null && liberando > disponivel;
+                        return (
+                          <tr key={it.id} className="border-t border-border">
+                            <td className="px-3 py-2">{it.item_nome || `Item #${it.item}`}</td>
+                            <td className="px-3 py-2 text-center">{it.quantidade}</td>
+                            <td className="px-3 py-2 text-center">
+                              {disponivel === null ? (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              ) : semEstoque ? (
+                                <span className="flex items-center justify-center gap-1 text-destructive text-xs font-medium">
+                                  <AlertTriangle className="w-3.5 h-3.5" />{disponivel}
+                                </span>
+                              ) : (
+                                <span className="flex items-center justify-center gap-1 text-green-600 text-xs font-medium">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />{disponivel}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <Input
+                                type="number" min="0" max={it.quantidade}
+                                className={`w-20 mx-auto text-center ${semEstoque ? "border-destructive" : ""}`}
+                                value={approvalQuantities[it.id] ?? String(it.quantidade)}
+                                onChange={(e) => setApprovalQuantities(p => ({ ...p, [it.id]: e.target.value }))}
+                              />
+                              {semEstoque && <p className="text-xs text-destructive mt-0.5">Estoque insuficiente</p>}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Você pode liberar uma quantidade diferente da solicitada.</p>
               </div>
 
               <DialogFooter className="gap-2 pt-2">
-                <Button variant="outline" onClick={() => { setRejectItem(approvalItem); setApprovalItem(null); setApprovalQuantities({}); }}>Rejeitar</Button>
+                <Button variant="outline" onClick={() => { setRejectItem(approvalItem); setApprovalItem(null); }}>Negar</Button>
                 <Button variant="outline" onClick={() => { setApprovalItem(null); setApprovalQuantities({}); }}>Cancelar</Button>
-                <Button onClick={handleApprove}>Aprovar Pedido</Button>
+                <Button onClick={handleApprove} disabled={aprovaMutation.isPending}>Aprovar Pedido</Button>
               </DialogFooter>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {/* Reject Dialog */}
+      {/* Modal: Negar */}
       <Dialog open={!!rejectItem} onOpenChange={() => { setRejectItem(null); setRejectJustificativa(""); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Rejeitar Pedido Interno</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>Negar Pedido Interno</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">Informe a justificativa para rejeitar o pedido de <strong>{rejectItem?.requisitante}</strong>.</p>
+            <p className="text-sm text-muted-foreground">Informe a justificativa para negar o pedido de <strong>{rejectItem?.requisitante_nome}</strong>.</p>
             <div className="space-y-2">
               <Label>Justificativa <span className="text-destructive">*</span></Label>
-              <Textarea value={rejectJustificativa} onChange={e => setRejectJustificativa(e.target.value)} placeholder="Motivo da rejeição..." className="min-h-[100px]" />
+              <Textarea value={rejectJustificativa} onChange={e => setRejectJustificativa(e.target.value)} placeholder="Motivo da negação..." className="min-h-[100px]" />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setRejectItem(null); setRejectJustificativa(""); }}>Cancelar</Button>
-            <Button variant="destructive" onClick={handleReject} disabled={!rejectJustificativa.trim()}>Rejeitar</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={!rejectJustificativa.trim() || negaMutation.isPending}>Negar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Entregar Dialog */}
+      {/* Modal: Entregar */}
       <AlertDialog open={!!entregarItem} onOpenChange={() => setEntregarItem(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Entregar Pedido Interno?</AlertDialogTitle>
-            <AlertDialogDescription>Ao entregar o pedido de <strong>{entregarItem?.requisitante}</strong>, uma <strong>saída de estoque automática</strong> será gerada. Deseja prosseguir?</AlertDialogDescription>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Registrar Entrega?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Será gerada uma <strong>saída de estoque</strong> automática com os itens aprovados da requisição de <strong>{entregarItem?.requisitante_nome}</strong>.
+              O estoque da unidade <strong>{entregarItem?.unidade_nome}</strong> será debitado.
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => entregarItem && handleEntregar(entregarItem)}>Entregar</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => entregarItem && entregaMutation.mutate(entregarItem.id)}
+              disabled={entregaMutation.isPending}
+            >
+              Confirmar Entrega
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Modal: Visualizar */}
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Detalhes do Pedido Interno</DialogTitle></DialogHeader>
           {viewItem && (
-            <div className="space-y-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between py-1 border-b border-border"><span className="text-muted-foreground">Data</span><span className="font-medium">{viewItem.data}</span></div>
-                <div className="flex justify-between py-1 border-b border-border"><span className="text-muted-foreground">Requisitante</span><span className="font-medium">{viewItem.requisitante}</span></div>
-                <div className="flex justify-between py-1 border-b border-border"><span className="text-muted-foreground">Unidade</span><span className="font-medium">{viewItem.unidade}</span></div>
-                <div className="flex justify-between py-1 border-b border-border"><span className="text-muted-foreground">Setor</span><span className="font-medium">{viewItem.setor}</span></div>
-                <div className="flex justify-between py-1 border-b border-border"><span className="text-muted-foreground">Status</span><StatusBadge status={viewItem.status} /></div>
-              </div>
-              <div>
-                <p className="text-sm font-semibold mb-2">Itens</p>
-                <Table>
-                  <TableHeader><TableRow>
-                    <TableHead className="text-center">Item</TableHead>
-                    <TableHead className="text-center">Qtd Requisitada</TableHead>
-                    <TableHead className="text-center">Qtd Aprovada</TableHead>
-                  </TableRow></TableHeader>
-                  <TableBody>
-                    {viewItem.itens.map(it => (
-                      <TableRow key={it.id}>
-                        <TableCell className="text-center">{it.item}</TableCell>
-                        <TableCell className="text-center">{it.quantidade}</TableCell>
-                        <TableCell className="text-center">{it.quantidadeAprovada !== undefined ? it.quantidadeAprovada : "—"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+            <div className="space-y-4 text-sm">
+              {[["Data", viewItem.data], ["Requisitante", viewItem.requisitante_nome], ["Unidade", viewItem.unidade_nome], ["Setor", viewItem.setor_nome], ["Status", viewItem.status], ["Entrega", viewItem.status_entrega], ["Observação", viewItem.observacao]].map(([k, v]) => v ? (
+                <div key={k} className="flex justify-between py-1 border-b border-border last:border-0">
+                  <span className="text-muted-foreground">{k}</span>
+                  <span className="font-medium">{v}</span>
+                </div>
+              ) : null)}
+              {(viewItem.itens ?? []).length > 0 && (
+                <div className="pt-1">
+                  <p className="font-semibold mb-2">Itens</p>
+                  {viewItem.itens!.map((it, i) => (
+                    <div key={i} className="flex justify-between py-1 border-b border-border/50 last:border-0">
+                      <span>{it.item_nome}</span>
+                      <span className="text-muted-foreground">Solicitado: {it.quantidade}{it.quantidade_aprovada != null ? ` | Aprovado: ${it.quantidade_aprovada}` : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
+      {/* Modal: Editar */}
       <Dialog open={!!editItem} onOpenChange={() => setEditItem(null)}>
-        <DialogContent><DialogHeader><DialogTitle>Editar Pedido Interno</DialogTitle></DialogHeader>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Pedido Interno</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>Requisitante</Label><Input value={editData.requisitante} onChange={e => setEditData({ ...editData, requisitante: e.target.value })} /></div>
-            <div><Label>Setor</Label><Input value={editData.setor} onChange={e => setEditData({ ...editData, setor: e.target.value })} /></div>
+            <div><Label>Requisitante</Label><Input value={editData.requisitante_nome} onChange={e => setEditData(p => ({ ...p, requisitante_nome: e.target.value }))} /></div>
+            <div><Label>Observação</Label><Textarea value={editData.observacao} onChange={e => setEditData(p => ({ ...p, observacao: e.target.value }))} /></div>
           </div>
-          <DialogFooter><Button onClick={handleSaveEdit}>Salvar</Button></DialogFooter>
+          <DialogFooter><Button onClick={() => editItem && updateMutation.mutate({ id: editItem.id, payload: editData })} disabled={updateMutation.isPending}>Salvar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* AlertDialog: Excluir */}
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir pedido?</AlertDialogTitle><AlertDialogDescription>Deseja excluir o pedido de "{deleteItemData?.requisitante}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+        <AlertDialogContent>
+          <AlertDialogHeader><AlertDialogTitle>Excluir pedido?</AlertDialogTitle><AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteId && deleteMutation.mutate(deleteId)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleteMutation.isPending}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

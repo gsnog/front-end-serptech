@@ -6,6 +6,8 @@ import { Layers } from "lucide-react";
 import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
+import { createSetor } from "@/services/pessoas";
+import { toast } from "@/hooks/use-toast";
 
 const validationFields = [
   { name: "nome", label: "Nome", required: true, minLength: 2, maxLength: 100 },
@@ -26,7 +28,16 @@ const NovoSetor = () => {
 
   const handleSalvar = async () => {
     if (validateAll()) {
-      await handleSave("/operacional/setor", "Setor salvo com sucesso!");
+      try {
+        await createSetor({ nome: formData.nome });
+        await handleSave("/operacional/setor", "Setor salvo com sucesso!");
+      } catch (e: any) {
+        toast({
+          title: "Erro ao cadastrar",
+          description: e?.response?.data?.error || "Verifique os dados e tente novamente",
+          variant: "destructive"
+        })
+      }
     }
   };
 

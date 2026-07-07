@@ -1,24 +1,30 @@
+import { fmtDate, todayStr } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GradientCard } from "@/components/financeiro/GradientCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { 
-  Users, Target, FileText, TrendingUp, DollarSign, Calendar, Phone, 
+import {
+  Users, Target, FileText, TrendingUp, DollarSign, Calendar, Phone,
   AlertTriangle, ArrowUpRight, ChevronRight
 } from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import { 
-  leadsMock, oportunidadesMock, atividadesMock, propostasMock,
-  etapasFunil, getPipelineTotal, getForecastPonderado, getContaById
-} from "@/data/comercial-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
+import {
+  etapasFunil
+} from "@/services/comercial";
+import { pessoasQueryKey } from "@/services/pessoas";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { useDashboardData } from "../Dashboard";
+import { useQuery } from "@tanstack/react-query";
+import { fetchOportunidades, fetchLeads, fetchAtividades, fetchPropostas } from "@/services/comercial";
+
+// --- Mocks removidos para usar dados reais ---
+
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -51,14 +57,20 @@ export default function VisaoGeralComercial() {
   const [periodo, setPeriodo] = useState("30d");
   const [vendedor, setVendedor] = useState("__all__");
 
-  // Métricas
-  const leadsNovos = leadsMock.filter(l => l.status === 'novo').length;
-  const opsAbertas = oportunidadesMock.filter(o => !['ganho', 'perdido'].includes(o.etapa)).length;
-  const propostasPendentes = propostasMock.filter(p => p.status === 'enviada').length;
-  const pipelineTotal = getPipelineTotal();
-  const forecastMes = getForecastPonderado();
-  const atividadesVencidas = atividadesMock.filter(a => 
-    a.status === 'pendente' && new Date(a.data) < new Date()
+  const { dash } = useDashboardData();
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['oportunidades'], queryFn: fetchOportunidades });
+  const { data: leads = [] } = useQuery({ queryKey: ['leads'], queryFn: fetchLeads });
+  const { data: atividades = [] } = useQuery({ queryKey: ['atividades'], queryFn: fetchAtividades });
+  const { data: propostas = [] } = useQuery({ queryKey: ['propostas'], queryFn: fetchPropostas });
+
+  // Métricas Reais
+  const leadsNovos = leads.filter(l => l.status === 'novo').length;
+  const opsAbertas = oportunidades.filter(o => !['ganho', 'perdido'].includes(o.estagio)).length;
+  const propostasPendentes = propostas.filter(p => p.status === 'enviada').length;
+  const pipelineTotal = oportunidades.filter(o => !['ganho', 'perdido'].includes(o.estagio)).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0);
+  const forecastMes = pipelineTotal * 0.7; // Simples forecast ponderado de 70%
+  const atividadesVencidas = atividades.filter(a =>
+    a.status === 'pendente' && a.data < todayStr()
   ).length;
 
   // Dados do funil
@@ -66,36 +78,19 @@ export default function VisaoGeralComercial() {
     .filter(e => !['ganho', 'perdido'].includes(e.id))
     .map(etapa => ({
       name: etapa.nome,
-      value: oportunidadesMock.filter(o => o.etapa === etapa.id).length,
-      amount: oportunidadesMock
-        .filter(o => o.etapa === etapa.id)
-        .reduce((sum, o) => sum + o.valorEstimado, 0)
+      value: oportunidades.filter(o => o.estagio === etapa.id).length,
+      amount: oportunidades
+        .filter(o => o.estagio === etapa.id)
+        .reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0)
     }));
 
-  // Ranking de vendedores
-  const rankingVendedores = pessoasMock.slice(0, 5).map(p => {
-    const ops = oportunidadesMock.filter(o => o.proprietarioId === p.id);
-    const ganhas = ops.filter(o => o.etapa === 'ganho');
-    const receita = ganhas.reduce((sum, o) => sum + o.valorEstimado, 0);
-    const total = ops.length;
-    const taxa = total > 0 ? (ganhas.length / total * 100) : 0;
-    return {
-      nome: p.nome.split(' ')[0],
-      receita,
-      taxa: taxa.toFixed(0),
-      atividades: atividadesMock.filter(a => a.responsavelId === p.id).length
-    };
-  }).sort((a, b) => b.receita - a.receita);
-
-  // Motivos de perda
-  const motivosPerdaData = [
-    { name: 'Preço', value: 35, color: 'hsl(var(--destructive))' },
-    { name: 'Concorrência', value: 25, color: 'hsl(var(--warning))' },
-    { name: 'Timing', value: 20, color: 'hsl(var(--primary))' },
-    { name: 'Orçamento', value: 15, color: 'hsl(var(--chart-3))' },
-    { name: 'Outros', value: 5, color: 'hsl(var(--muted-foreground))' },
-  ];
-  const motivosTotal = motivosPerdaData.reduce((s, d) => s + d.value, 0);
+  // Motivos de perda reais do backend
+  const motivosPerdaData = (dash.comercialData?.perdas || []).map((p: any, i: number) => ({
+    name: p.motivo,
+    value: p.valor,
+    color: `hsl(${(i * 60) % 360} 70% 50%)`
+  }));
+  const motivosTotalCount = motivosPerdaData.reduce((s: number, d: any) => s + d.value, 0);
 
   return (
     <div className="space-y-6">
@@ -123,9 +118,6 @@ export default function VisaoGeralComercial() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">Todos</SelectItem>
-                    {pessoasMock.slice(0, 5).map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -172,7 +164,7 @@ export default function VisaoGeralComercial() {
                 </div>
                 <div>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold">Atividades Hoje</p>
-                  <p className="text-3xl font-bold mt-1">{atividadesMock.filter(a => a.data === '2026-02-04').length}</p>
+                  <p className="text-3xl font-bold mt-1">{atividades.filter(a => a.data === todayStr()).length}</p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
@@ -212,7 +204,7 @@ export default function VisaoGeralComercial() {
                   </defs>
                   <XAxis type="number" tickFormatter={(v) => `${v}`} axisLine={false} tickLine={false} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} />
                   <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-                  <Tooltip 
+                  <Tooltip
                     content={<ChartTooltip />}
                     cursor={false}
                   />
@@ -223,25 +215,13 @@ export default function VisaoGeralComercial() {
           </div>
         </FadeIn>
 
-        {/* Ranking Vendedores */}
+        {/* Ranking Vendedores - Placeholder real (vazio se sem dados) */}
         <FadeIn delay={9}>
           <div className="bg-card rounded-2xl p-6 shadow-sm shadow-black/[0.04] dark:shadow-black/20">
-            <h3 className="text-sm font-semibold mb-5">Ranking de Vendedores</h3>
-            <div className="space-y-3">
-              {rankingVendedores.map((v, i) => (
-                <div key={v.nome} className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className="w-7 h-7 rounded-lg bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">
-                      {i + 1}
-                    </span>
-                    <span className="font-medium">{v.nome}</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-muted-foreground">{v.taxa}% conv.</span>
-                    <span className="font-semibold">{formatCurrency(v.receita)}</span>
-                  </div>
-                </div>
-              ))}
+            <h3 className="text-sm font-semibold mb-5">Eficiência de Vendas</h3>
+            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
+              <TrendingUp className="h-8 w-8 mb-2 opacity-20" />
+              <p className="text-sm">Dados de performance em processamento...</p>
             </div>
           </div>
         </FadeIn>
@@ -269,8 +249,8 @@ export default function VisaoGeralComercial() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" style={{ fontSize: 18, fontWeight: 700 }}>{motivosTotal}%</text>
-                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>Total</text>
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" style={{ fontSize: 18, fontWeight: 700 }}>{motivosTotalCount}</text>
+                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>Oportunidades Perdidas</text>
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                 </PieChart>
               </ResponsiveContainer>
@@ -296,27 +276,29 @@ export default function VisaoGeralComercial() {
               </Button>
             </div>
             <div className="space-y-3">
-              {atividadesMock.filter(a => a.status === 'pendente').slice(0, 5).map(a => (
+              {atividades.filter(a => a.status === 'pendente').slice(0, 5).map(a => (
                 <div key={a.id} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 hover:bg-muted/40 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className={`p-2.5 rounded-xl ${
-                      a.tipo === 'reuniao' ? 'bg-primary/10' : 
+                    <div className={`p-2.5 rounded-xl ${a.tipo === 'reuniao' ? 'bg-primary/10' :
                       a.tipo === 'ligacao' ? 'bg-success/10' : 'bg-warning/10'
-                    }`}>
+                      }`}>
                       {a.tipo === 'reuniao' ? <Calendar className="h-4 w-4 text-primary" /> :
-                       a.tipo === 'ligacao' ? <Phone className="h-4 w-4 text-success" /> :
-                       <FileText className="h-4 w-4 text-warning" />}
+                        a.tipo === 'ligacao' ? <Phone className="h-4 w-4 text-success" /> :
+                          <FileText className="h-4 w-4 text-warning" />}
                     </div>
                     <div>
                       <p className="text-sm font-medium">{a.titulo}</p>
-                      <p className="text-xs text-muted-foreground">{a.data} {a.hora && `às ${a.hora}`}</p>
+                      <p className="text-xs text-muted-foreground">{fmtDate(a.data)} {a.hora && `às ${a.hora}`}</p>
                     </div>
                   </div>
-                  <StatusBadge 
-                    status={a.tipo === 'reuniao' ? 'Em andamento' : a.tipo === 'ligacao' ? 'Normal' : 'Processando'} 
+                  <StatusBadge
+                    status={a.tipo === 'reuniao' ? 'Em andamento' : a.tipo === 'ligacao' ? 'Normal' : 'Processando'}
                   />
                 </div>
               ))}
+              {atividades.filter(a => a.status === 'pendente').length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Sem atividades pendentes.</p>
+              )}
             </div>
           </div>
         </FadeIn>

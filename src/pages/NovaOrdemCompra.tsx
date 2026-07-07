@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,69 +10,84 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { Trash2, ShoppingCart, ExternalLink } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
+import {
+  fetchSetoresEstoque, fetchUnidades, fetchItensEstoque,
+  createOrdemCompra, updateOrdemCompra, fetchOrdemCompra,
+  ordensCompraQueryKey,
+} from "@/services/estoque";
 
 interface ItemOrdem {
-  id: number;
+  localId: number;
   item: string;
   marca: string;
-  quantidade: string;
+  quantidade: number;
   especificacoes: string;
-}
-
-const unidadeOptions = [
-  { value: "almoxarifado-sp", label: "Almoxarifado SP" },
-  { value: "ti-central", label: "TI Central" },
-  { value: "deposito-rj", label: "Depósito RJ" },
-];
-
-const setorOptions = [
-  { value: "setor1", label: "Setor 1" },
-  { value: "setor2", label: "Setor 2" },
-  { value: "administrativo", label: "Administrativo" },
-  { value: "operacional", label: "Operacional" },
-];
-
-const itensCadastradosBase = [
-  { value: "parafuso-m8", label: "Parafuso M8" },
-  { value: "parafuso-m10", label: "Parafuso M10" },
-  { value: "cabo-hdmi", label: "Cabo HDMI" },
-  { value: "oleo-lubrificante", label: "Óleo Lubrificante" },
-  { value: "papel-a4", label: "Papel A4" },
-  { value: "toner-hp", label: "Toner HP" },
-];
-
-function loadItensCadastrados() {
-  const novos = JSON.parse(sessionStorage.getItem("novos_itens_cadastrados") || "[]");
-  const extras = novos.map((n: any) => ({ value: n.value, label: n.label }));
-  // Merge without duplicates
-  const allValues = new Set(itensCadastradosBase.map(i => i.value));
-  const merged = [...itensCadastradosBase];
-  for (const e of extras) {
-    if (!allValues.has(e.value)) {
-      merged.push(e);
-      allValues.add(e.value);
-    }
-  }
-  return merged;
 }
 
 export default function NovaOrdemCompra() {
   const navigate = useNavigate();
-  const { isSaving, handleSave } = useSaveWithDelay();
+  const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
+  const isEditing = !!id;
+
   const [itens, setItens] = useState<ItemOrdem[]>([]);
-  const [itensCadastrados, setItensCadastrados] = useState(loadItensCadastrados);
   const [formData, setFormData] = useState({
     unidade: "", setor: "", descricao: "", justificativa: "",
     itemCadastrado: "", marca: "", quantidade: "", especificacoes: "",
   });
   const [showNoItemDialog, setShowNoItemDialog] = useState(false);
 
-  // Restore state from sessionStorage on mount
-  useState(() => {
+  // Load setores, unidades, itens from API
+  const { data: setoresData = [] } = useQuery({
+    queryKey: ['setoresEstoque'],
+    queryFn: fetchSetoresEstoque,
+  });
+  const { data: unidadesData = [] } = useQuery({
+    queryKey: ['unidades'],
+    queryFn: fetchUnidades,
+  });
+  const { data: itensEstoqueRaw } = useQuery({
+    queryKey: ['itensEstoque'],
+    queryFn: () => fetchItensEstoque(),
+  });
+  const itensEstoque = Array.isArray(itensEstoqueRaw)
+    ? itensEstoqueRaw
+    : (itensEstoqueRaw as any)?.results ?? [];
+
+  // Load existing order for editing
+  const { data: existingOrder } = useQuery({
+    queryKey: ['ordemCompra', id],
+    queryFn: () => fetchOrdemCompra(Number(id)),
+    enabled: isEditing,
+  });
+
+  // Pre-populate form when editing
+  useEffect(() => {
+    if (existingOrder) {
+      setFormData(prev => ({
+        ...prev,
+        unidade: existingOrder.unidade ? String(existingOrder.unidade) : "",
+        setor: existingOrder.setor ? String(existingOrder.setor) : "",
+        descricao: existingOrder.descricao_material || "",
+        justificativa: existingOrder.justificativa || "",
+      }));
+      if (existingOrder.itens) {
+        setItens(existingOrder.itens.map((item, idx) => ({
+          localId: idx,
+          item: item.item,
+          marca: item.marca || "",
+          quantidade: item.quantidade,
+          especificacoes: item.especificacoes || "",
+        })));
+      }
+    }
+  }, [existingOrder]);
+
+  // Restore state from sessionStorage on mount (returning from item cadastro)
+  useEffect(() => {
     const saved = sessionStorage.getItem("novaOrdemCompra_state");
     if (saved) {
       try {
@@ -83,47 +99,65 @@ export default function NovaOrdemCompra() {
         console.error("Erro ao restaurar estado:", e);
       }
     }
-  });
-
-  // Reload items list when window regains focus (returning from cadastro)
-  useEffect(() => {
-    const handleFocus = () => {
-      setItensCadastrados(loadItensCadastrados());
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
   }, []);
 
+  const mutation = useMutation({
+    mutationFn: (payload: any) =>
+      isEditing ? updateOrdemCompra(Number(id), payload) : createOrdemCompra(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ordensCompraQueryKey });
+      toast({ title: isEditing ? "Ordem de compra atualizada!" : "Ordem de compra criada!" });
+      navigate("/estoque/ordem-compra");
+    },
+    onError: () => {
+      toast({ title: "Erro ao salvar", description: "Verifique os dados e tente novamente.", variant: "destructive" });
+    },
+  });
+
   const handleAddItem = () => {
-    const itemName = itensCadastrados.find(i => i.value === formData.itemCadastrado)?.label || "";
+    const itemName = formData.itemCadastrado;
     if (!itemName || !formData.quantidade) {
       toast({ title: "Campos obrigatórios", description: "Selecione um item e informe a quantidade.", variant: "destructive" });
       return;
     }
-    const novoItem: ItemOrdem = {
-      id: Date.now(),
+    setItens([...itens, {
+      localId: Date.now(),
       item: itemName,
       marca: formData.marca,
-      quantidade: formData.quantidade,
+      quantidade: Number(formData.quantidade),
       especificacoes: formData.especificacoes,
-    };
-    setItens([...itens, novoItem]);
+    }]);
     setFormData({ ...formData, itemCadastrado: "", marca: "", quantidade: "", especificacoes: "" });
   };
 
-  const handleRemoveItem = (id: number) => setItens(itens.filter((item) => item.id !== id));
-  const handleSalvar = () => handleSave("/estoque/ordem-compra", "Ordem de compra salva com sucesso!");
+  const handleRemoveItem = (localId: number) => setItens(itens.filter(i => i.localId !== localId));
+
+  const handleSalvar = () => {
+    if (!formData.setor || !formData.unidade || !formData.descricao) {
+      toast({ title: "Campos obrigatórios", description: "Preencha setor, unidade e descrição.", variant: "destructive" });
+      return;
+    }
+    mutation.mutate({
+      setor: Number(formData.setor),
+      unidade: Number(formData.unidade),
+      descricao_material: formData.descricao,
+      justificativa: formData.justificativa,
+      itens: itens.map(({ item, marca, quantidade, especificacoes }) => ({
+        item, marca, quantidade, especificacoes,
+      })),
+    });
+  };
+
   const handleCancelar = () => navigate("/estoque/ordem-compra");
 
   const handleGoToCadastroItem = () => {
-    const stateToSave = { formData, itens };
-    sessionStorage.setItem("novaOrdemCompra_state", JSON.stringify(stateToSave));
+    sessionStorage.setItem("novaOrdemCompra_state", JSON.stringify({ formData, itens }));
     setShowNoItemDialog(false);
     navigate("/cadastro/estoque/itens/novo?returnTo=/estoque/ordem-compra/nova");
   };
 
   return (
-    <SimpleFormWizard title="Nova Ordem de Compra">
+    <SimpleFormWizard title={isEditing ? "Editar Ordem de Compra" : "Nova Ordem de Compra"}>
       <Card className="border-border shadow-lg">
         <CardContent className="p-6 md:p-8">
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -143,7 +177,7 @@ export default function NovaOrdemCompra() {
                 <Select value={formData.unidade} onValueChange={(v) => setFormData({ ...formData, unidade: v })}>
                   <SelectTrigger className="form-input"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {unidadeOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {unidadesData.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.unidade}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -153,7 +187,7 @@ export default function NovaOrdemCompra() {
                 <Select value={formData.setor} onValueChange={(v) => setFormData({ ...formData, setor: v })}>
                   <SelectTrigger className="form-input"><SelectValue placeholder="Selecione o setor" /></SelectTrigger>
                   <SelectContent className="bg-popover">
-                    {setorOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                    {setoresData.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.setor}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -184,7 +218,9 @@ export default function NovaOrdemCompra() {
                       <Select value={formData.itemCadastrado} onValueChange={(v) => setFormData({ ...formData, itemCadastrado: v })}>
                         <SelectTrigger className="form-input"><SelectValue placeholder="Selecione um item cadastrado" /></SelectTrigger>
                         <SelectContent className="bg-popover">
-                          {itensCadastrados.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                          {itensEstoque.map((item: any) => (
+                            <SelectItem key={item.id} value={item.itens_do_estoque}>{item.itens_do_estoque}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -218,10 +254,10 @@ export default function NovaOrdemCompra() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-center">Item</TableHead>
-                  <TableHead className="text-center">Marca</TableHead>
-                  <TableHead className="text-center">Quantidade</TableHead>
-                  <TableHead className="text-center">Especificações</TableHead>
+                  <TableHead >Item</TableHead>
+                  <TableHead >Marca</TableHead>
+                  <TableHead className="text-right">Quantidade</TableHead>
+                  <TableHead >Especificações</TableHead>
                   <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -230,13 +266,13 @@ export default function NovaOrdemCompra() {
                   <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum item adicionado</TableCell></TableRow>
                 ) : (
                   itens.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="text-center">{item.item}</TableCell>
-                      <TableCell className="text-center">{item.marca}</TableCell>
-                      <TableCell className="text-center">{item.quantidade}</TableCell>
-                      <TableCell className="text-center">{item.especificacoes}</TableCell>
-                      <TableCell className="text-center">
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
+                    <TableRow key={item.localId}>
+                      <TableCell >{item.item}</TableCell>
+                      <TableCell >{item.marca}</TableCell>
+                      <TableCell >{item.quantidade}</TableCell>
+                      <TableCell >{item.especificacoes}</TableCell>
+                      <TableCell >
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.localId)} className="text-destructive hover:text-destructive"><Trash2 size={16} /></Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -244,12 +280,11 @@ export default function NovaOrdemCompra() {
               </TableBody>
             </Table>
 
-            <FormActionBar onSave={handleSalvar} onCancel={handleCancelar} isSaving={isSaving} />
+            <FormActionBar onSave={handleSalvar} onCancel={handleCancelar} isSaving={mutation.isPending} />
           </div>
         </CardContent>
       </Card>
 
-      {/* Dialog: Item não encontrado */}
       <Dialog open={showNoItemDialog} onOpenChange={setShowNoItemDialog}>
         <DialogContent>
           <DialogHeader>

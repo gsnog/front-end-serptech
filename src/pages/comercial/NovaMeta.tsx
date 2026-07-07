@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
+import { fetchMeuTime } from "@/services/pessoas";
+import { useQuery } from "@tanstack/react-query";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { DropdownWithAdd } from "@/components/DropdownWithAdd";
@@ -9,7 +11,11 @@ import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
-import { pessoasMock } from "@/data/pessoas-mock";
+
+// --- Mocks removidos ---
+
+
+
 
 const validationFields = [
   { name: "vendedorId", label: "Vendedor", required: true },
@@ -22,6 +28,7 @@ const validationFields = [
 export default function NovaMeta() {
   const navigate = useNavigate();
   const { handleSave, isSaving } = useSaveWithDelay();
+  const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { vendedorId: "", tipo: "", area: "", periodoInicio: "", periodoFim: "", valorMeta: "" },
@@ -61,7 +68,7 @@ export default function NovaMeta() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ValidatedSelect label="Vendedor / Responsável" required value={formData.vendedorId} onChange={(v) => setFieldValue("vendedorId", v)}
                 onBlur={() => setFieldTouched("vendedorId")} error={getFieldError("vendedorId")} touched={touched.vendedorId}
-                options={pessoasMock.map(p => ({ value: p.id, label: p.nome }))} searchable searchPlaceholder="Buscar vendedor..." />
+                options={time.map((p: any) => ({ value: String(p.id), label: p.nome }))} searchable searchPlaceholder="Buscar vendedor..." />
               <ValidatedSelect label="Área" required value={formData.area} onChange={(v) => setFieldValue("area", v)}
                 onBlur={() => setFieldTouched("area")} error={getFieldError("area")} touched={touched.area}
                 options={[

@@ -3,16 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GradientCard } from "@/components/financeiro/GradientCard";
-import { 
+import {
   Target, DollarSign, TrendingUp, BarChart3, Calendar, Filter
 } from "lucide-react";
-import { 
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend
 } from "recharts";
-import { 
-  campanhasMock, canaisMock, getMetricasGerais, roiPorCampanhaData
-} from "@/data/marketing-mock";
+import {
+  fetchCampanhas, fetchCanais
+} from "@/services/marketing";
+import { useQuery } from "@tanstack/react-query";
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -22,39 +23,37 @@ export default function AtribuicaoROI() {
   const [periodo, setPeriodo] = useState("30d");
   const [modelo, setModelo] = useState("last_touch");
 
-  const metricas = getMetricasGerais();
+  const { data: campanhas = [] } = useQuery({ queryKey: ['marketing_campanhas'], queryFn: fetchCampanhas });
+  const { data: canais = [] } = useQuery({ queryKey: ['marketing_canais'], queryFn: fetchCanais });
 
-  // Dados de atribuição por canal (mock)
-  const atribuicaoPorCanal = canaisMock.slice(0, 5).map((canal, i) => ({
+  const metricas = {
+    roi: 0,
+    receitaAtribuida: 0,
+    cac: 0,
+    pipelineInfluenciado: 0
+  };
+
+  const atribuicaoPorCanal = canais.map(canal => ({
     canal: canal.nome,
-    leads: [15, 25, 8, 12, 20][i],
-    oportunidades: [5, 10, 3, 4, 8][i],
-    receita: [75000, 150000, 45000, 60000, 120000][i],
-    contribuicao: [16, 33, 10, 13, 27][i],
+    leads: 0,
+    oportunidades: 0,
+    receita: 0,
+    contribuicao: 0,
   }));
 
   const pieData = atribuicaoPorCanal.map((item, i) => ({
     name: item.canal,
     value: item.contribuicao,
-    color: [`hsl(var(--primary))`, `hsl(var(--success))`, `hsl(var(--warning))`, `hsl(var(--chart-3))`, `hsl(var(--chart-4))`][i]
+    color: [`hsl(var(--primary))`, `hsl(var(--success))`, `hsl(var(--warning))`, `hsl(var(--chart-3))`, `hsl(var(--chart-4))`][i % 5]
   }));
 
-  // Evolução do ROI (mock)
-  const evolucaoROI = [
-    { mes: 'Set', roi: 180 },
-    { mes: 'Out', roi: 220 },
-    { mes: 'Nov', roi: 195 },
-    { mes: 'Dez', roi: 250 },
-    { mes: 'Jan', roi: 280 },
-    { mes: 'Fev', roi: metricas.roi },
-  ];
+  const evolucaoROI: any[] = [];
+  const ltvCacData: any[] = [];
 
-  // LTV e CAC (mock)
-  const ltvCacData = [
-    { periodo: 'Q3 2025', ltv: 85000, cac: 12000, ratio: 7.1 },
-    { periodo: 'Q4 2025', ltv: 92000, cac: 11000, ratio: 8.4 },
-    { periodo: 'Q1 2026', ltv: 98000, cac: metricas.cac, ratio: 98000 / metricas.cac },
-  ];
+  const roiPorCampanhaData = campanhas.map(c => ({
+    campanha: c.nome,
+    roi: 0
+  }));
 
   return (
     <div className="space-y-6">
@@ -65,7 +64,7 @@ export default function AtribuicaoROI() {
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">Filtros:</span>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Período:</span>
             <div className="flex gap-1">
@@ -151,7 +150,7 @@ export default function AtribuicaoROI() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     formatter={(value: number) => [`${value}%`, 'Contribuição']}
                     contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                   />
@@ -182,7 +181,7 @@ export default function AtribuicaoROI() {
               <LineChart data={evolucaoROI}>
                 <XAxis dataKey="mes" />
                 <YAxis tickFormatter={(v) => `${v}%`} />
-                <Tooltip 
+                <Tooltip
                   formatter={(value: number) => [`${value.toFixed(0)}%`, 'ROI']}
                   contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                 />
@@ -235,12 +234,12 @@ export default function AtribuicaoROI() {
             <BarChart data={roiPorCampanhaData} layout="vertical">
               <XAxis type="number" tickFormatter={(v) => `${v}%`} />
               <YAxis dataKey="campanha" type="category" width={150} tick={{ fontSize: 11 }} />
-              <Tooltip 
+              <Tooltip
                 formatter={(value: number) => [`${value.toFixed(0)}%`, 'ROI']}
                 contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
               />
-              <Bar 
-                dataKey="roi" 
+              <Bar
+                dataKey="roi"
                 fill="hsl(var(--success))"
                 radius={[0, 4, 4, 0]}
               />

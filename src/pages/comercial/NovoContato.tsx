@@ -9,7 +9,8 @@ import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
 import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { ValidatedSelect } from "@/components/ui/validated-select";
-import { contasMock } from "@/data/comercial-mock";
+import { fetchContas } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
 
 const validationFields = [
   { name: "nome", label: "Nome", required: true, minLength: 2 },
@@ -23,6 +24,7 @@ const validationFields = [
 export default function NovoContato() {
   const navigate = useNavigate();
   const { handleSave, isSaving } = useSaveWithDelay();
+  const { data: contas = [] } = useQuery({ queryKey: ['crm_contas'], queryFn: fetchContas });
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { nome: "", cargo: "", email: "", telefone: "", contaId: "", papel: "", tags: "" },
@@ -79,7 +81,7 @@ export default function NovoContato() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <ValidatedSelect label="Conta" required value={formData.contaId} onChange={(v) => setFieldValue("contaId", v)}
                 onBlur={() => setFieldTouched("contaId")} error={getFieldError("contaId")} touched={touched.contaId}
-                options={contasMock.map(c => ({ value: c.id, label: c.nomeFantasia }))} />
+                options={contas.map((c: any) => ({ value: String(c.id), label: c.nome_fantasia }))} />
               <DropdownWithAdd label="Papel" required value={formData.papel} onChange={(v) => setFieldValue("papel", v)}
                 options={papelOptions} onAddNew={(item) => setPapelOptions(prev => [...prev, { value: item.toLowerCase(), label: item }])} />
             </div>

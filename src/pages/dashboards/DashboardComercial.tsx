@@ -2,12 +2,20 @@ import { GradientCard } from "@/components/financeiro/GradientCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Target, DollarSign, TrendingUp, Users, AlertTriangle, Filter } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
-import { oportunidadesMock, etapasFunil, getPipelineTotal, getForecastPonderado, metasMock, atividadesMock } from "@/data/comercial-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
+import { fetchOportunidades, fetchMetas, fetchAtividades, etapasFunil } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMeuTime } from "@/services/pessoas";
+import { useDashboardData, getPeriodCutoff, PERIODO_LABELS } from "@/pages/Dashboard";
+import { todayStr } from "@/lib/utils";
+
 import { motion } from "framer-motion";
+
+// --- Mocks removidos ---
+
+
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
@@ -35,28 +43,71 @@ const FadeIn = ({ children, delay = 0, className = "" }: { children: React.React
   </motion.div>
 );
 
+const PERDA_COLORS = [
+  'hsl(var(--destructive))',
+  'hsl(45 90% 55%)',
+  'hsl(var(--primary))',
+  'hsl(202 46% 59%)',
+  'hsl(var(--muted-foreground))',
+];
+
 export default function DashboardComercial() {
   const [periodo, setPeriodo] = useState("30d");
-  const [vendedor, setVendedor] = useState("__all__");
+  const [vendedorFilter, setVendedorFilter] = useState("__all__");
 
-  const pipelineTotal = getPipelineTotal();
-  const forecastMes = getForecastPonderado();
-  const metaTotal = metasMock.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + m.valorMeta, 0);
-  const realizadoTotal = metasMock.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + m.valorRealizado, 0);
-  const atividadesVencidas = atividadesMock.filter(a => a.status === 'pendente' && new Date(a.data) < new Date()).length;
+  const { dash } = useDashboardData(periodo);
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
+  const { data: metas = [] } = useQuery({ queryKey: ['crm_metas'], queryFn: fetchMetas });
+  const { data: atividades = [] } = useQuery({ queryKey: ['crm_atividades'], queryFn: fetchAtividades });
+  const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
+
+  const cutoff = useMemo(() => getPeriodCutoff(periodo), [periodo])
+
+  const filteredOportunidades = useMemo(() => oportunidades.filter(o => {
+    const matchPeriodo = o.criado_em ? new Date(o.criado_em) >= cutoff : true
+    const matchVendedor = vendedorFilter === "__all__" || String(o.responsavel) === vendedorFilter
+    return matchPeriodo && matchVendedor
+  }), [oportunidades, cutoff, vendedorFilter])
+
+  const filteredAtividades = useMemo(() => atividades.filter(a => {
+    const matchPeriodo = a.data ? new Date(a.data + 'T00:00:00') >= cutoff : true
+    const matchVendedor = vendedorFilter === "__all__" || String(a.responsavel) === vendedorFilter
+    return matchPeriodo && matchVendedor
+  }), [atividades, cutoff, vendedorFilter])
+
+  const filteredMetas = useMemo(() => metas.filter(m =>
+    vendedorFilter === "__all__" || String(m.responsavel) === vendedorFilter
+  ), [metas, vendedorFilter])
+
+  const pipelineTotal = filteredOportunidades
+    .filter(o => !['ganho', 'perdido'].includes(o.estagio))
+    .reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0);
+
+  // Forecast ponderado por probabilidade de cada etapa
+  const forecastMes = filteredOportunidades
+    .filter(o => !['ganho', 'perdido'].includes(o.estagio))
+    .reduce((sum, o) => {
+      const etapa = etapasFunil.find(e => e.id === o.estagio);
+      const prob = (etapa?.probabilidade ?? 50) / 100;
+      return sum + (Number(o.valor_estimado) || 0) * prob;
+    }, 0);
+
+  const metaTotal = filteredMetas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_meta), 0);
+  const realizadoTotal = filteredMetas.filter(m => m.tipo === 'receita').reduce((sum, m) => sum + Number(m.valor_realizado), 0);
+  const atividadesVencidas = filteredAtividades.filter(a => a.status === 'pendente' && a.data < todayStr()).length;
 
   const funilData = etapasFunil.filter(e => !['ganho', 'perdido'].includes(e.id)).map(etapa => ({
-    name: etapa.nome, value: oportunidadesMock.filter(o => o.etapa === etapa.id).length,
-    amount: oportunidadesMock.filter(o => o.etapa === etapa.id).reduce((sum, o) => sum + o.valorEstimado, 0)
+    name: etapa.nome,
+    value: filteredOportunidades.filter(o => o.estagio === etapa.id).length,
+    amount: filteredOportunidades.filter(o => o.estagio === etapa.id).reduce((sum, o) => sum + (Number(o.valor_estimado) || 0), 0),
   }));
 
-  const motivosPerdaData = [
-    { name: 'Preço', value: 35, color: 'hsl(var(--destructive))' },
-    { name: 'Concorrência', value: 25, color: 'hsl(45 90% 55%)' },
-    { name: 'Timing', value: 20, color: 'hsl(var(--primary))' },
-    { name: 'Outros', value: 20, color: 'hsl(var(--muted-foreground))' },
-  ];
-  const motivosTotal = motivosPerdaData.reduce((s, d) => s + d.value, 0);
+  // Motivos de perda vindos do backend
+  const perdas: { motivo: string; valor: number }[] = dash.comercialData?.perdas ?? [];
+  const motivosPerdaData = perdas.length > 0
+    ? perdas.map((p, i) => ({ name: p.motivo, value: p.valor, color: PERDA_COLORS[i % PERDA_COLORS.length] }))
+    : [{ name: 'Sem dados', value: 1, color: 'hsl(var(--muted-foreground))' }];
+  const motivosTotal = perdas.reduce((s, d) => s + d.valor, 0);
 
   return (
     <div className="space-y-6">
@@ -69,15 +120,15 @@ export default function DashboardComercial() {
               <span className="text-xs text-muted-foreground font-medium">Período:</span>
               <div className="flex gap-1 bg-muted/50 rounded-full p-0.5">
                 {["7d", "30d", "90d"].map(p => (
-                  <Button key={p} variant={periodo === p ? "default" : "ghost"} size="sm" onClick={() => setPeriodo(p)} className="h-7 px-2.5 text-xs rounded-full">{p}</Button>
+                  <Button key={p} variant={periodo === p ? "default" : "ghost"} size="sm" onClick={() => setPeriodo(p)} className="h-7 px-2.5 text-xs rounded-full">{PERIODO_LABELS[p] ?? p}</Button>
                 ))}
               </div>
             </div>
-            <Select value={vendedor} onValueChange={setVendedor}>
+            <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
               <SelectTrigger className="w-[180px] h-7 text-xs rounded-full"><SelectValue placeholder="Todos os vendedores" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
-                {pessoasMock.slice(0, 5).map(p => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                {time.slice(0, 10).map(p => <SelectItem key={p.id} value={String(p.id)}>{p.nome}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -88,18 +139,18 @@ export default function DashboardComercial() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <GradientCard title="Pipeline Total" value={formatCurrency(pipelineTotal)} icon={DollarSign} variant="info" trend={{ value: "+18%", positive: true }} delay={1} />
         <GradientCard title="Forecast Ponderado" value={formatCurrency(forecastMes)} icon={TrendingUp} variant="warning" delay={2} />
-        <GradientCard title="Meta vs Realizado" value={`${(realizadoTotal/metaTotal*100).toFixed(0)}%`} icon={Target} variant="success" delay={3} />
+        <GradientCard title="Meta vs Realizado" value={`${(realizadoTotal / metaTotal * 100).toFixed(0)}%`} icon={Target} variant="success" delay={3} />
         <GradientCard title="Atividades Vencidas" value={atividadesVencidas.toString()} icon={AlertTriangle} variant="danger" delay={4} />
       </div>
 
       {/* Hero Dark Accent Card */}
       <FadeIn delay={5}>
         <div className="relative overflow-hidden rounded-2xl p-8 bg-gradient-to-br from-[#0B0D0F] via-[#131619] to-[#0B0D0F] shadow-xl shadow-black/20">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-lime-400/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-400/5 rounded-full blur-3xl pointer-events-none" />
           <p className="text-[11px] text-white/40 uppercase tracking-widest font-semibold mb-2">Valor Total no Pipeline</p>
           <div className="flex items-baseline gap-4">
             <span className="text-5xl font-bold tracking-tight text-white">{formatCurrency(pipelineTotal)}</span>
-            <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-lime-400/15 text-lime-400 border border-lime-400/20">+18% vs mês anterior</span>
+            <span className="text-xs font-bold px-3 py-1.5 rounded-full bg-sky-400/15 text-sky-400 border border-sky-400/20">+18% vs mês anterior</span>
           </div>
         </div>
       </FadeIn>
@@ -137,8 +188,8 @@ export default function DashboardComercial() {
                   <Pie data={motivosPerdaData} cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={3} dataKey="value" cornerRadius={6}>
                     {motivosPerdaData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" style={{ fontSize: 18, fontWeight: 700 }}>{motivosTotal}%</text>
-                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>Total</text>
+                  <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" className="fill-foreground" style={{ fontSize: 18, fontWeight: 700 }}>{motivosTotal}</text>
+                  <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" style={{ fontSize: 10 }}>perdas</text>
                   <Tooltip content={<ChartTooltip />} cursor={false} />
                 </PieChart>
               </ResponsiveContainer>
@@ -147,7 +198,7 @@ export default function DashboardComercial() {
               {motivosPerdaData.map(m => (
                 <div key={m.name} className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: m.color }} />
-                  <span className="text-xs text-muted-foreground">{m.name} ({m.value}%)</span>
+                  <span className="text-xs text-muted-foreground">{m.name} ({m.value})</span>
                 </div>
               ))}
             </div>

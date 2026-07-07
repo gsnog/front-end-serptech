@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -9,10 +10,14 @@ import { FilterSection } from "@/components/FilterSection";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DollarSign, TrendingUp, Clock, CheckCircle, XCircle, Download, Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { comissoesMock, oportunidadesMock, getContaById } from "@/data/comercial-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
-import { toast } from "@/hooks/use-toast";
+import { fetchComissoes, fetchOportunidades, fetchContas } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMeuTime } from "@/services/pessoas";
 import { ExportButton } from "@/components/ExportButton";
+
+// --- Mocks removidos ---
+
+
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -20,26 +25,31 @@ const formatCurrency = (value: number) =>
 export default function Comissoes() {
   const navigate = useNavigate();
   const [periodo, setPeriodo] = useState("");
-  const [vendedor, setVendedor] = useState("");
+  const [vendedorFilter, setVendedorFilter] = useState("");
   const [view, setView] = useState<"extrato" | "regras">("extrato");
 
-  const filteredComissoes = comissoesMock.filter(c => {
-    const matchVendedor = !vendedor || c.vendedorId === vendedor;
+  const { data: comissoesData = [], isLoading: isLoadingComissoes } = useQuery({ queryKey: ['crm_comissoes'], queryFn: fetchComissoes });
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
+  const { data: contas = [] } = useQuery({ queryKey: ['crm_contas'], queryFn: fetchContas });
+  const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
+
+  const filteredComissoes = comissoesData.filter(c => {
+    const matchVendedor = !vendedorFilter || String(c.responsavel) === vendedorFilter;
     return matchVendedor;
   });
 
-  const comissoesPrevistas = filteredComissoes.filter(c => c.status === 'prevista').reduce((sum, c) => sum + c.valor, 0);
-  const comissoesAprovadas = filteredComissoes.filter(c => c.status === 'aprovada').reduce((sum, c) => sum + c.valor, 0);
-  const comissoesPagas = filteredComissoes.filter(c => c.status === 'paga').reduce((sum, c) => sum + c.valor, 0);
-  const comissoesEstornadas = filteredComissoes.filter(c => c.status === 'estornada').reduce((sum, c) => sum + c.valor, 0);
+  const comissoesPrevistas = filteredComissoes.filter(c => c.status === 'prevista').reduce((sum, c) => sum + Number(c.valor), 0);
+  const comissoesAprovadas = filteredComissoes.filter(c => c.status === 'aprovada').reduce((sum, c) => sum + Number(c.valor), 0);
+  const comissoesPagas = filteredComissoes.filter(c => c.status === 'paga').reduce((sum, c) => sum + Number(c.valor), 0);
+  const comissoesEstornadas = filteredComissoes.filter(c => c.status === 'estornada').reduce((sum, c) => sum + Number(c.valor), 0);
 
-  const getVendedorName = (id: string) => pessoasMock.find(p => p.id === id)?.nome || 'N/A';
+  const getVendedorName = (id: number) => time.find(p => p.id === id)?.nome || 'N/A';
 
-  const getOportunidadeInfo = (opId: string) => {
-    const op = oportunidadesMock.find(o => o.id === opId);
+  const getOportunidadeInfo = (opId: number) => {
+    const op = oportunidades.find(o => o.id === opId);
     if (!op) return { titulo: 'N/A', conta: 'N/A', valor: 0 };
-    const conta = getContaById(op.contaId);
-    return { titulo: op.titulo, conta: conta?.nomeFantasia || 'N/A', valor: op.valorEstimado };
+    const conta = contas.find(c => c.id === op.conta);
+    return { titulo: op.titulo, conta: conta?.nome_fantasia || 'N/A', valor: Number(op.valor_estimado) };
   };
 
   const getStatusBadgeStatus = (status: string): string => {
@@ -52,14 +62,14 @@ export default function Comissoes() {
     }
   };
 
-  const extratoVendedores = pessoasMock.slice(0, 5).map(p => {
-    const comissoes = comissoesMock.filter(c => c.vendedorId === p.id);
+  const extratoVendedores = time.slice(0, 10).map(p => {
+    const comissoes = comissoesData.filter(c => c.responsavel === p.id);
     return {
       id: p.id, nome: p.nome,
-      previstas: comissoes.filter(c => c.status === 'prevista').reduce((sum, c) => sum + c.valor, 0),
-      aprovadas: comissoes.filter(c => c.status === 'aprovada').reduce((sum, c) => sum + c.valor, 0),
-      pagas: comissoes.filter(c => c.status === 'paga').reduce((sum, c) => sum + c.valor, 0),
-      estornadas: comissoes.filter(c => c.status === 'estornada').reduce((sum, c) => sum + c.valor, 0),
+      previstas: comissoes.filter(c => c.status === 'prevista').reduce((sum, c) => sum + Number(c.valor), 0),
+      aprovadas: comissoes.filter(c => c.status === 'aprovada').reduce((sum, c) => sum + Number(c.valor), 0),
+      pagas: comissoes.filter(c => c.status === 'paga').reduce((sum, c) => sum + Number(c.valor), 0),
+      estornadas: comissoes.filter(c => c.status === 'estornada').reduce((sum, c) => sum + Number(c.valor), 0),
     };
   });
 
@@ -69,21 +79,27 @@ export default function Comissoes() {
     { id: 3, descricao: 'Desconto inadimplência', percentual: -100, tipo: 'Estorno', condicao: 'Atraso > 90 dias' },
   ];
 
-  const getExportData = () => filteredComissoes.map(c => {
-    const opInfo = getOportunidadeInfo(c.oportunidadeId);
-    return { Vendedor: getVendedorName(c.vendedorId), Oportunidade: opInfo.titulo, Conta: opInfo.conta,
-      "Valor Venda": opInfo.valor, "%": c.percentual, Comissão: c.valor, Status: c.status, "Data Base": c.dataBase };
+  const getExportData = () => filteredComissoes.map((c: any) => {
+    const opInfo = getOportunidadeInfo(c.oportunidade);
+    return {
+      Vendedor: getVendedorName(c.responsavel), Oportunidade: opInfo.titulo, Conta: opInfo.conta,
+      "Valor Venda": opInfo.valor, "%": c.percentual, Comissão: c.valor, Status: c.status, "Data Base": c.data_base
+    };
   });
 
   return (
     <div className="space-y-6">
       <FilterSection
         fields={[
-          { type: "select", label: "Período", placeholder: "Selecione", value: periodo, onChange: setPeriodo, options: [
-            { value: "2026-01", label: "Janeiro 2026" }, { value: "2026-02", label: "Fevereiro 2026" }, { value: "2026-03", label: "Março 2026" }
-          ], width: "min-w-[160px]" },
-          { type: "select", label: "Vendedor", placeholder: "Todos", value: vendedor, onChange: setVendedor,
-            options: pessoasMock.slice(0, 5).map(p => ({ value: p.id, label: p.nome })), width: "min-w-[200px]" }
+          {
+            type: "select", label: "Período", placeholder: "Selecione", value: periodo, onChange: setPeriodo, options: [
+              { value: "2026-01", label: "Janeiro 2026" }, { value: "2026-02", label: "Fevereiro 2026" }, { value: "2026-03", label: "Março 2026" }
+            ], width: "min-w-[160px]"
+          },
+          {
+            type: "select", label: "Vendedor", placeholder: "Todos", value: vendedorFilter, onChange: setVendedorFilter,
+            options: time.map(p => ({ value: String(p.id), label: p.nome })), width: "min-w-[200px]"
+          }
         ]}
       >
         <ExportButton getData={getExportData} fileName="comissoes" sheetName="Comissões" />
@@ -111,10 +127,10 @@ export default function Comissoes() {
                   <TableHeader>
                     <TableRow className="bg-table-header">
                       <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-right">Previstas</TableHead>
-                      <TableHead className="text-right">Aprovadas</TableHead>
-                      <TableHead className="text-right">Pagas</TableHead>
-                      <TableHead className="text-right">Estornadas</TableHead>
+                      <TableHead >Previstas</TableHead>
+                      <TableHead >Aprovadas</TableHead>
+                      <TableHead >Pagas</TableHead>
+                      <TableHead >Estornadas</TableHead>
                       <TableHead className="text-right">Saldo</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -146,25 +162,25 @@ export default function Comissoes() {
                       <TableHead>Oportunidade</TableHead>
                       <TableHead>Conta</TableHead>
                       <TableHead className="text-right">Valor Venda</TableHead>
-                      <TableHead className="text-right">%</TableHead>
-                      <TableHead className="text-right">Comissão</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Data Base</TableHead>
+                      <TableHead >%</TableHead>
+                      <TableHead >Comissão</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center">Data Base</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredComissoes.map((c) => {
-                      const opInfo = getOportunidadeInfo(c.oportunidadeId);
+                      const opInfo = getOportunidadeInfo(c.oportunidade);
                       return (
                         <TableRow key={c.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">{getVendedorName(c.vendedorId)}</TableCell>
+                          <TableCell className="font-medium">{getVendedorName(c.responsavel)}</TableCell>
                           <TableCell>{opInfo.titulo}</TableCell>
                           <TableCell>{opInfo.conta}</TableCell>
                           <TableCell className="text-right">{formatCurrency(opInfo.valor)}</TableCell>
-                          <TableCell className="text-right">{c.percentual}%</TableCell>
-                          <TableCell className="text-right font-semibold">{formatCurrency(c.valor)}</TableCell>
+                          <TableCell >{c.percentual}%</TableCell>
+                          <TableCell className="text-right font-semibold">{formatCurrency(Number(c.valor))}</TableCell>
                           <TableCell><StatusBadge status={getStatusBadgeStatus(c.status)} /></TableCell>
-                          <TableCell className="text-muted-foreground">{new Date(c.dataBase).toLocaleDateString('pt-BR')}</TableCell>
+                          <TableCell className="text-center text-muted-foreground">{fmtDate(c.data_base)}</TableCell>
                         </TableRow>
                       );
                     })}
@@ -189,10 +205,10 @@ export default function Comissoes() {
                   <TableHeader>
                     <TableRow className="bg-table-header">
                       <TableHead>Descrição</TableHead>
-                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-center">Tipo</TableHead>
                       <TableHead>Condição</TableHead>
                       <TableHead className="text-right">Percentual</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

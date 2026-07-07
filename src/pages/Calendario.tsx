@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Plus, 
-  Filter, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Filter,
   Calendar as CalendarIcon,
   Clock,
   MapPin,
@@ -26,15 +26,36 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { usePermissions } from '@/contexts/PermissionsContext';
-import { 
-  eventosMock, 
-  eventTypes, 
-  getEventosVisiveis, 
-  getEventosPorPeriodo,
-  CalendarEvent,
-  EventType
-} from '@/data/calendar-mock';
-import { pessoasMock, setoresMock, getSubordinados } from '@/data/pessoas-mock';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+// Calendar types — defined locally (data/calendar-mock was deleted)
+type EventType = 'reuniao' | 'prazo' | 'evento' | 'tarefa' | 'feriado' | 'pessoal';
+interface CalendarParticipante { id: string; nome: string; confirmado: boolean; }
+interface CalendarEvent {
+  id: string; titulo: string; descricao?: string; tipo: EventType;
+  dataInicio: string; horaInicio: string; dataFim: string; horaFim: string;
+  criadorId: string; criadorNome?: string;
+  participantes: CalendarParticipante[];
+  setorId?: string; local?: string; cor?: string; privado?: boolean;
+  // legacy aliases kept for compatibility
+  inicio?: string; fim?: string;
+}
+const eventTypes: { id: EventType; label: string; color: string; value: EventType }[] = [
+  { id: 'reuniao', label: 'Reunião', color: 'bg-blue-500', value: 'reuniao' },
+  { id: 'prazo', label: 'Prazo', color: 'bg-red-500', value: 'prazo' },
+  { id: 'evento', label: 'Evento', color: 'bg-purple-500', value: 'evento' },
+  { id: 'tarefa', label: 'Tarefa', color: 'bg-yellow-500', value: 'tarefa' },
+  { id: 'feriado', label: 'Feriado', color: 'bg-green-500', value: 'feriado' },
+  { id: 'pessoal', label: 'Pessoal', color: 'bg-orange-500', value: 'pessoal' },
+];
+const getEventosVisiveis = (eventos: CalendarEvent[], _userId: string, _scope?: string) => eventos;
+const getEventosPorPeriodo = (eventos: CalendarEvent[], _inicio: Date, _fim: Date) => eventos;
+// Stubs for removed setoresMock / getSubordinados (pessoas-mock deleted)
+const setoresMock: { id: string; nome: string; status: string }[] = [];
+const getSubordinados = (_userId: string): { id: string; nome: string }[] => [];
+
+
 import { cn } from '@/lib/utils';
 
 type ViewMode = 'dia' | 'semana' | 'mes' | 'agenda';
@@ -44,25 +65,25 @@ const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julh
 
 export default function Calendario() {
   const navigate = useNavigate();
-  const { getScope, hasPermission } = usePermissions();
+  const { currentUser, getScope, hasPermission } = usePermissions();
   const rawScope = getScope('calendario', 'all');
   // Normalize scope to only valid values for calendar
   const scope: 'self' | 'team' | 'all' = rawScope === 'area' ? 'team' : rawScope;
-  
+
   const [viewMode, setViewMode] = useState<ViewMode>('mes');
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 1, 4)); // 2026-02-04
+  const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  
+
   // Filtros
   const [filterPessoa, setFilterPessoa] = useState('');
   const [filterSetor, setFilterSetor] = useState('');
   const [filterTipo, setFilterTipo] = useState('');
   const [filterEquipe, setFilterEquipe] = useState(false);
   const [participanteSearch, setParticipanteSearch] = useState('');
-  
+
   // Novo evento
   const [novoEvento, setNovoEvento] = useState({
     titulo: '',
@@ -76,37 +97,82 @@ export default function Calendario() {
     privado: false,
     participantes: [] as string[],
   });
-  
-  const currentUserId = '9'; // Pedro Piaes (mockado)
-  
+
+  const currentUserId = String(currentUser?.userId || '9');
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: rawEvents = [], isLoading } = useQuery({
+    queryKey: ['agendaEvents'],
+    queryFn: async () => {
+      const res = await api.get('/api/agenda/events/');
+      return res.data.map((e: any): CalendarEvent => ({
+        id: String(e.id),
+        titulo: e.titulo,
+        descricao: e.descricao || '',
+        tipo: e.tipo,
+        dataInicio: e.data_inicio,
+        horaInicio: e.hora_inicio?.substring(0, 5) || '00:00',
+        dataFim: e.data_fim,
+        horaFim: e.hora_fim?.substring(0, 5) || '00:00',
+        criadorId: String(e.criador),
+        criadorNome: e.criador_nome,
+        participantes: (e.participantes_rel || []).map((p: any) => ({
+          id: String(p.usuario.id),
+          nome: p.usuario.first_name ? `${p.usuario.first_name} ${p.usuario.last_name || ''}`.trim() : p.usuario.username,
+          confirmado: p.confirmado
+        })),
+        setorId: e.setor ? String(e.setor) : undefined,
+        local: e.local || '',
+        cor: e.cor,
+        privado: e.privado
+      }));
+    }
+  });
+
+  // Fetch real system users for participant search
+  const { data: systemUsers = [] } = useQuery({
+    queryKey: ['systemUsers'],
+    queryFn: async () => {
+      const res = await api.get('/api/pessoas/lookup/');
+      const list = Array.isArray(res.data) ? res.data : (res.data.results ?? []);
+      return list.map((u: any) => ({
+        id: String(u.id),
+        nome: u.nome || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username,
+        iniciais: (u.iniciais || (u.nome || u.first_name || u.username || '').slice(0, 2)).toUpperCase(),
+        status: 'Ativo',
+      }));
+    },
+  });
+
   // Eventos base (sem filtro de pessoa) para calcular pessoas disponíveis
   const eventosBase = useMemo(() => {
-    let eventos = getEventosVisiveis(currentUserId, scope);
-    
+    let eventos = getEventosVisiveis(rawEvents, currentUserId, scope);
+
     if (filterEquipe && scope !== 'self') {
       const subordinados = getSubordinados(currentUserId);
       const subordinadosIds = [currentUserId, ...subordinados.map(s => s.id)];
-      eventos = eventos.filter(e => 
+      eventos = eventos.filter(e =>
         subordinadosIds.includes(e.criadorId) ||
         e.participantes.some(p => subordinadosIds.includes(p.id))
       );
     }
-    
+
     if (filterSetor) {
       eventos = eventos.filter(e => e.setorId === filterSetor);
     }
-    
+
     if (filterTipo) {
       eventos = eventos.filter(e => e.tipo === filterTipo);
     }
-    
+
     return eventos;
-  }, [scope, filterEquipe, filterSetor, filterTipo]);
+  }, [rawEvents, scope, filterEquipe, filterSetor, filterTipo, currentUserId]);
 
   // Eventos visíveis (com filtro de pessoa aplicado)
   const eventosVisiveis = useMemo(() => {
     if (!filterPessoa) return eventosBase;
-    return eventosBase.filter(e => 
+    return eventosBase.filter(e =>
       e.criadorId === filterPessoa ||
       e.participantes.some(p => p.id === filterPessoa)
     );
@@ -119,12 +185,12 @@ export default function Calendario() {
       pessoaIds.add(e.criadorId);
       e.participantes.forEach(p => pessoaIds.add(p.id));
     });
-    return pessoasMock.filter(p => p.status === 'Ativo' && pessoaIds.has(p.id));
+    return systemUsers.filter((p: any) => pessoaIds.has(p.id));
   }, [eventosBase]);
-  
+
   const canCreate = hasPermission('calendario', 'all', 'create');
   const canEdit = hasPermission('calendario', 'all', 'edit');
-  
+
   // Navegação
   const navigatePrev = () => {
     const newDate = new Date(currentDate);
@@ -133,7 +199,7 @@ export default function Calendario() {
     else newDate.setMonth(newDate.getMonth() - 1);
     setCurrentDate(newDate);
   };
-  
+
   const navigateNext = () => {
     const newDate = new Date(currentDate);
     if (viewMode === 'dia') newDate.setDate(newDate.getDate() + 1);
@@ -141,11 +207,11 @@ export default function Calendario() {
     else newDate.setMonth(newDate.getMonth() + 1);
     setCurrentDate(newDate);
   };
-  
+
   const goToToday = () => {
-    setCurrentDate(new Date(2026, 1, 4));
+    setCurrentDate(new Date());
   };
-  
+
   // Gerar dias do mês
   const getDaysInMonth = () => {
     const year = currentDate.getFullYear();
@@ -153,27 +219,27 @@ export default function Calendario() {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
-    
+
     // Dias do mês anterior
     for (let i = 0; i < firstDay.getDay(); i++) {
       const d = new Date(year, month, -firstDay.getDay() + i + 1);
       days.push({ date: d, isCurrentMonth: false });
     }
-    
+
     // Dias do mês atual
     for (let i = 1; i <= lastDay.getDate(); i++) {
       days.push({ date: new Date(year, month, i), isCurrentMonth: true });
     }
-    
+
     // Dias do próximo mês
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
     }
-    
+
     return days;
   };
-  
+
   // Gerar horas do dia
   const getHoursOfDay = () => {
     const hours = [];
@@ -182,13 +248,13 @@ export default function Calendario() {
     }
     return hours;
   };
-  
+
   // Gerar dias da semana
   const getWeekDays = () => {
     const days = [];
     const startOfWeek = new Date(currentDate);
     startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-    
+
     for (let i = 0; i < 7; i++) {
       const d = new Date(startOfWeek);
       d.setDate(d.getDate() + i);
@@ -196,45 +262,78 @@ export default function Calendario() {
     }
     return days;
   };
-  
+
   const formatDate = (date: Date) => {
     return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
   };
-  
+
   const getEventsForDate = (date: Date) => {
     const dateStr = formatDate(date);
     return eventosVisiveis.filter(e => e.dataInicio === dateStr);
   };
-  
+
   const handleEventClick = (event: CalendarEvent) => {
     setSelectedEvent(event);
     setShowEventModal(true);
   };
-  
+
+  const deleteEventMutation = useMutation({
+    mutationFn: async (id: string) => await api.delete(`/api/agenda/events/${id}/`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agendaEvents'] });
+      toast({ title: 'Evento excluído' });
+      setShowEventModal(false);
+    }
+  });
+
+  const createEventMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const payload = {
+        titulo: data.titulo,
+        descricao: data.descricao,
+        tipo: data.tipo,
+        data_inicio: data.dataInicio,
+        hora_inicio: data.horaInicio,
+        data_fim: data.dataFim,
+        hora_fim: data.horaFim,
+        local: data.local,
+        privado: data.privado,
+        participantes: data.participantes.map(Number)
+      };
+      return await api.post('/api/agenda/events/', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agendaEvents'] });
+      toast({ title: 'Evento criado com sucesso' });
+      setShowCreateModal(false);
+      setNovoEvento({
+        titulo: '',
+        descricao: '',
+        tipo: 'reuniao',
+        dataInicio: '',
+        horaInicio: '09:00',
+        dataFim: '',
+        horaFim: '10:00',
+        local: '',
+        privado: false,
+        participantes: [],
+      });
+    },
+    onError: () => {
+      toast({ title: 'Erro ao criar evento', variant: 'destructive' });
+    }
+  });
+
   const handleCreateEvent = () => {
-    // Mock: adicionar evento
-    console.log('Criar evento:', novoEvento);
-    setShowCreateModal(false);
-    setNovoEvento({
-      titulo: '',
-      descricao: '',
-      tipo: 'reuniao',
-      dataInicio: '',
-      horaInicio: '09:00',
-      dataFim: '',
-      horaFim: '10:00',
-      local: '',
-      privado: false,
-      participantes: [],
-    });
+    createEventMutation.mutate(novoEvento);
   };
-  
+
   const getEventTypeLabel = (tipo: EventType) => {
     return eventTypes.find(t => t.value === tipo)?.label || tipo;
   };
-  
+
   const subordinados = scope === 'team' || scope === 'all' ? getSubordinados(currentUserId) : [];
-  
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -269,7 +368,7 @@ export default function Calendario() {
             )}
           </h2>
         </div>
-        
+
         <div className="flex items-center gap-2">
           {/* Seletor de visualização */}
           <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
@@ -292,16 +391,16 @@ export default function Calendario() {
               </TabsTrigger>
             </TabsList>
           </Tabs>
-          
-          <Button 
-            variant="outline" 
+
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
           >
             <Filter className="h-4 w-4 mr-1" />
             Filtros
           </Button>
-          
+
           {canCreate && (
             <Button size="sm" onClick={() => setShowCreateModal(true)}>
               <Plus className="h-4 w-4 mr-1" />
@@ -310,7 +409,7 @@ export default function Calendario() {
           )}
         </div>
       </div>
-      
+
       {/* Filtros */}
       {showFilters && (
         <Card className="p-4">
@@ -319,7 +418,7 @@ export default function Calendario() {
               <div className="flex flex-col gap-1.5 min-w-[180px]">
                 <label className="filter-label">Equipe</label>
                 <div className="flex items-center gap-2 h-10">
-                  <Switch 
+                  <Switch
                     id="filter-equipe"
                     checked={filterEquipe}
                     onCheckedChange={setFilterEquipe}
@@ -330,7 +429,7 @@ export default function Calendario() {
                 </div>
               </div>
             )}
-            
+
             <div className="flex flex-col gap-1.5 min-w-[180px]">
               <label className="filter-label">Pessoa</label>
               <Select value={filterPessoa || "__all__"} onValueChange={(v) => setFilterPessoa(v === "__all__" ? "" : v)}>
@@ -345,7 +444,7 @@ export default function Calendario() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex flex-col gap-1.5 min-w-[180px]">
               <label className="filter-label">Setor/Área</label>
               <Select value={filterSetor || "__all__"} onValueChange={(v) => setFilterSetor(v === "__all__" ? "" : v)}>
@@ -360,7 +459,7 @@ export default function Calendario() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex flex-col gap-1.5 min-w-[180px]">
               <label className="filter-label">Tipo de Evento</label>
               <Select value={filterTipo || "__all__"} onValueChange={(v) => setFilterTipo(v === "__all__" ? "" : v)}>
@@ -375,7 +474,7 @@ export default function Calendario() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-2 h-10"
                 onClick={() => {
@@ -392,7 +491,7 @@ export default function Calendario() {
           </div>
         </Card>
       )}
-      
+
       {/* Visualização do Calendário */}
       <Card className="overflow-hidden">
         {/* Visão Mês */}
@@ -406,13 +505,13 @@ export default function Calendario() {
                 </div>
               ))}
             </div>
-            
+
             {/* Grid de dias */}
             <div className="grid grid-cols-7 gap-1">
               {getDaysInMonth().map((day, idx) => {
                 const eventos = getEventsForDate(day.date);
                 const isToday = formatDate(day.date) === '2026-02-04';
-                
+
                 return (
                   <div
                     key={idx}
@@ -458,23 +557,23 @@ export default function Calendario() {
             </div>
           </div>
         )}
-        
+
         {/* Visão Dia */}
         {viewMode === 'dia' && (
           <div className="p-4">
             <div className="grid grid-cols-[60px_1fr] gap-2">
               {getHoursOfDay().map(hour => {
-                const eventos = eventosVisiveis.filter(e => 
-                  e.dataInicio === formatDate(currentDate) && 
+                const eventos = eventosVisiveis.filter(e =>
+                  e.dataInicio === formatDate(currentDate) &&
                   e.horaInicio.startsWith(hour.split(':')[0])
                 );
-                
+
                 return (
                   <div key={hour} className="contents">
                     <div className="text-xs text-muted-foreground py-3 text-right pr-2">
                       {hour}
                     </div>
-                    <div 
+                    <div
                       className="border-t border-border dark:border-[hsl(220_6%_15%)] min-h-[48px] py-1 space-y-1 cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => {
                         if (canCreate) {
@@ -496,7 +595,10 @@ export default function Calendario() {
                           key={evento.id}
                           className="p-2 rounded text-sm cursor-pointer hover:opacity-80"
                           style={{ backgroundColor: evento.cor + '20', borderLeft: `3px solid ${evento.cor}` }}
-                          onClick={() => handleEventClick(evento)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEventClick(evento);
+                          }}
                         >
                           <div className="font-medium" style={{ color: evento.cor }}>
                             {evento.privado && scope !== 'all' ? 'Ocupado' : evento.titulo}
@@ -515,7 +617,7 @@ export default function Calendario() {
             </div>
           </div>
         )}
-        
+
         {/* Visão Semana */}
         {viewMode === 'semana' && (
           <div className="p-4 overflow-x-auto">
@@ -525,8 +627,8 @@ export default function Calendario() {
               {getWeekDays().map((day, idx) => {
                 const isToday = formatDate(day) === '2026-02-04';
                 return (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     className={cn(
                       "text-center py-2 text-sm font-medium",
                       isToday && "text-primary"
@@ -542,7 +644,7 @@ export default function Calendario() {
                   </div>
                 );
               })}
-              
+
               {/* Grid de horas */}
               {getHoursOfDay().map(hour => (
                 <div key={hour} className="contents">
@@ -550,14 +652,14 @@ export default function Calendario() {
                     {hour}
                   </div>
                   {getWeekDays().map((day, dayIdx) => {
-                    const eventos = eventosVisiveis.filter(e => 
-                      e.dataInicio === formatDate(day) && 
+                    const eventos = eventosVisiveis.filter(e =>
+                      e.dataInicio === formatDate(day) &&
                       e.horaInicio.startsWith(hour.split(':')[0])
                     );
-                    
+
                     return (
-                      <div 
-                        key={dayIdx} 
+                      <div
+                        key={dayIdx}
                         className="border-t border-l border-border dark:border-[hsl(220_6%_15%)] min-h-[48px] p-0.5"
                       >
                         {eventos.map(evento => (
@@ -565,7 +667,10 @@ export default function Calendario() {
                             key={evento.id}
                             className="p-1 rounded text-xs cursor-pointer hover:opacity-80 mb-0.5"
                             style={{ backgroundColor: evento.cor + '20', borderLeft: `2px solid ${evento.cor}` }}
-                            onClick={() => handleEventClick(evento)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEventClick(evento);
+                            }}
                           >
                             <div className="font-medium truncate" style={{ color: evento.cor }}>
                               {evento.privado && scope !== 'all' ? 'Ocupado' : evento.titulo}
@@ -580,14 +685,14 @@ export default function Calendario() {
             </div>
           </div>
         )}
-        
+
         {/* Visão Agenda */}
         {viewMode === 'agenda' && (
           <div className="divide-y">
             {eventosVisiveis
               .sort((a, b) => a.dataInicio.localeCompare(b.dataInicio))
               .map(evento => (
-                <div 
+                <div
                   key={evento.id}
                   className="p-4 hover:bg-muted/50 cursor-pointer transition-colors"
                   onClick={() => handleEventClick(evento)}
@@ -595,13 +700,13 @@ export default function Calendario() {
                   <div className="flex items-start gap-4">
                     <div className="text-center min-w-[60px]">
                       <div className="text-2xl font-bold text-foreground">
-                        {new Date(evento.dataInicio).getDate()}
+                        {new Date(evento.dataInicio + 'T00:00:00').getDate()}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {meses[new Date(evento.dataInicio).getMonth()].slice(0, 3)}
+                        {meses[new Date(evento.dataInicio + 'T00:00:00').getMonth()].slice(0, 3)}
                       </div>
                     </div>
-                    <div 
+                    <div
                       className="w-1 self-stretch rounded"
                       style={{ backgroundColor: evento.cor }}
                     />
@@ -653,23 +758,23 @@ export default function Calendario() {
           </div>
         )}
       </Card>
-      
+
       {/* Modal de detalhes do evento */}
       <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <div 
+              <div
                 className="w-3 h-3 rounded-full"
                 style={{ backgroundColor: selectedEvent?.cor }}
               />
-              {selectedEvent?.privado && scope !== 'all' 
-                ? 'Evento Privado' 
+              {selectedEvent?.privado && scope !== 'all'
+                ? 'Evento Privado'
                 : selectedEvent?.titulo
               }
             </DialogTitle>
           </DialogHeader>
-          
+
           {selectedEvent && (!selectedEvent.privado || scope === 'all') && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm">
@@ -678,15 +783,15 @@ export default function Calendario() {
                   <Badge variant="outline">Privado</Badge>
                 )}
               </div>
-              
+
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CalendarIcon className="h-4 w-4" />
-                  {new Date(selectedEvent.dataInicio).toLocaleDateString('pt-BR', { 
-                    weekday: 'long', 
-                    day: 'numeric', 
-                    month: 'long', 
-                    year: 'numeric' 
+                  {new Date(selectedEvent.dataInicio + 'T00:00:00').toLocaleDateString('pt-BR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
                   })}
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -700,19 +805,19 @@ export default function Calendario() {
                   </div>
                 )}
               </div>
-              
+
               {selectedEvent.descricao && (
                 <div>
                   <Label className="text-xs text-muted-foreground">Descrição</Label>
                   <p className="text-sm mt-1">{selectedEvent.descricao}</p>
                 </div>
               )}
-              
+
               <div>
                 <Label className="text-xs text-muted-foreground">Criado por</Label>
                 <p className="text-sm mt-1">{selectedEvent.criadorNome}</p>
               </div>
-              
+
               {selectedEvent.participantes.length > 0 && (
                 <div>
                   <Label className="text-xs text-muted-foreground">
@@ -737,44 +842,47 @@ export default function Calendario() {
               )}
             </div>
           )}
-          
+
           {selectedEvent?.privado && scope !== 'all' && (
             <div className="text-center text-muted-foreground py-4">
               Este evento é privado. Você não tem permissão para ver os detalhes.
             </div>
           )}
-          
+
           <DialogFooter>
             {canEdit && selectedEvent && (selectedEvent.criadorId === currentUserId || scope === 'all') && (
-              <Button variant="outline">Editar</Button>
+              <>
+                <Button variant="outline">Editar</Button>
+                <Button variant="destructive" onClick={() => deleteEventMutation.mutate(selectedEvent.id)}>Excluir</Button>
+              </>
             )}
             <Button onClick={() => setShowEventModal(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
       {/* Modal de criar evento */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Novo Evento</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4 overflow-y-auto px-1 flex-1">
             <div>
               <Label>Título *</Label>
-              <Input 
+              <Input
                 value={novoEvento.titulo}
-                onChange={(e) => setNovoEvento({...novoEvento, titulo: e.target.value})}
+                onChange={(e) => setNovoEvento({ ...novoEvento, titulo: e.target.value })}
                 placeholder="Nome do evento"
               />
             </div>
-            
+
             <div>
               <Label>Tipo *</Label>
-              <Select 
+              <Select
                 value={novoEvento.tipo}
-                onValueChange={(v) => setNovoEvento({...novoEvento, tipo: v as EventType})}
+                onValueChange={(v) => setNovoEvento({ ...novoEvento, tipo: v as EventType })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -786,64 +894,64 @@ export default function Calendario() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Data Início *</Label>
-                <Input 
+                <Input
                   type="date"
                   value={novoEvento.dataInicio}
-                  onChange={(e) => setNovoEvento({...novoEvento, dataInicio: e.target.value})}
+                  onChange={(e) => setNovoEvento({ ...novoEvento, dataInicio: e.target.value })}
                 />
               </div>
               <div>
                 <Label>Hora Início *</Label>
-                <Input 
+                <Input
                   type="time"
                   value={novoEvento.horaInicio}
-                  onChange={(e) => setNovoEvento({...novoEvento, horaInicio: e.target.value})}
+                  onChange={(e) => setNovoEvento({ ...novoEvento, horaInicio: e.target.value })}
                 />
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Data Fim *</Label>
-                <Input 
+                <Input
                   type="date"
                   value={novoEvento.dataFim}
-                  onChange={(e) => setNovoEvento({...novoEvento, dataFim: e.target.value})}
+                  onChange={(e) => setNovoEvento({ ...novoEvento, dataFim: e.target.value })}
                 />
               </div>
               <div>
                 <Label>Hora Fim *</Label>
-                <Input 
+                <Input
                   type="time"
                   value={novoEvento.horaFim}
-                  onChange={(e) => setNovoEvento({...novoEvento, horaFim: e.target.value})}
+                  onChange={(e) => setNovoEvento({ ...novoEvento, horaFim: e.target.value })}
                 />
               </div>
             </div>
-            
+
             <div>
               <Label>Local</Label>
-              <Input 
+              <Input
                 value={novoEvento.local}
-                onChange={(e) => setNovoEvento({...novoEvento, local: e.target.value})}
+                onChange={(e) => setNovoEvento({ ...novoEvento, local: e.target.value })}
                 placeholder="Sala, endereço ou link"
               />
             </div>
-            
+
             <div>
               <Label>Descrição</Label>
-              <Textarea 
+              <Textarea
                 value={novoEvento.descricao}
-                onChange={(e) => setNovoEvento({...novoEvento, descricao: e.target.value})}
+                onChange={(e) => setNovoEvento({ ...novoEvento, descricao: e.target.value })}
                 placeholder="Detalhes do evento"
                 rows={3}
               />
             </div>
-            
+
             <div>
               <Label>Participantes</Label>
               <Input
@@ -853,7 +961,7 @@ export default function Calendario() {
                 className="mt-2"
               />
               <div className="mt-2 max-h-40 overflow-y-auto border rounded p-2 space-y-1">
-                {pessoasMock.filter(p => p.status === 'Ativo' && p.id !== currentUserId && p.nome.toLowerCase().includes(participanteSearch.toLowerCase())).map(p => (
+                {systemUsers.filter((p: any) => p.id !== currentUserId && p.nome.toLowerCase().includes(participanteSearch.toLowerCase())).map((p: any) => (
                   <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5">
                     <Checkbox
                       checked={novoEvento.participantes.includes(p.id)}
@@ -879,15 +987,15 @@ export default function Calendario() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Switch 
+              <Switch
                 id="privado"
                 checked={novoEvento.privado}
-                onCheckedChange={(v) => setNovoEvento({...novoEvento, privado: v})}
+                onCheckedChange={(v) => setNovoEvento({ ...novoEvento, privado: v })}
               />
               <Label htmlFor="privado">Evento privado</Label>
             </div>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateModal(false)}>
               Cancelar

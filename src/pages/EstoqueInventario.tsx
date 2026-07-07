@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useState, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { FilterSection } from "@/components/FilterSection"
+import { SortableHead } from "@/components/SortableHead"
 import { TableActions } from "@/components/TableActions"
 import { ExportButton } from "@/components/ExportButton"
 import { FileText } from "lucide-react"
@@ -11,40 +12,70 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
-
-const mockInventario = [
-  { id: 1, item: "Parafuso M8", quantidade: 250, unidade: "Almoxarifado SP" },
-  { id: 2, item: "Cabo HDMI", quantidade: 8, unidade: "TI Central" },
-  { id: 3, item: "Óleo Lubrificante", quantidade: 4, unidade: "Manutenção" },
-  { id: 4, item: "Papel A4", quantidade: 50, unidade: "Almoxarifado SP" },
-  { id: 5, item: "Toner HP", quantidade: 3, unidade: "TI Central" },
-]
-
-type Item = typeof mockInventario[0];
+import { useQuery } from "@tanstack/react-query"
+import { fetchInventario, fetchUnidades, inventarioQueryKey } from "@/services/estoque"
+import { unidadeMedidaLabel } from "@/lib/unidadesMedida"
+import { usePagination } from "@/hooks/usePagination"
+import { useSortable } from "@/hooks/useSortable"
+import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates"
+import { Loader2 } from "lucide-react"
 
 export default function EstoqueInventario() {
   const navigate = useNavigate()
-  const [items, setItems] = useState(mockInventario)
+
+  useRealtimeUpdates([[...inventarioQueryKey]]);
+
+  const { data: response, isLoading } = useQuery({
+    queryKey: inventarioQueryKey,
+    queryFn: () => fetchInventario(),
+  });
+  const inventario = Array.isArray(response) ? response : (response?.results ?? []);
+
+  const { data: unidades = [] } = useQuery({ queryKey: ['unidades'], queryFn: fetchUnidades })
+  const unidadeOptions = [
+    { value: "todos", label: "Todos" },
+    ...unidades.map(u => ({ value: u.unidade, label: u.unidade }))
+  ]
+
   const [filterNome, setFilterNome] = useState("")
   const [filterCidade, setFilterCidade] = useState("")
-  const [viewItem, setViewItem] = useState<Item | null>(null)
+  const [filterQtdMin, setFilterQtdMin] = useState("")
+  const [viewItem, setViewItem] = useState<any>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [editItem, setEditItem] = useState<Item | null>(null)
+  const [editItem, setEditItem] = useState<any>(null)
   const [editData, setEditData] = useState({ item: "", quantidade: "", unidade: "" })
+
+  const items = useMemo(() => {
+    return (inventario || []).map(i => ({
+      id: i.id,
+      item: i.item_nome,
+      quantidade: i.quantidade_disponivel,
+      unidade: i.unidade_nome,
+      unidadeMedida: unidadeMedidaLabel(i.unidade_medida)
+    }))
+  }, [inventario])
 
   const filtered = useMemo(() => {
     return items.filter(item => {
       const matchNome = item.item.toLowerCase().includes(filterNome.toLowerCase())
-      const matchCidade = filterCidade && filterCidade !== "todos" ? item.unidade.toLowerCase().includes(filterCidade.toLowerCase()) : true
-      return matchNome && matchCidade
+      const matchCidade = filterCidade && filterCidade !== "todos" ? item.unidade === filterCidade : true
+      const matchQtdMin = filterQtdMin ? Number(item.quantidade) >= Number(filterQtdMin) : true
+      return matchNome && matchCidade && matchQtdMin
     })
-  }, [items, filterNome, filterCidade])
+  }, [items, filterNome, filterCidade, filterQtdMin])
 
-  const getExportData = () => filtered.map(i => ({ Item: i.item, Quantidade: i.quantidade, Unidade: i.unidade }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removido", description: "Item excluído do inventário." }); } };
-  const openEdit = (i: Item) => { setEditItem(i); setEditData({ item: i.item, quantidade: String(i.quantidade), unidade: i.unidade }); };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, item: editData.item, quantidade: Number(editData.quantidade), unidade: editData.unidade } : i)); setEditItem(null); toast({ title: "Salvo", description: "Item atualizado." }); } };
+  const { sorted, sortKey, sortDir, toggleSort } = useSortable(filtered)
+  const { page, goToPage, totalPages, paginatedItems, total, hasNext, hasPrev } = usePagination(sorted)
+
+  const getExportData = () => filtered.map(i => ({ Item: i.item, Quantidade: i.quantidade, Unidade: i.unidade, "Unidade de Medida": i.unidadeMedida }));
+  const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API" }); setDeleteId(null); } };
+  const openEdit = (i: any) => { setEditItem(i); setEditData({ item: i.item, quantidade: String(i.quantidade), unidade: i.unidade }); };
+  const handleSaveEdit = () => { if (editItem) { toast({ title: "Edição requer API" }); setEditItem(null); } };
   const deleteItem = items.find(i => i.id === deleteId);
+
+  if (isLoading) {
+    return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  }
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -57,29 +88,47 @@ export default function EstoqueInventario() {
         <FilterSection
           fields={[
             { type: "text", label: "Nome do Item", placeholder: "Buscar item...", value: filterNome, onChange: setFilterNome, width: "flex-1 min-w-[200px]" },
-            { type: "select", label: "Unidade", placeholder: "Selecione...", value: filterCidade, onChange: setFilterCidade, options: [{ value: "todos", label: "Todos" }, { value: "almoxarifado-sp", label: "Almoxarifado SP" }, { value: "ti-central", label: "TI Central" }, { value: "manutencao", label: "Manutenção" }], width: "min-w-[180px]" }
+            { type: "select", label: "Unidade", placeholder: "Todas", value: filterCidade, onChange: setFilterCidade, options: unidadeOptions, width: "min-w-[180px]" },
+            { type: "text", label: "Qtd. mínima", placeholder: "Ex: 10", value: filterQtdMin, onChange: setFilterQtdMin, width: "min-w-[130px]" }
           ]}
           resultsCount={filtered.length}
         />
 
-        <Table>
-          <TableHeader><TableRow><TableHead className="text-center">Item</TableHead><TableHead className="text-center">Quantidade</TableHead><TableHead className="text-center">Unidade</TableHead><TableHead className="text-center">Ações</TableHead></TableRow></TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (<TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Nenhum item encontrado.</TableCell></TableRow>) : (
-              filtered.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell className="text-center">{item.item}</TableCell><TableCell className="text-center">{item.quantidade}</TableCell><TableCell className="text-center">{item.unidade}</TableCell>
-                  <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} onEdit={() => openEdit(item)} onDelete={() => setDeleteId(item.id)} /></TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <div className="rounded border border-border overflow-hidden">
+          <Table>
+            <TableHeader><TableRow className="bg-table-header">
+              <SortableHead label="Item" field="item" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Quantidade" field="quantidade" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Unidade" field="unidade" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <SortableHead label="Unidade de Medida" field="unidadeMedida" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+              <TableHead className="text-center font-semibold">Ações</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {paginatedItems.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhum item encontrado.</TableCell></TableRow>) : (
+                paginatedItems.map((item) => (
+                  <TableRow key={item.id} className="hover:bg-table-hover transition-colors">
+                    <TableCell >{item.item}</TableCell><TableCell >{item.quantidade}</TableCell><TableCell >{item.unidade}</TableCell><TableCell >{item.unidadeMedida}</TableCell>
+                    <TableCell className="text-center"><TableActions onView={() => setViewItem(item)} /></TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">{(page-1)*20+1}–{Math.min(page*20,total)} de {total} registros</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => goToPage(page-1)} disabled={!hasPrev}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => goToPage(page+1)} disabled={!hasNext}>Próxima</Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes do Item</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Item: viewItem.item, Quantidade: viewItem.quantidade, Unidade: viewItem.unidade }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
+          {viewItem && <div className="space-y-2">{Object.entries({ Item: viewItem.item, Quantidade: viewItem.quantidade, Unidade: viewItem.unidade, "Unidade de Medida": viewItem.unidadeMedida }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
         </DialogContent>
       </Dialog>
 

@@ -38,8 +38,8 @@ export function FilterSection({
     <div className="space-y-4">
       <div className="filter-card">
         <div className="flex flex-wrap gap-4 items-end">
-          {fields.map((field, index) => (
-            <div key={index} className={`flex flex-col gap-1.5 ${field.width || 'min-w-[180px]'}`}>
+          {fields.map((field) => (
+            <div key={field.label} className={`flex flex-col gap-1.5 ${field.width || 'min-w-[180px]'}`}>
               <label className="filter-label">{field.label}</label>
               
               {field.type === "text" && (

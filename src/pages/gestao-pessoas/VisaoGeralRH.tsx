@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { GradientCard } from "@/components/financeiro/GradientCard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, UserCheck, UserX, AlertTriangle, TrendingUp } from "lucide-react";
-import { getEstatisticasRH } from "@/data/pessoas-mock";
+import { Users, UserCheck, UserX, AlertTriangle, TrendingUp, Loader2 } from "lucide-react";
+import { fetchPessoas } from "@/services/pessoas";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { motion } from "framer-motion";
 
@@ -29,21 +31,47 @@ const FadeIn = ({ children, delay = 0 }: { children: React.ReactNode; delay?: nu
 );
 
 export default function VisaoGeralRH() {
-  const stats = getEstatisticasRH();
+  const { data: pessoasResponse, isLoading } = useQuery({
+    queryKey: ['pessoas'],
+    queryFn: () => fetchPessoas(1, '', 200),
+  });
+  const pessoas = pessoasResponse?.results ?? [];
+
   const [periodo, setPeriodo] = useState("30d");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [setorFilter, setSetorFilter] = useState("todos");
 
-  const setores = ["todos", ...stats.porSetor.filter(s => s.quantidade > 0).map(s => s.setor)];
+  if (isLoading) {
+    return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  }
+
+  // Calculate stats manually for now from 'pessoas'
+  const total = pessoas?.length || 0;
+  // Assumes is_active=True returned from backend means 'Ativo'
+  const ativos = total;
+  const afastados = 0;
+  const desligados = 0;
+  const semGestor = pessoas?.filter(p => !p.supervisor_id).length || 0;
+
+  // Group by sector
+  const setoresMap: Record<string, number> = {};
+  pessoas?.forEach(p => {
+    const s = p.setor || "Sem Setor";
+    setoresMap[s] = (setoresMap[s] || 0) + 1;
+  });
+
+  const porSetor = Object.entries(setoresMap).map(([k, v]) => ({ setor: k, quantidade: v }));
+
+  const setoresList = ["todos", ...porSetor.filter(s => s.quantidade > 0).map(s => s.setor)];
 
   const pieData = [
-    { name: "Ativos", value: stats.ativos, color: "hsl(72 100% 50%)" },
-    { name: "Afastados", value: stats.afastados, color: "hsl(45 100% 50%)" },
-    { name: "Desligados", value: stats.desligados, color: "hsl(0 80% 60%)" },
+    { name: "Ativos", value: ativos, color: "hsl(202 46% 59%)" },
+    { name: "Afastados", value: afastados, color: "hsl(45 100% 50%)" },
+    { name: "Desligados", value: desligados, color: "hsl(0 80% 60%)" },
   ];
   const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
 
-  const barData = stats.porSetor.filter(s => s.quantidade > 0);
+  const barData = porSetor.filter(s => s.quantidade > 0);
 
   const ultimasAlteracoes = [
     { id: 1, acao: "Cadastro criado", pessoa: "Gabriela Nunes", data: "04/02/2026 14:30", usuario: "Maria Oliveira" },
@@ -86,7 +114,7 @@ export default function VisaoGeralRH() {
                 <label className="filter-label">Setor</label>
                 <Select value={setorFilter} onValueChange={setSetorFilter}>
                   <SelectTrigger className="filter-input"><SelectValue placeholder="Todos Setores" /></SelectTrigger>
-                  <SelectContent>{setores.map((s) => <SelectItem key={s} value={s}>{s === "todos" ? "Todos Setores" : s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{setoresList.map((s) => <SelectItem key={s} value={s}>{s === "todos" ? "Todos Setores" : s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -96,10 +124,10 @@ export default function VisaoGeralRH() {
 
       {/* Cards de Resumo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GradientCard title="Total de Pessoas" value={stats.total.toString()} icon={Users} variant="info" delay={0} />
-        <GradientCard title="Ativos" value={stats.ativos.toString()} icon={UserCheck} variant="success" trend={{ value: "+3%", positive: true }} delay={1} />
-        <GradientCard title="Afastados" value={stats.afastados.toString()} icon={UserX} variant="warning" delay={2} />
-        <GradientCard title="Sem Gestor" value={stats.semGestor.toString()} icon={AlertTriangle} variant="danger" delay={3} />
+        <GradientCard title="Total de Pessoas" value={total.toString()} icon={Users} variant="info" delay={0} />
+        <GradientCard title="Ativos" value={ativos.toString()} icon={UserCheck} variant="success" trend={{ value: "+3%", positive: true }} delay={1} />
+        <GradientCard title="Afastados" value={afastados.toString()} icon={UserX} variant="warning" delay={2} />
+        <GradientCard title="Sem Gestor" value={semGestor.toString()} icon={AlertTriangle} variant="danger" delay={3} />
       </div>
 
       {/* Gráficos */}
@@ -176,7 +204,7 @@ export default function VisaoGeralRH() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-foreground">{alt.data}</p>
+                  <p className="text-sm text-foreground">{fmtDate(alt.data)}</p>
                   <p className="text-xs text-muted-foreground">por {alt.usuario}</p>
                 </div>
               </div>

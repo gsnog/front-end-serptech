@@ -1,29 +1,58 @@
 import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { TrendingUp } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { DropdownWithAdd } from "@/components/DropdownWithAdd";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import {
+  createCentroReceita, centrosReceitaQueryKey,
+  fetchAreas, areasQueryKey,
+} from "@/services/financeiro";
+import { fetchSetoresEstoque, setoresEstoqueQueryKey } from "@/services/estoque";
 
 const NovoCentroReceita = () => {
   const navigate = useNavigate();
-  const { handleSalvar, isSaving } = useSaveWithDelay({
-    redirectTo: "/cadastro/financeiro/centro-receita",
-    successMessage: "Centro de receita salvo!",
-    successDescription: "O registro foi salvo com sucesso.",
-  });
-  const [diretoria, setDiretoria] = useState("");
-  const [diretorias, setDiretorias] = useState([
-    { value: "dir1", label: "Diretoria 1" },
-    { value: "dir2", label: "Diretoria 2" },
-  ]);
+  const queryClient = useQueryClient();
 
-  const handleCancelar = () => {
-    navigate("/cadastro/financeiro/centro-receita");
+  const [setor, setSetor] = useState("");
+  const [area, setArea] = useState("");
+
+  const { data: setoresRaw = [] } = useQuery({
+    queryKey: [...setoresEstoqueQueryKey],
+    queryFn: fetchSetoresEstoque,
+  });
+  const setores = Array.isArray(setoresRaw) ? setoresRaw : (setoresRaw as any)?.results ?? [];
+
+  const { data: areasRaw = [] } = useQuery({
+    queryKey: [...areasQueryKey],
+    queryFn: fetchAreas,
+  });
+  const areas = Array.isArray(areasRaw) ? areasRaw : (areasRaw as any)?.results ?? [];
+
+  const mutation = useMutation({
+    mutationFn: createCentroReceita,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: centrosReceitaQueryKey });
+      toast({ title: "Centro de receita salvo!", description: "O registro foi salvo com sucesso." });
+      navigate("/cadastro/financeiro/centro-receita");
+    },
+    onError: (error: any) => {
+      const data = error?.response?.data;
+      const msg = data
+        ? Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`).join(" | ")
+        : "Erro ao salvar centro de receita.";
+      toast({ title: "Erro", description: msg, variant: "destructive" });
+    },
+  });
+
+  const handleSalvar = () => {
+    if (!setor) { toast({ title: "Selecione o setor.", variant: "destructive" }); return; }
+    if (!area) { toast({ title: "Selecione a área.", variant: "destructive" }); return; }
+    mutation.mutate({ setor: Number(setor), area: Number(area) });
   };
 
   return (
@@ -37,41 +66,48 @@ const NovoCentroReceita = () => {
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-foreground">Dados do Centro de Receita</h2>
-                <p className="text-sm text-muted-foreground">Preencha as informações abaixo</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DropdownWithAdd
-                label="Diretoria"
-                required
-                value={diretoria}
-                onChange={setDiretoria}
-                options={diretorias}
-                onAddNew={(name) => {
-                  const newVal = name.toLowerCase().replace(/\s/g, "-");
-                  setDiretorias(prev => [...prev, { value: newVal, label: name }]);
-                  setDiretoria(newVal);
-                }}
-              />
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Gerência</Label>
-                <Input placeholder="" className="form-input" />
+                <p className="text-sm text-muted-foreground">O código do centro será gerado automaticamente</p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Departamento</Label>
-                <Input placeholder="" className="form-input" />
+                <Label className="text-sm font-medium">Setor <span className="text-destructive">*</span></Label>
+                <Select value={setor} onValueChange={setSetor}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar setor" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {setores.map((s: any) => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.setor || s.nome || `Setor ${s.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Área <span className="text-destructive">*</span></Label>
+                <Select value={area} onValueChange={setArea}>
+                  <SelectTrigger className="form-input">
+                    <SelectValue placeholder="Selecionar área" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover">
+                    {areas.map((a: any) => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <FormActionBar
               onSave={handleSalvar}
-              onCancel={handleCancelar}
-              isSaving={isSaving}
+              onCancel={() => navigate("/cadastro/financeiro/centro-receita")}
+              isSaving={mutation.isPending}
             />
           </div>
         </CardContent>

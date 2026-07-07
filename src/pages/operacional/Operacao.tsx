@@ -11,24 +11,35 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-
-const initialOperacoes = [
-  { id: 1, dataEntrada: "02/06/2025", barco: "Marlin Azul", custoAproximado: "R$ 15.000,00", valorPago: "R$ 15.000,00", previsaoEntrega: "15/06/2025", dataEntrega: "15/06/2025" },
-  { id: 2, dataEntrada: "01/06/2025", barco: "Veleiro Norte", custoAproximado: "R$ 8.500,00", valorPago: "R$ 4.250,00", previsaoEntrega: "20/06/2025", dataEntrega: "-" },
-  { id: 3, dataEntrada: "28/05/2025", barco: "Lancha Sul", custoAproximado: "R$ 22.000,00", valorPago: "R$ 0,00", previsaoEntrega: "10/07/2025", dataEntrega: "-" },
-]
-
-type Op = typeof initialOperacoes[0];
+import { useQuery } from "@tanstack/react-query";
+import { fetchProjetos } from "@/services/operacional";
+import { Loader2 } from "lucide-react";
 
 const Operacao = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(initialOperacoes);
+  const { data: projetos, isLoading } = useQuery({
+    queryKey: ['projetos'],
+    queryFn: fetchProjetos
+  });
+
   const [filterNome, setFilterNome] = useState("");
   const [filterData, setFilterData] = useState("");
-  const [viewItem, setViewItem] = useState<Op | null>(null);
+  const [viewItem, setViewItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editItem, setEditItem] = useState<Op | null>(null);
+  const [editItem, setEditItem] = useState<any>(null);
   const [editData, setEditData] = useState({ barco: "", custoAproximado: "", valorPago: "" });
+
+  const items = useMemo(() => {
+    return (projetos || []).map(p => ({
+      id: p.id,
+      dataEntrada: p.data_inicio || "-",
+      barco: p.nome,
+      custoAproximado: "Consultar no Financeiro",
+      valorPago: "-",
+      previsaoEntrega: p.data_fim || "-",
+      dataEntrega: p.status === 'Concluído' ? p.data_fim : "-"
+    }));
+  }, [projetos]);
 
   const filtered = useMemo(() => items.filter(op => {
     const matchNome = op.barco.toLowerCase().includes(filterNome.toLowerCase());
@@ -37,10 +48,14 @@ const Operacao = () => {
   }), [items, filterNome, filterData]);
 
   const getExportData = () => filtered.map(o => ({ "Data Entrada": o.dataEntrada, Barco: o.barco, "Custo Aproximado": o.custoAproximado, "Valor Pago": o.valorPago, "Previsão Entrega": o.previsaoEntrega, "Data Entrega": o.dataEntrega }));
-  const openEdit = (o: Op) => { setEditItem(o); setEditData({ barco: o.barco, custoAproximado: o.custoAproximado, valorPago: o.valorPago }) };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Operação atualizada." }) } };
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Operação excluída." }) } };
+  const openEdit = (o: any) => { setEditItem(o); setEditData({ barco: o.barco, custoAproximado: o.custoAproximado, valorPago: o.valorPago }) };
+  const handleSaveEdit = () => { if (editItem) { toast({ title: "Edição requer API de Update", description: "Módulo em desenvolvimento." }); setEditItem(null); } };
+  const handleDelete = () => { if (deleteId !== null) { toast({ title: "Exclusão requer API de Delete", description: "Módulo em desenvolvimento." }); setDeleteId(null); } };
   const deleteItemData = items.find(i => i.id === deleteId);
+
+  if (isLoading) {
+    return <div className="flex justify-center p-8"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+  }
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -58,13 +73,13 @@ const Operacao = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Data de Entrada</TableHead><TableHead className="text-center">Barco</TableHead><TableHead className="text-center">Custo Aproximado</TableHead><TableHead className="text-center">Valor Pago</TableHead><TableHead className="text-center">Previsão de Entrega</TableHead><TableHead className="text-center">Data de Entrega</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead className="text-center">Data de Entrada</TableHead><TableHead >Barco</TableHead><TableHead className="text-right">Custo Aproximado</TableHead><TableHead className="text-right">Valor Pago</TableHead><TableHead className="text-center">Previsão de Entrega</TableHead><TableHead className="text-center">Data de Entrega</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {filtered.length === 0 ? (<TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma operação encontrada.</TableCell></TableRow>) : (
                 filtered.map((op) => (
                   <TableRow key={op.id}>
-                    <TableCell className="text-center">{op.dataEntrada}</TableCell><TableCell className="text-center">{op.barco}</TableCell><TableCell className="text-center">{op.custoAproximado}</TableCell><TableCell className="text-center">{op.valorPago}</TableCell><TableCell className="text-center">{op.previsaoEntrega}</TableCell><TableCell className="text-center">{op.dataEntrega}</TableCell>
+                    <TableCell >{op.dataEntrada}</TableCell><TableCell >{op.barco}</TableCell><TableCell >{op.custoAproximado}</TableCell><TableCell >{op.valorPago}</TableCell><TableCell >{op.previsaoEntrega}</TableCell><TableCell >{op.dataEntrega}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(op)} onEdit={() => openEdit(op)} onDelete={() => setDeleteId(op.id)} /></TableCell>
                   </TableRow>
                 ))

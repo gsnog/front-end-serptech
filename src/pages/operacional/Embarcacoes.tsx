@@ -11,32 +11,58 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
-
-const initialEmbarcacoes = [
-  { id: 1, nome: "Marlin Azul", cliente: "João Silva", dimensao: "15m x 4m", setores: "Motor, Pintura" },
-  { id: 2, nome: "Veleiro Norte", cliente: "Maria Santos", dimensao: "12m x 3.5m", setores: "Elétrica, Fibra" },
-  { id: 3, nome: "Lancha Sul", cliente: "Carlos Pereira", dimensao: "8m x 2.5m", setores: "Motor" },
-]
-
-type Emb = typeof initialEmbarcacoes[0];
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { fetchEmbarcacoes, createEmbarcacao, updateEmbarcacao, deleteEmbarcacao, type Embarcacao as Emb } from "@/services/operacional";
 
 const Embarcacoes = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(initialEmbarcacoes);
+  const queryClient = useQueryClient();
   const [filterNome, setFilterNome] = useState("");
   const [filterCliente, setFilterCliente] = useState("");
   const [viewItem, setViewItem] = useState<Emb | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editItem, setEditItem] = useState<Emb | null>(null);
-  const [editData, setEditData] = useState({ nome: "", cliente: "", dimensao: "", setores: "" });
+  const [editData, setEditData] = useState({ nome: "", cliente: "", dimensoes: "", setores: "" });
 
-  const filtered = useMemo(() => items.filter(emb => emb.nome.toLowerCase().includes(filterNome.toLowerCase()) && emb.cliente.toLowerCase().includes(filterCliente.toLowerCase())), [items, filterNome, filterCliente]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: response, isLoading } = useQuery({
+    queryKey: ['embarcacoes', currentPage],
+    queryFn: () => fetchEmbarcacoes(currentPage),
+  });
+  const items = Array.isArray(response) ? response : (response?.results ?? []);
+  const totalCount = Array.isArray(response) ? response.length : (response?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
 
-  const getExportData = () => filtered.map(e => ({ Nome: e.nome, Cliente: e.cliente, Dimensão: e.dimensao, Setores: e.setores }));
-  const openEdit = (e: Emb) => { setEditItem(e); setEditData({ nome: e.nome, cliente: e.cliente, dimensao: e.dimensao, setores: e.setores }) };
-  const handleSaveEdit = () => { if (editItem) { setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, ...editData } : i)); setEditItem(null); toast({ title: "Salvo", description: "Embarcação atualizada." }) } };
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removida", description: "Embarcação excluída." }) } };
-  const deleteItemData = items.find(i => i.id === deleteId);
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: number; payload: Partial<Emb> }) => updateEmbarcacao(data.id, data.payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['embarcacoes'] });
+      setEditItem(null);
+      toast({ title: "Salvo", description: "Embarcação atualizada com sucesso." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao atualizar.", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteEmbarcacao,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['embarcacoes'] });
+      setDeleteId(null);
+      toast({ title: "Removida", description: "Embarcação excluída com sucesso." });
+    },
+    onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
+  });
+
+  const filtered = useMemo(() => items.filter((emb: Emb) =>
+    (emb.nome || "").toLowerCase().includes(filterNome.toLowerCase()) &&
+    (emb.cliente || "").toLowerCase().includes(filterCliente.toLowerCase())
+  ), [items, filterNome, filterCliente]);
+
+  const getExportData = () => filtered.map((e: Emb) => ({ Nome: e.nome, Cliente: e.cliente, Dimensão: e.dimensoes, Setores: e.setores }));
+  const openEdit = (e: Emb) => { setEditItem(e); setEditData({ nome: e.nome, cliente: e.cliente || "", dimensoes: e.dimensoes || "", setores: e.setores || "" }) };
+  const handleSaveEdit = () => { if (editItem) { updateMutation.mutate({ id: editItem.id, payload: editData }); } };
+  const handleDelete = () => { if (deleteId !== null) { deleteMutation.mutate(deleteId); } };
+  const deleteItemData = items.find((i: Emb) => i.id === deleteId);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -54,25 +80,38 @@ const Embarcacoes = () => {
         <div className="rounded overflow-hidden">
           <Table>
             <TableHeader><TableRow>
-              <TableHead className="text-center">Nome</TableHead><TableHead className="text-center">Cliente</TableHead><TableHead className="text-center">Dimensão</TableHead><TableHead className="text-center">Setores</TableHead><TableHead className="text-center">Ações</TableHead>
+              <TableHead >Nome</TableHead><TableHead >Cliente</TableHead><TableHead >Dimensão</TableHead><TableHead >Setores</TableHead><TableHead className="text-center">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (<TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma embarcação encontrada.</TableCell></TableRow>) : (
-                filtered.map((emb) => (
+              {isLoading ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+              ) : filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Nenhuma embarcação encontrada.</TableCell></TableRow>
+              ) : (
+                filtered.map((emb: Emb) => (
                   <TableRow key={emb.id}>
-                    <TableCell className="text-center">{emb.nome}</TableCell><TableCell className="text-center">{emb.cliente}</TableCell><TableCell className="text-center">{emb.dimensao}</TableCell><TableCell className="text-center">{emb.setores}</TableCell>
+                    <TableCell >{emb.nome}</TableCell><TableCell >{emb.cliente || "—"}</TableCell><TableCell >{emb.dimensoes || "—"}</TableCell><TableCell >{emb.setores || "—"}</TableCell>
                     <TableCell className="text-center"><TableActions onView={() => setViewItem(emb)} onEdit={() => openEdit(emb)} onDelete={() => setDeleteId(emb.id)} /></TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+              <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>Detalhes da Embarcação</DialogTitle></DialogHeader>
-          {viewItem && <div className="space-y-2">{Object.entries({ Nome: viewItem.nome, Cliente: viewItem.cliente, Dimensão: viewItem.dimensao, Setores: viewItem.setores }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v}</span></div>))}</div>}
+          {viewItem && <div className="space-y-2">{Object.entries({ Nome: viewItem.nome, Cliente: viewItem.cliente, Dimensões: viewItem.dimensoes, Setores: viewItem.setores }).map(([k, v]) => (<div key={k} className="flex justify-between py-1 border-b border-border last:border-0"><span className="text-sm text-muted-foreground">{k}</span><span className="text-sm font-medium">{v || "—"}</span></div>))}</div>}
         </DialogContent>
       </Dialog>
 
@@ -81,16 +120,16 @@ const Embarcacoes = () => {
           <div className="space-y-3">
             <div><Label>Nome</Label><Input value={editData.nome} onChange={e => setEditData({ ...editData, nome: e.target.value })} /></div>
             <div><Label>Cliente</Label><Input value={editData.cliente} onChange={e => setEditData({ ...editData, cliente: e.target.value })} /></div>
-            <div><Label>Dimensão</Label><Input value={editData.dimensao} onChange={e => setEditData({ ...editData, dimensao: e.target.value })} /></div>
+            <div><Label>Dimensões</Label><Input value={editData.dimensoes} onChange={e => setEditData({ ...editData, dimensoes: e.target.value })} /></div>
             <div><Label>Setores</Label><Input value={editData.setores} onChange={e => setEditData({ ...editData, setores: e.target.value })} /></div>
           </div>
-          <DialogFooter><Button onClick={handleSaveEdit}>Salvar</Button></DialogFooter>
+          <DialogFooter><Button onClick={handleSaveEdit} disabled={updateMutation.isPending}>{updateMutation.isPending ? "Salvando..." : "Salvar"}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir embarcação?</AlertDialogTitle><AlertDialogDescription>Deseja excluir "{deleteItemData?.nome}"? Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={deleteMutation.isPending}>{deleteMutation.isPending ? "Excluindo..." : "Excluir"}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

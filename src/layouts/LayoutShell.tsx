@@ -1,25 +1,41 @@
 import { useState } from "react"
-import { Outlet, useLocation } from "react-router-dom"
+import { Outlet, useLocation, Navigate } from "react-router-dom"
 import { AppSidebar } from "@/components/AppSidebar"
 import { Topbar } from "@/components/Topbar"
+import { Footer } from "@/components/Footer"
 import { ThemeProvider } from "@/hooks/useTheme"
 import { cn } from "@/lib/utils"
+import { usePermissions } from "@/contexts/PermissionsContext"
+import { Loader2 } from "lucide-react"
+
+// Maps path prefixes to the module required for access.
+// Checked in order — first match wins.
+const ROUTE_PERMISSIONS: Array<{ prefix: string; module: string }> = [
+  { prefix: '/gestao-pessoas',       module: 'gestao_pessoas'     },
+  { prefix: '/cadastro/estoque',     module: 'cadastro_estoque'   },
+  { prefix: '/cadastro/financeiro',  module: 'cadastro_financeiro'},
+  { prefix: '/cadastro/pessoas',     module: 'cadastro_pessoas'   },
+  { prefix: '/estoque',              module: 'estoque'            },
+  { prefix: '/financeiro',           module: 'financeiro'         },
+  { prefix: '/comercial',            module: 'comercial'          },
+  { prefix: '/operacional',          module: 'operacional'        },
+  { prefix: '/calendario',           module: 'calendario'         },
+  { prefix: '/kanban',               module: 'kanban'             },
+  { prefix: '/chat',                 module: 'chat'               },
+]
 
 const pageTitles: Record<string, { title: string; description?: string }> = {
   "/": { title: "Dashboard", description: "Visão geral do sistema" },
   "/relatorios": { title: "Relatórios", description: "Gere e exporte relatórios financeiros e operacionais" },
-  "/cadastro": { title: "Cadastro", description: "Gerenciamento de cadastros" },
   "/novo-usuario": { title: "Novo Usuário", description: "Cadastro de novo usuário" },
   
   // Cadastro Estoque - Páginas principais
-  "/cadastro/estoque/formas-apresentacao": { title: "Formas de Apresentação", description: "Cadastro de formas de apresentação do estoque" },
   "/cadastro/estoque/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores do estoque" },
   "/cadastro/estoque/itens": { title: "Itens", description: "Cadastro de itens do estoque" },
   "/cadastro/estoque/setores": { title: "Setores", description: "Cadastro de setores do estoque" },
   "/cadastro/estoque/unidades": { title: "Unidades", description: "Cadastro de unidades do estoque" },
   
   // Cadastro Estoque - Subpáginas
-  "/cadastro/estoque/formas-apresentacao/nova": { title: "Formas de Apresentação", description: "Nova Forma de Apresentação" },
   "/cadastro/estoque/fornecedores/novo": { title: "Fornecedores", description: "Novo Fornecedor" },
   "/cadastro/estoque/itens/novo": { title: "Itens", description: "Novo Item" },
   "/cadastro/estoque/setores/novo": { title: "Setores", description: "Novo Setor" },
@@ -30,39 +46,39 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/cadastro/financeiro/clientes": { title: "Clientes", description: "Cadastro de clientes" },
   "/cadastro/financeiro/centro-custo": { title: "Centro de Custo", description: "Cadastro de centros de custo" },
   "/cadastro/financeiro/centro-receita": { title: "Centro de Receita", description: "Cadastro de centros de receita" },
-  "/cadastro/financeiro/contabil": { title: "Contábil", description: "Cadastro contábil" },
   "/cadastro/financeiro/categorias": { title: "Categorias", description: "Cadastro de categorias" },
-  "/cadastro/financeiro/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores financeiros" },
+  "/cadastro/financeiro/fornecedores": { title: "Fornecedores", description: "Cadastro de fornecedores" },
   "/cadastro/financeiro/subcategorias": { title: "Subcategorias", description: "Cadastro de subcategorias" },
   "/cadastro/financeiro/plano-contas": { title: "Plano de Contas", description: "Cadastro do plano de contas" },
-  "/cadastro/financeiro/conciliacao-bancaria": { title: "Conciliação Bancária", description: "Conciliação de contas bancárias" },
-  "/cadastro/financeiro/transferencias": { title: "Transferências", description: "Cadastro de transferências" },
+  "/financeiro/conciliacao-bancaria": { title: "Conciliação Bancária", description: "Conciliação de contas bancárias" },
+  "/financeiro/transferencias": { title: "Transferências", description: "Cadastro de transferências" },
   
   // Cadastro Financeiro - Subpáginas
   "/cadastro/financeiro/conta-bancaria/nova": { title: "Conta Bancária", description: "Nova Conta Bancária" },
   "/cadastro/financeiro/clientes/novo": { title: "Clientes", description: "Novo Cliente" },
   "/cadastro/financeiro/centro-custo/novo": { title: "Centro de Custo", description: "Novo Centro de Custo" },
   "/cadastro/financeiro/centro-receita/novo": { title: "Centro de Receita", description: "Novo Centro de Receita" },
-  "/cadastro/financeiro/contabil/novo": { title: "Contábil", description: "Novo Registro Contábil" },
   "/cadastro/financeiro/categorias/nova": { title: "Categorias", description: "Nova Categoria" },
   "/cadastro/financeiro/fornecedores/novo": { title: "Fornecedores", description: "Novo Fornecedor" },
   "/cadastro/financeiro/subcategorias/nova": { title: "Subcategorias", description: "Nova Subcategoria" },
   "/cadastro/financeiro/plano-contas/novo": { title: "Plano de Contas", description: "Novo Plano de Contas" },
-  "/cadastro/financeiro/transferencias/nova": { title: "Transferências", description: "Nova Transferência" },
-  
+
   // Estoque - Páginas principais
   "/estoque/entradas": { title: "Entradas de Estoque", description: "Controle de entrada de materiais" },
   "/estoque/saidas": { title: "Saídas de Estoque", description: "Controle de saída de materiais" },
+  "/estoque/transferencias": { title: "Transferências de Estoque", description: "Transferência de itens entre unidades" },
   "/estoque/inventario": { title: "Inventário", description: "Controle de inventário" },
   "/estoque/locacoes": { title: "Locações", description: "Gerencie todas as locações de unidades" },
   "/estoque/ordem-compra": { title: "Ordem de Compra", description: "Gerenciamento de ordens de compra" },
   "/estoque/ordem-servico": { title: "Ordem de Serviço", description: "Gerenciamento de ordens de serviço" },
   "/estoque/requisicoes": { title: "Requisições", description: "Gerenciamento de requisições" },
+  "/estoque/pedidos-internos": { title: "Pedidos Internos", description: "Gerenciamento de pedidos internos" },
   
   // Estoque - Subpáginas
   "/estoque/entradas/nova": { title: "Entradas de Estoque", description: "Nova Entrada" },
   "/estoque/entradas/upload-nfe": { title: "Entradas de Estoque", description: "Upload NF-e" },
   "/estoque/saidas/nova": { title: "Saídas de Estoque", description: "Nova Saída" },
+  "/estoque/transferencias/nova": { title: "Transferências de Estoque", description: "Nova Transferência" },
   "/estoque/locacoes/nova": { title: "Locações", description: "Nova Locação" },
   "/estoque/requisicoes/nova": { title: "Requisições", description: "Nova Requisição" },
   "/estoque/ordem-compra/nova": { title: "Ordem de Compra", description: "Nova Ordem de Compra" },
@@ -72,53 +88,43 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/financeiro/contas-receber": { title: "Contas a Receber", description: "Gerenciamento de contas a receber" },
   "/financeiro/contas-pagar": { title: "Contas a Pagar", description: "Gerenciamento de contas a pagar" },
   "/financeiro/fluxo-caixa": { title: "Fluxo de Caixa", description: "Controle de fluxo de caixa" },
-  "/financeiro/xml": { title: "XML", description: "Gerenciamento de arquivos XML" },
+  "/financeiro/xml": { title: "Notas Fiscais", description: "Gerenciamento de notas fiscais eletrônicas" },
   
   // Financeiro - Subpáginas
   "/financeiro/contas-receber/nova": { title: "Contas a Receber", description: "Nova Conta a Receber" },
   "/financeiro/contas-pagar/nova": { title: "Contas a Pagar", description: "Nova Conta a Pagar" },
-  "/financeiro/contas-receber/relatorio": { title: "Contas a Receber", description: "Relatório de Contas a Receber" },
-  "/financeiro/contas-pagar/relatorio": { title: "Contas a Pagar", description: "Relatório de Contas a Pagar" },
   "/financeiro/fluxo-caixa/relatorio": { title: "Fluxo de Caixa", description: "Relatório de Fluxo de Caixa" },
   
   // Patrimônio (under Estoque)
   "/patrimonio": { title: "Patrimônio", description: "Gerenciamento de patrimônio" },
-  
-  // Operacional - Páginas principais
-  "/operacional/setor": { title: "Setor", description: "Gerenciamento de setores" },
-  "/operacional/embarcacoes": { title: "Embarcações", description: "Gerenciamento de embarcações" },
-  "/operacional/operacao": { title: "Operação", description: "Gerenciamento de operações" },
-  "/operacional/servicos": { title: "Serviços", description: "Gerenciamento de serviços" },
-  
-  // Operacional - Subpáginas
-  "/operacional/setor/novo": { title: "Setor", description: "Novo Setor" },
-  "/operacional/embarcacoes/nova": { title: "Embarcações", description: "Nova Embarcação" },
-  "/operacional/operacao/nova": { title: "Operação", description: "Nova Operação" },
-  "/operacional/servicos/novo": { title: "Serviços", description: "Novo Serviço" },
-  
-  // NF-e
-  "/nfe": { title: "NF-e", description: "Gerenciamento de notas fiscais eletrônicas" },
-  "/nfe/nova": { title: "NF-e", description: "Nova Nota Fiscal" },
+
+  // Operacional - Lab
+  "/operacional/mapas": { title: "Mapas", description: "Mapas do laboratório" },
+  "/operacional/exames": { title: "Exames", description: "Tipos de exames" },
+
+  // Portal do Médico
+  "/portal-medico":       { title: "Portal do Médico", description: "Visão geral dos seus mapas" },
+  "/portal-medico/mapas": { title: "Portal do Médico", description: "Meus mapas enviados" },
+
+  // Notas Fiscais
+  "/nfe": { title: "Notas Fiscais", description: "Gerenciamento de notas fiscais eletrônicas" },
+  "/nfe/nova": { title: "Notas Fiscais", description: "Nova Nota Fiscal" },
   
   // Usuário
   "/notificacoes": { title: "Notificações", description: "Central de notificações do sistema" },
   "/usuario/visualizar": { title: "Meu Perfil", description: "Visualizar informações do perfil" },
-  "/usuario/editar": { title: "Editar Perfil", description: "Alterar informações do perfil" },
-  "/usuario/excluir": { title: "Excluir Conta", description: "Remover conta permanentemente" },
-  
+
   // Cadastro - Pessoas
   "/cadastro/pessoas/pessoas": { title: "Pessoas", description: "Cadastro de colaboradores" },
   "/cadastro/pessoas/pessoas/nova": { title: "Pessoas", description: "Nova Pessoa" },
-  "/cadastro/pessoas/setores": { title: "Setores/Áreas", description: "Cadastro de setores da empresa" },
-  "/cadastro/pessoas/setores/novo": { title: "Setores/Áreas", description: "Novo Setor" },
   
   // Gestão de Pessoas
-  "/gestao-pessoas/visao-geral": { title: "Visão Geral RH", description: "Dashboard de Recursos Humanos" },
   "/gestao-pessoas/pessoas": { title: "Pessoas (360º)", description: "Visão completa dos colaboradores" },
   "/gestao-pessoas/hierarquia": { title: "Hierarquia", description: "Organograma da empresa" },
   "/gestao-pessoas/acessos": { title: "Acessos do Sistema", description: "Gerenciamento de permissões" },
-  "/gestao-pessoas/dashboards": { title: "Dashboards", description: "Controle de visibilidade" },
   "/gestao-pessoas/auditoria": { title: "Auditoria", description: "Histórico de alterações" },
+  "/gestao-pessoas/medicos": { title: "Médicos", description: "Cadastro de médicos" },
+  "/gestao-pessoas/medicos/novo": { title: "Médicos", description: "Novo Médico" },
   
   // Módulos Globais - Header
   "/calendario": { title: "Calendário", description: "Calendário corporativo" },
@@ -126,32 +132,59 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/kanban": { title: "Kanban", description: "Gestão de tarefas e projetos" },
   
   // Comercial
-  "/comercial/visao-geral": { title: "Comercial", description: "Visão Geral" },
   "/comercial/leads": { title: "Comercial", description: "Leads" },
   "/comercial/contas": { title: "Comercial", description: "Contas (Empresas)" },
   "/comercial/contatos": { title: "Comercial", description: "Contatos" },
   "/comercial/oportunidades": { title: "Comercial", description: "Oportunidades (Pipeline)" },
   "/comercial/propostas": { title: "Comercial", description: "Propostas" },
   "/comercial/atividades": { title: "Comercial", description: "Atividades" },
-  "/comercial/metas": { title: "Comercial", description: "Metas e Forecast" },
-  "/comercial/comissoes": { title: "Comercial", description: "Comissões" },
-  
-  // Marketing
-  "/marketing/visao-geral": { title: "Marketing", description: "Visão Geral" },
-  "/marketing/campanhas": { title: "Marketing", description: "Campanhas" },
-  "/marketing/canais": { title: "Marketing", description: "Canais" },
-  "/marketing/leads": { title: "Marketing", description: "Leads (MQL/SQL)" },
-  "/marketing/atribuicao": { title: "Marketing", description: "Atribuição e ROI" },
-  
+
   // Dashboards
   "/dashboards/comercial": { title: "Dashboard Comercial", description: "Métricas de vendas" },
-  "/dashboards/marketing": { title: "Dashboard Marketing", description: "Métricas de marketing" },
+
+  // Admin Panel
+  "/admin-panel": { title: "Administração", description: "Painel de administração do sistema" },
+  "/admin-panel/usuarios": { title: "Administração", description: "Gerenciamento de usuários" },
+  "/admin-panel/tokens-automacao": { title: "Administração", description: "Tokens de automação" },
+
 }
 
 function LayoutContent() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const location = useLocation()
-  const pageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
+  const { currentUser, isLoadingUser, hasPermission, isStaff, isOnlyMedico } = usePermissions()
+  const basePageInfo = pageTitles[location.pathname] || { title: "SerpTech", description: "Sistema de Gestão" }
+  // Médico-only na rota raiz vê o dashboard do portal, não o dashboard principal
+  const pageInfo = (location.pathname === '/' && isOnlyMedico())
+    ? { title: "Portal do Médico", description: "Visão geral dos seus mapas" }
+    : basePageInfo
+
+  // ── Auth guard: wait for hydration before deciding to redirect ────────────
+  const token = localStorage.getItem('accessToken')
+  if (!token) {
+    return <Navigate to="/login" replace />
+  }
+  if (isLoadingUser) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <Loader2 className="animate-spin h-8 w-8 text-primary" />
+      </div>
+    )
+  }
+  if (!currentUser.userId) {
+    return <Navigate to="/login" replace />
+  }
+
+  // ── Admin guard: /admin-panel only for staff users ───────────────────────
+  if (location.pathname.startsWith('/admin-panel') && !isStaff()) {
+    return <Navigate to="/acesso-negado" replace />
+  }
+
+  // ── Permission guard: check route against module map ─────────────────────
+  const matched = ROUTE_PERMISSIONS.find(r => location.pathname.startsWith(r.prefix))
+  if (matched && !hasPermission(matched.module, 'all', 'view')) {
+    return <Navigate to="/acesso-negado" replace />
+  }
 
   return (
     <div className="flex min-h-screen w-full bg-background">
@@ -181,6 +214,9 @@ function LayoutContent() {
         )}>
           <Outlet />
         </main>
+
+        {/* Footer padrão de responsabilidade */}
+        {location.pathname !== "/chat" && <Footer />}
       </div>
     </div>
   )

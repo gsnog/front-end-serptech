@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { fmtDate } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -6,7 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/StatusBadge";
 import { ArrowLeft, FileDown, RotateCcw, Send, XCircle, CheckCircle, AlertTriangle, Clock, FileText, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { mockNotasFiscais } from "@/data/fiscal-mock";
+// Fiscal-mock removed — stub until /api/fiscal/ endpoints exist
+const mockNotasFiscais: any[] = [];
 
 export default function NotaFiscalDetalhe() {
   const { id } = useParams<{ id: string }>();
@@ -131,10 +133,10 @@ export default function NotaFiscalDetalhe() {
                   <TableHeader><TableRow className="bg-table-header">
                     <TableHead className="font-semibold">Código</TableHead>
                     <TableHead className="font-semibold">Descrição</TableHead>
-                    <TableHead className="text-center font-semibold">NCM</TableHead>
-                    <TableHead className="text-center font-semibold">CST</TableHead>
-                    <TableHead className="text-center font-semibold">Qtd</TableHead>
-                    <TableHead className="text-right font-semibold">Vlr Unit.</TableHead>
+                    <TableHead className="font-semibold">NCM</TableHead>
+                    <TableHead className="font-semibold">CST</TableHead>
+                    <TableHead className="text-right font-semibold">Qtd</TableHead>
+                    <TableHead className="font-semibold">Vlr Unit.</TableHead>
                     <TableHead className="text-right font-semibold">Desconto</TableHead>
                     <TableHead className="text-right font-semibold">Total</TableHead>
                   </TableRow></TableHeader>
@@ -143,12 +145,12 @@ export default function NotaFiscalDetalhe() {
                       <TableRow key={item.id} className="hover:bg-table-hover">
                         <TableCell className="font-mono text-xs">{item.itemCadastro}</TableCell>
                         <TableCell className="font-medium">{item.descricao}</TableCell>
-                        <TableCell className="text-center text-xs">{item.ncm || "—"}</TableCell>
-                        <TableCell className="text-center text-xs">{item.cst || "—"}</TableCell>
-                        <TableCell className="text-center">{item.quantidade}</TableCell>
-                        <TableCell className="text-right">{fmt(item.valorUnitario)}</TableCell>
-                        <TableCell className="text-right">{fmt(item.desconto)}</TableCell>
-                        <TableCell className="text-right font-semibold">{fmt(item.total)}</TableCell>
+                        <TableCell className="text-xs">{item.ncm || "—"}</TableCell>
+                        <TableCell className="text-xs">{item.cst || "—"}</TableCell>
+                        <TableCell >{item.quantidade}</TableCell>
+                        <TableCell >{fmt(item.valorUnitario)}</TableCell>
+                        <TableCell >{fmt(item.desconto)}</TableCell>
+                        <TableCell className="font-semibold">{fmt(item.total)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -166,9 +168,9 @@ export default function NotaFiscalDetalhe() {
                 <Table>
                   <TableHeader><TableRow className="bg-table-header">
                     <TableHead className="font-semibold">Imposto</TableHead>
-                    <TableHead className="text-right font-semibold">Base Cálculo</TableHead>
-                    <TableHead className="text-center font-semibold">Alíquota</TableHead>
-                    <TableHead className="text-right font-semibold">Calculado</TableHead>
+                    <TableHead className="font-semibold">Base Cálculo</TableHead>
+                    <TableHead className="font-semibold">Alíquota</TableHead>
+                    <TableHead className="font-semibold">Calculado</TableHead>
                     <TableHead className="text-right font-semibold">Valor Final</TableHead>
                     <TableHead className="font-semibold">Ajustado por</TableHead>
                     <TableHead className="font-semibold">Justificativa</TableHead>
@@ -179,9 +181,9 @@ export default function NotaFiscalDetalhe() {
                       return (
                         <TableRow key={t.imposto} className="hover:bg-table-hover">
                           <TableCell className="font-semibold">{t.imposto}</TableCell>
-                          <TableCell className="text-right">{fmt(t.baseCalculo)}</TableCell>
-                          <TableCell className="text-center">{t.aliquota}%</TableCell>
-                          <TableCell className="text-right text-muted-foreground">{fmt(t.valorCalculado)}</TableCell>
+                          <TableCell >{fmt(t.baseCalculo)}</TableCell>
+                          <TableCell >{t.aliquota}%</TableCell>
+                          <TableCell className="text-muted-foreground">{fmt(t.valorCalculado)}</TableCell>
                           <TableCell className={`text-right font-semibold ${wasAdjusted ? "text-yellow-600 dark:text-yellow-400" : ""}`}>
                             {fmt(t.valorFinal)}
                             {wasAdjusted && <span className="ml-1 text-[10px]">✎</span>}
@@ -203,10 +205,10 @@ export default function NotaFiscalDetalhe() {
                     <Table>
                       <TableHeader><TableRow className="bg-table-header">
                         <TableHead className="font-semibold">Campo</TableHead>
-                        <TableHead className="font-semibold">Valor Anterior</TableHead>
-                        <TableHead className="font-semibold">Valor Novo</TableHead>
+                        <TableHead className="text-right font-semibold">Valor Anterior</TableHead>
+                        <TableHead className="text-right font-semibold">Valor Novo</TableHead>
                         <TableHead className="font-semibold">Usuário</TableHead>
-                        <TableHead className="font-semibold">Data</TableHead>
+                        <TableHead className="text-center font-semibold">Data</TableHead>
                         <TableHead className="font-semibold">Justificativa</TableHead>
                       </TableRow></TableHeader>
                       <TableBody>
@@ -216,7 +218,7 @@ export default function NotaFiscalDetalhe() {
                             <TableCell className="text-sm text-destructive">{a.valorAnterior}</TableCell>
                             <TableCell className="text-sm text-primary">{a.valorNovo}</TableCell>
                             <TableCell className="text-sm">{a.usuario}</TableCell>
-                            <TableCell className="text-sm">{a.data}</TableCell>
+                            <TableCell className="text-center text-sm">{fmtDate(a.data)}</TableCell>
                             <TableCell className="text-xs">{a.justificativa || "—"}</TableCell>
                           </TableRow>
                         ))}
@@ -239,15 +241,14 @@ export default function NotaFiscalDetalhe() {
                 <div className="space-y-3">
                   {nota.eventos.map(ev => (
                     <div key={ev.id} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-muted/30">
-                      <div className={`mt-0.5 flex-shrink-0 w-2 h-2 rounded-full ${
-                        ev.status === "Sucesso" || ev.status === "Autorizada" || ev.status === "Homologado" ? "bg-primary" :
-                        ev.status === "Rejeitada" ? "bg-destructive" : "bg-yellow-500"
-                      }`} />
+                      <div className={`mt-0.5 flex-shrink-0 w-2 h-2 rounded-full ${ev.status === "Sucesso" || ev.status === "Autorizada" || ev.status === "Homologado" ? "bg-primary" :
+                          ev.status === "Rejeitada" ? "bg-destructive" : "bg-yellow-500"
+                        }`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold">{ev.tipo}</span>
                           <StatusBadge status={ev.status} className="text-[10px] min-w-0 px-2 py-0.5" />
-                          <span className="text-xs text-muted-foreground ml-auto">{ev.data}</span>
+                          <span className="text-xs text-muted-foreground ml-auto">{fmtDate(ev.data)}</span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">{ev.mensagem}</p>
                         {ev.protocolo && <p className="text-xs text-muted-foreground mt-0.5">Protocolo: <span className="font-mono">{ev.protocolo}</span></p>}

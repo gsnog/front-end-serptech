@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,10 +10,11 @@ import { SimpleFormWizard } from "@/components/SimpleFormWizard";
 import { FormActionBar } from "@/components/FormActionBar";
 import { DropdownWithAdd } from "@/components/DropdownWithAdd";
 import { Settings, Trash2 } from "lucide-react";
-import { useSaveWithDelay } from "@/hooks/useSaveWithDelay";
-import { useFormValidation } from "@/hooks/useFormValidation";
 import { ValidatedInput } from "@/components/ui/validated-input";
 import { toast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createProjeto, createTarefa } from "@/services/operacional";
+import { useFormValidation } from "@/hooks/useFormValidation";
 
 interface ServicoItem {
   id: number;
@@ -31,7 +33,24 @@ const validationFields = [
 
 const NovaOperacao = () => {
   const navigate = useNavigate();
-  const { isSaving, handleSave } = useSaveWithDelay();
+  const queryClient = useQueryClient();
+
+  const mutationProjeto = useMutation({
+    mutationFn: createProjeto,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['projetos'] });
+      return data;
+    }
+  });
+
+  const mutationTarefa = useMutation({
+    mutationFn: createTarefa,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tarefas'] });
+    }
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
 
   const { formData, setFieldValue, setFieldTouched, validateAll, getFieldError, touched } = useFormValidation(
     { dataEntrada: "", embarcacao: "", previsaoEntrega: "", servico: "", setor: "", dataInicio: "", desconto: "0", valorAdicional: "0" },
@@ -71,7 +90,33 @@ const NovaOperacao = () => {
 
   const handleSalvar = async () => {
     if (validateAll()) {
-      await handleSave("/operacional/operacao", "Operação salva com sucesso!");
+      setIsSaving(true);
+      try {
+        const projeto = await mutationProjeto.mutateAsync({
+          nome: formData.embarcacao,
+          data_inicio: formData.dataEntrada,
+          data_fim: formData.previsaoEntrega,
+          status: 'Em Andamento'
+        });
+
+        // Create tasks (serviços) linked to the project
+        for (const item of itens) {
+          await mutationTarefa.mutateAsync({
+            projeto: projeto.id,
+            titulo: item.servico,
+            descricao: item.setor,
+            status: 'Em Andamento',
+            prazo: formData.previsaoEntrega
+          });
+        }
+
+        toast({ title: "Operação salva com sucesso!", description: "Projeto e tarefas criados no sistema." });
+        navigate("/operacional/operacao");
+      } catch (error) {
+        toast({ title: "Erro ao salvar", description: "Verifique os dados e tente novamente.", variant: "destructive" });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -128,11 +173,11 @@ const NovaOperacao = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-center">Serviço</TableHead>
-                    <TableHead className="text-center">Setor</TableHead>
+                    <TableHead >Serviço</TableHead>
+                    <TableHead >Setor</TableHead>
                     <TableHead className="text-center">Data de Início</TableHead>
-                    <TableHead className="text-center">Desconto</TableHead>
-                    <TableHead className="text-center">Valor Adicional</TableHead>
+                    <TableHead className="text-right">Desconto</TableHead>
+                    <TableHead className="text-right">Valor Adicional</TableHead>
                     <TableHead className="text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -142,12 +187,12 @@ const NovaOperacao = () => {
                   ) : (
                     itens.map((item) => (
                       <TableRow key={item.id}>
-                        <TableCell className="text-center">{item.servico}</TableCell>
-                        <TableCell className="text-center">{item.setor}</TableCell>
-                        <TableCell className="text-center">{item.dataInicio}</TableCell>
-                        <TableCell className="text-center">{item.desconto}</TableCell>
-                        <TableCell className="text-center">{item.valorAdicional}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell >{item.servico}</TableCell>
+                        <TableCell >{item.setor}</TableCell>
+                        <TableCell >{fmtDate(item.dataInicio)}</TableCell>
+                        <TableCell >{item.desconto}</TableCell>
+                        <TableCell >{item.valorAdicional}</TableCell>
+                        <TableCell >
                           <Button variant="ghost" size="sm" onClick={() => setItens(prev => prev.filter(i => i.id !== item.id))} className="text-destructive hover:text-destructive">
                             <Trash2 size={16} />
                           </Button>

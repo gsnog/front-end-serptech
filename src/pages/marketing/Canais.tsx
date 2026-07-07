@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { GradientCard } from "@/components/financeiro/GradientCard";
-import { 
+import {
   Globe, Target, DollarSign, TrendingUp, Users, BarChart3
 } from "lucide-react";
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from "recharts";
-import { canaisMock, calcularMetricasCanal, leadsPorCanalData } from "@/data/marketing-mock";
+import { fetchCanais, canaisQueryKey, calcularMetricasCanal, leadsPorCanalData } from "@/services/marketing";
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -20,15 +21,17 @@ const formatCurrency = (value: number) => {
 export default function Canais() {
   const [selectedCanal, setSelectedCanal] = useState<string | null>(null);
 
+  const { data: canaisData = [] } = useQuery({ queryKey: canaisQueryKey, queryFn: fetchCanais });
+
   // Métricas totais
   const totalLeads = leadsPorCanalData.reduce((sum, c) => sum + c.leads, 0);
   const totalMQL = leadsPorCanalData.reduce((sum, c) => sum + c.mql, 0);
   const totalSQL = leadsPorCanalData.reduce((sum, c) => sum + c.sql, 0);
-  const orcamentoTotal = canaisMock.reduce((sum, c) => sum + (c.orcamentoMensal || 0), 0);
+  const orcamentoTotal = canaisData.reduce((sum, c) => sum + parseFloat(c.custo_estimado || '0'), 0);
 
   // Dados por canal com métricas
-  const canaisComMetricas = canaisMock.map(canal => {
-    const metricas = calcularMetricasCanal(canal.id);
+  const canaisComMetricas = canaisData.map(canal => {
+    const metricas = calcularMetricasCanal(canal.id as any);
     return {
       ...canal,
       leads: metricas.leads || 0,
@@ -59,7 +62,7 @@ export default function Canais() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <GradientCard
           title="Total de Canais"
-          value={canaisMock.filter(c => c.ativo).length.toString()}
+          value={canaisData.filter((c: any) => c.status === 'ativo').length.toString()}
           icon={Globe}
           variant="info"
         />
@@ -94,7 +97,7 @@ export default function Canais() {
               <BarChart data={leadsPorCanalData}>
                 <XAxis dataKey="canal" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={80} />
                 <YAxis />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
                 />
                 <Bar dataKey="leads" name="Leads" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
@@ -111,7 +114,7 @@ export default function Canais() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {canaisComMetricas.filter(c => c.orcamentoMensal).map(canal => (
+              {canaisComMetricas.filter(c => parseFloat(c.custo_estimado || '0') > 0).map(canal => (
                 <div key={canal.id} className="flex items-center justify-between p-3 rounded bg-muted/50">
                   <div className="flex items-center gap-3">
                     <div className="p-2 rounded bg-primary/10">
@@ -144,14 +147,14 @@ export default function Canais() {
               <TableHeader>
                 <TableRow className="bg-table-header">
                   <TableHead>Canal</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Orçamento</TableHead>
-                  <TableHead className="text-right">Leads</TableHead>
-                  <TableHead className="text-right">MQL</TableHead>
-                  <TableHead className="text-right">SQL</TableHead>
-                  <TableHead className="text-right">CPL</TableHead>
-                  <TableHead className="text-right">Conversão</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="text-center">Tipo</TableHead>
+                  <TableHead >Orçamento</TableHead>
+                  <TableHead >Leads</TableHead>
+                  <TableHead >MQL</TableHead>
+                  <TableHead >SQL</TableHead>
+                  <TableHead >CPL</TableHead>
+                  <TableHead >Conversão</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -159,26 +162,26 @@ export default function Canais() {
                   <TableRow key={canal.id} className="hover:bg-muted/50">
                     <TableCell className="font-medium">{canal.nome}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{getTipoLabel(canal.tipo)}</Badge>
+                      <Badge variant="outline">{getTipoLabel(canal.tipo_canal)}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {canal.orcamentoMensal ? formatCurrency(canal.orcamentoMensal) : '-'}
+                      {canal.custo_estimado ? formatCurrency(parseFloat(canal.custo_estimado)) : '-'}
                     </TableCell>
-                    <TableCell className="text-right font-semibold">{canal.leads}</TableCell>
-                    <TableCell className="text-right">{canal.mql}</TableCell>
-                    <TableCell className="text-right">{canal.sql}</TableCell>
+                    <TableCell className="font-semibold">{canal.leads}</TableCell>
+                    <TableCell >{canal.mql}</TableCell>
+                    <TableCell >{canal.sql}</TableCell>
                     <TableCell className="text-right">
                       {canal.cpl > 0 ? formatCurrency(canal.cpl) : '-'}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell >
                       <div className="flex items-center justify-end gap-2">
                         <Progress value={canal.conversao} className="h-2 w-12" />
                         <span className="text-sm">{canal.conversao.toFixed(0)}%</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={canal.ativo ? "default" : "secondary"}>
-                        {canal.ativo ? 'Ativo' : 'Inativo'}
+                      <Badge variant={canal.status === 'ativo' ? "default" : "secondary"}>
+                        {canal.status === 'ativo' ? 'Ativo' : 'Inativo'}
                       </Badge>
                     </TableCell>
                   </TableRow>

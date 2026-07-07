@@ -8,8 +8,14 @@ import { ExportButton } from "@/components/ExportButton";
 import { Target, TrendingUp, DollarSign, BarChart3, Plus } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { useNavigate } from "react-router-dom";
-import { metasMock, oportunidadesMock, etapasFunil, getForecastPonderado, getPipelineTotal } from "@/data/comercial-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
+import { fetchMetas, fetchOportunidades, etapasFunil } from "@/services/comercial";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMeuTime } from "@/services/pessoas";
+
+// --- Mocks removidos ---
+
+
+
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -17,22 +23,37 @@ const formatCurrency = (value: number) =>
 export default function MetasForecast() {
   const navigate = useNavigate();
   const [periodo, setPeriodo] = useState("");
-  const [vendedor, setVendedor] = useState("");
+  const [vendedorFilter, setVendedorFilter] = useState("");
 
-  const selectedPeriodo = periodo || "2026-02";
-  const forecastPonderado = getForecastPonderado();
-  const metasPeriodo = metasMock.filter(m => m.periodo === selectedPeriodo && m.tipo === 'receita');
-  const metaTotal = metasPeriodo.reduce((sum, m) => sum + m.valorMeta, 0);
-  const realizadoTotal = metasPeriodo.reduce((sum, m) => sum + m.valorRealizado, 0);
+  const { data: metasData = [], isLoading: isLoadingMetas } = useQuery({ queryKey: ['crm_metas'], queryFn: fetchMetas });
+  const { data: oportunidades = [] } = useQuery({ queryKey: ['crm_oportunidades'], queryFn: fetchOportunidades });
+  const { data: time = [] } = useQuery({ queryKey: ['meu_time'], queryFn: fetchMeuTime });
+
+  const selectedPeriodo = periodo || "2026-03";
+
+  // Forecast ponderado real baseado nas oportunidades abertas
+  const forecastPonderado = oportunidades
+    .filter(o => !['ganho', 'perdido'].includes(o.estagio))
+    .reduce((sum, o) => sum + (Number(o.valor_estimado) * (o.probabilidade / 100)), 0);
+
+  const metasPeriodo = metasData.filter(m => m.periodo === selectedPeriodo && m.tipo === 'receita');
+  const metaTotal = metasPeriodo.reduce((sum, m) => sum + Number(m.valor_meta), 0);
+  const realizadoTotal = metasPeriodo.reduce((sum, m) => sum + Number(m.valor_realizado), 0);
   const gapMeta = metaTotal - realizadoTotal;
   const progressoMeta = metaTotal > 0 ? (realizadoTotal / metaTotal) * 100 : 0;
 
-  const vendedoresData = pessoasMock.slice(0, 5).map(p => {
-    const metas = metasMock.filter(m => m.vendedorId === p.id && m.periodo === selectedPeriodo);
+  const vendedoresData = time.slice(0, 10).map(p => {
+    const metas = metasData.filter(m => m.responsavel === p.id && m.periodo === selectedPeriodo);
     const metaReceita = metas.find(m => m.tipo === 'receita');
-    const ops = oportunidadesMock.filter(o => o.proprietarioId === p.id && !['ganho', 'perdido'].includes(o.etapa));
-    const forecast = ops.reduce((sum, o) => sum + (o.valorEstimado * o.probabilidade / 100), 0);
-    return { nome: p.nome.split(' ')[0], meta: metaReceita?.valorMeta || 0, realizado: metaReceita?.valorRealizado || 0, forecast, pipeline: ops.reduce((sum, o) => sum + o.valorEstimado, 0) };
+    const ops = oportunidades.filter(o => o.responsavel === p.id && !['ganho', 'perdido'].includes(o.estagio));
+    const forecast = ops.reduce((sum, o) => sum + (Number(o.valor_estimado) * o.probabilidade / 100), 0);
+    return {
+      nome: p.nome.split(' ')[0],
+      meta: Number(metaReceita?.valor_meta || 0),
+      realizado: Number(metaReceita?.valor_realizado || 0),
+      forecast,
+      pipeline: ops.reduce((sum, o) => sum + Number(o.valor_estimado), 0)
+    };
   });
 
   const evolucaoData = [
@@ -55,12 +76,16 @@ export default function MetasForecast() {
 
       <FilterSection
         fields={[
-          { type: "select", label: "Período", placeholder: "Selecione", value: periodo, onChange: setPeriodo, options: [
-            { value: "2026-01", label: "Janeiro 2026" }, { value: "2026-02", label: "Fevereiro 2026" },
-            { value: "2026-03", label: "Março 2026" }, { value: "2026-Q1", label: "Q1 2026" }, { value: "2026", label: "Ano 2026" }
-          ], width: "min-w-[160px]" },
-          { type: "select", label: "Vendedor", placeholder: "Todos", value: vendedor, onChange: setVendedor,
-            options: pessoasMock.slice(0, 5).map(p => ({ value: p.id, label: p.nome })), width: "min-w-[200px]" }
+          {
+            type: "select", label: "Período", placeholder: "Selecione", value: periodo, onChange: setPeriodo, options: [
+              { value: "2026-01", label: "Janeiro 2026" }, { value: "2026-02", label: "Fevereiro 2026" },
+              { value: "2026-03", label: "Março 2026" }, { value: "2026-Q1", label: "Q1 2026" }, { value: "2026", label: "Ano 2026" }
+            ], width: "min-w-[160px]"
+          },
+          {
+            type: "select", label: "Vendedor", placeholder: "Todos", value: vendedorFilter, onChange: setVendedorFilter,
+            options: time.map(p => ({ value: String(p.id), label: p.nome })), width: "min-w-[200px]"
+          }
         ]}
       />
 
@@ -94,7 +119,7 @@ export default function MetasForecast() {
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={vendedoresData} layout="vertical">
-                <XAxis type="number" tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+                <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
                 <YAxis dataKey="nome" type="category" width={80} tick={{ fontSize: 12 }} />
                 <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
                 <Legend />
@@ -140,7 +165,7 @@ export default function MetasForecast() {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={evolucaoData}>
               <XAxis dataKey="mes" />
-              <YAxis tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }} />
               <Legend />
               <Line type="monotone" dataKey="meta" name="Meta" stroke="hsl(var(--muted-foreground))" strokeWidth={2} strokeDasharray="5 5" />

@@ -11,22 +11,18 @@ import { ExportButton } from "@/components/ExportButton";
 import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "@/hooks/use-toast";
 
-const mockRegras = [
-  { id: 1, item: "Parafuso M8", tipo: "Produto", ncm: "7318.15.00", cest: "", cstCsosn: "00", origem: "0", icms: 18, ipi: 5, pis: 1.65, cofins: 7.6, iss: 0 },
-  { id: 2, item: "Consultoria TI", tipo: "Serviço", ncm: "", cest: "", cstCsosn: "", origem: "", icms: 0, ipi: 0, pis: 0, cofins: 0, iss: 5 },
-  { id: 3, item: "Cabo HDMI", tipo: "Produto", ncm: "8544.42.00", cest: "", cstCsosn: "00", origem: "0", icms: 18, ipi: 10, pis: 1.65, cofins: 7.6, iss: 0 },
-];
+type RegraFiscal = { id: number; item: string; tipo: string; ncm: string; cest: string; cstCsosn: string; origem: string; icms: number; ipi: number; pis: number; cofins: number; iss: number; };
 
 const RegrasFiscais = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState(mockRegras);
+  const [items] = useState<RegraFiscal[]>([]);
   const [search, setSearch] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [viewItem, setViewItem] = useState<typeof mockRegras[0] | null>(null);
+  const [viewItem, setViewItem] = useState<RegraFiscal | null>(null);
 
   const filtered = items.filter(c => c.item.toLowerCase().includes(search.toLowerCase()) || c.tipo.toLowerCase().includes(search.toLowerCase()));
   const getExportData = () => filtered.map(c => ({ Item: c.item, Tipo: c.tipo, NCM: c.ncm, "CST/CSOSN": c.cstCsosn, ICMS: `${c.icms}%`, IPI: `${c.ipi}%`, ISS: `${c.iss}%` }));
-  const handleDelete = () => { if (deleteId !== null) { setItems(prev => prev.filter(i => i.id !== deleteId)); setDeleteId(null); toast({ title: "Removido", description: "Regra fiscal excluída." }); } };
+  const handleDelete = () => { setDeleteId(null); toast({ title: "Aguardando API", description: "Endpoint ainda não configurado." }); };
   const deleteItem = items.find(i => i.id === deleteId);
 
   return (
@@ -36,7 +32,7 @@ const RegrasFiscais = () => {
         <ExportButton getData={getExportData} fileName="regras-fiscais" />
       </div>
       <FilterSection fields={[{ type: "text" as const, label: "Buscar", placeholder: "Buscar por item ou tipo...", value: search, onChange: setSearch, width: "flex-1 min-w-[200px]" }]} resultsCount={filtered.length} />
-      
+
       <div className="bg-blue-500/10 border border-blue-500/30 rounded p-3 flex items-center gap-2 text-sm">
         <Info className="h-4 w-4 text-blue-500 shrink-0" />
         <span className="text-muted-foreground">Itens sem regra fiscal configurada podem ser emitidos em <strong>modo manual</strong> — o contador deverá preencher os tributos diretamente na nota.</span>
@@ -47,9 +43,9 @@ const RegrasFiscais = () => {
           <TableHeader><TableRow className="bg-table-header">
             <TableHead className="font-semibold">Item/Serviço</TableHead>
             <TableHead className="text-center font-semibold">Tipo</TableHead>
-            <TableHead className="text-center font-semibold">NCM</TableHead>
-            <TableHead className="text-center font-semibold">CST/CSOSN</TableHead>
-            <TableHead className="text-center font-semibold">Alíquotas</TableHead>
+            <TableHead className="font-semibold">NCM</TableHead>
+            <TableHead className="font-semibold">CST/CSOSN</TableHead>
+            <TableHead className="font-semibold">Alíquotas</TableHead>
             <TableHead className="text-center font-semibold">Ações</TableHead>
           </TableRow></TableHeader>
           <TableBody>
@@ -58,9 +54,9 @@ const RegrasFiscais = () => {
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
                   <TableCell className="font-medium">{c.item}</TableCell>
                   <TableCell className="text-center"><StatusBadge status={c.tipo} /></TableCell>
-                  <TableCell className="text-center font-mono text-xs">{c.ncm || "—"}</TableCell>
-                  <TableCell className="text-center font-mono text-xs">{c.cstCsosn || "—"}</TableCell>
-                  <TableCell className="text-center text-xs">
+                  <TableCell className="font-mono text-xs">{c.ncm || "—"}</TableCell>
+                  <TableCell className="font-mono text-xs">{c.cstCsosn || "—"}</TableCell>
+                  <TableCell className="text-xs">
                     {c.tipo === "Produto" ? `ICMS ${c.icms}% | IPI ${c.ipi}%` : `ISS ${c.iss}%`}
                   </TableCell>
                   <TableCell className="text-center"><TableActions onView={() => setViewItem(c)} onEdit={() => navigate("/cadastro/fiscal/regras-fiscais/nova")} onDelete={() => setDeleteId(c.id)} /></TableCell>
@@ -71,26 +67,26 @@ const RegrasFiscais = () => {
       </div>
     </div>
 
-    <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
-      <DialogContent><DialogHeader><DialogTitle>Regra Fiscal: {viewItem?.item}</DialogTitle></DialogHeader>
-        {viewItem && <div className="space-y-2 py-2">
-          <div className="flex justify-between"><span className="text-sm text-muted-foreground">Item</span><span className="text-sm font-medium">{viewItem.item}</span></div>
-          <div className="flex justify-between"><span className="text-sm text-muted-foreground">Tipo</span><span className="text-sm font-medium">{viewItem.tipo}</span></div>
-          {viewItem.tipo === "Produto" && <>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">NCM</span><span className="text-sm font-mono">{viewItem.ncm || "—"}</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">CST/CSOSN</span><span className="text-sm font-mono">{viewItem.cstCsosn || "—"}</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Origem</span><span className="text-sm">{viewItem.origem || "—"}</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">ICMS</span><span className="text-sm font-medium">{viewItem.icms}%</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">IPI</span><span className="text-sm font-medium">{viewItem.ipi}%</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">PIS</span><span className="text-sm font-medium">{viewItem.pis}%</span></div>
-            <div className="flex justify-between"><span className="text-sm text-muted-foreground">COFINS</span><span className="text-sm font-medium">{viewItem.cofins}%</span></div>
-          </>}
-          {viewItem.tipo === "Serviço" && <div className="flex justify-between"><span className="text-sm text-muted-foreground">ISS</span><span className="text-sm font-medium">{viewItem.iss}%</span></div>}
-        </div>}
-      </DialogContent>
-    </Dialog>
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
+        <DialogContent><DialogHeader><DialogTitle>Regra Fiscal: {viewItem?.item}</DialogTitle></DialogHeader>
+          {viewItem && <div className="space-y-2 py-2">
+            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Item</span><span className="text-sm font-medium">{viewItem.item}</span></div>
+            <div className="flex justify-between"><span className="text-sm text-muted-foreground">Tipo</span><span className="text-sm font-medium">{viewItem.tipo}</span></div>
+            {viewItem.tipo === "Produto" && <>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">NCM</span><span className="text-sm font-mono">{viewItem.ncm || "—"}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">CST/CSOSN</span><span className="text-sm font-mono">{viewItem.cstCsosn || "—"}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">Origem</span><span className="text-sm">{viewItem.origem || "—"}</span></div>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">ICMS</span><span className="text-sm font-medium">{viewItem.icms}%</span></div>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">IPI</span><span className="text-sm font-medium">{viewItem.ipi}%</span></div>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">PIS</span><span className="text-sm font-medium">{viewItem.pis}%</span></div>
+              <div className="flex justify-between"><span className="text-sm text-muted-foreground">COFINS</span><span className="text-sm font-medium">{viewItem.cofins}%</span></div>
+            </>}
+            {viewItem.tipo === "Serviço" && <div className="flex justify-between"><span className="text-sm text-muted-foreground">ISS</span><span className="text-sm font-medium">{viewItem.iss}%</span></div>}
+          </div>}
+        </DialogContent>
+      </Dialog>
 
-    <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Deseja excluir a regra fiscal de <strong>{deleteItem?.item}</strong>?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Confirmar exclusão</AlertDialogTitle><AlertDialogDescription>Deseja excluir a regra fiscal de <strong>{deleteItem?.item}</strong>?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
   );
 };

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,13 @@ import { Progress } from "@/components/ui/progress";
 import { TableActions } from "@/components/TableActions";
 import { Plus, Search, Megaphone, Calendar, DollarSign } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { campanhasMock, calcularMetricasCampanha } from "@/data/marketing-mock";
-import { pessoasMock } from "@/data/pessoas-mock";
+import { fetchCampanhas, campanhasQueryKey, calcularMetricasCampanha, fetchCanais, canaisQueryKey } from "@/services/marketing";
+
+// --- Stub temporário para evitar crashes por mock deletado ---
+const pessoasMock: any[] = [];
+
+
+
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
@@ -23,12 +29,29 @@ export default function Campanhas() {
   const [statusFilter, setStatusFilter] = useState("__all__");
   const [canalFilter, setCanalFilter] = useState("__all__");
 
-  const canais = [...new Set(campanhasMock.map(c => c.canal))];
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: pageResponse } = useQuery({
+    queryKey: [...campanhasQueryKey, currentPage],
+    queryFn: () => fetchCampanhas(currentPage),
+  });
+  const fetchedCampanhas = Array.isArray(pageResponse) ? pageResponse : (pageResponse?.results ?? []);
+  const totalCount = Array.isArray(pageResponse) ? pageResponse.length : (pageResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
+  const { data: canaisData = [] as any[] } = useQuery({ queryKey: canaisQueryKey, queryFn: fetchCanais });
+  const [campanhas, setCampanhas] = useState<any[]>([]);
 
-  const filteredCampanhas = campanhasMock.filter(campanha => {
+  useEffect(() => {
+    if (fetchedCampanhas.length > 0) {
+      setCampanhas(fetchedCampanhas);
+    }
+  }, [fetchedCampanhas]);
+
+  const canais = [...new Set(campanhas.map(c => c.canal_principal || 'N/A'))];
+
+  const filteredCampanhas = campanhas.filter((campanha: any) => {
     const matchSearch = campanha.nome.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = statusFilter === "__all__" || campanha.status === statusFilter;
-    const matchCanal = canalFilter === "__all__" || campanha.canal === canalFilter;
+    const matchCanal = canalFilter === "__all__" || campanha.canal_principal === canalFilter;
     return matchSearch && matchStatus && matchCanal;
   });
 
@@ -84,7 +107,7 @@ export default function Campanhas() {
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Canal:</span>
             <Select value={canalFilter} onValueChange={setCanalFilter}>
@@ -100,8 +123,8 @@ export default function Campanhas() {
             </Select>
           </div>
 
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => {
               setStatusFilter("__all__");
@@ -130,18 +153,18 @@ export default function Campanhas() {
               <TableHead>Gasto</TableHead>
               <TableHead>Leads</TableHead>
               <TableHead>ROI</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="text-center">Status</TableHead>
               <TableHead>Responsável</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCampanhas.map((campanha) => {
-              const metricas = calcularMetricasCampanha(campanha.id);
-              const progressoOrcamento = campanha.orcamento > 0 
-                ? (campanha.gastoReal / campanha.orcamento) * 100 
-                : 0;
-              
+            {filteredCampanhas.map((campanha: any) => {
+              const metricas = calcularMetricasCampanha() as any;
+              const orcamentoNum = parseFloat(campanha.orcamento || '0');
+              const gastoNum = parseFloat(campanha.custo_real || '0');
+              const progressoOrcamento = orcamentoNum > 0 ? (gastoNum / orcamentoNum) * 100 : 0;
+
               return (
                 <TableRow key={campanha.id} className="hover:bg-muted/50 cursor-pointer">
                   <TableCell>
@@ -149,24 +172,24 @@ export default function Campanhas() {
                       <Megaphone className="h-4 w-4 text-primary" />
                       <div>
                         <p className="font-medium">{campanha.nome}</p>
-                        <p className="text-xs text-muted-foreground">{campanha.objetivo}</p>
+                        <p className="text-xs text-muted-foreground">{campanha.tipo_campanha}</p>
                       </div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{campanha.canal}</Badge>
+                    <Badge variant="outline">{campanha.canal_principal || 'Multi'}</Badge>
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="text-center text-sm">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Calendar className="h-3 w-3" />
-                      {new Date(campanha.periodo.inicio).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} -
-                      {new Date(campanha.periodo.fim).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                      {campanha.data_inicio ? new Date(campanha.data_inicio + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'} -
+                      {campanha.data_fim ? new Date(campanha.data_fim + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '-'}
                     </div>
                   </TableCell>
-                  <TableCell>{formatCurrency(campanha.orcamento)}</TableCell>
+                  <TableCell>{formatCurrency(orcamentoNum)}</TableCell>
                   <TableCell>
                     <div className="space-y-1">
-                      <span className="text-sm">{formatCurrency(campanha.gastoReal)}</span>
+                      <span className="text-sm">{formatCurrency(gastoNum)}</span>
                       <Progress value={progressoOrcamento} className="h-1.5 w-16" />
                     </div>
                   </TableCell>
@@ -179,12 +202,12 @@ export default function Campanhas() {
                   <TableCell>
                     <StatusBadge status={getStatusBadgeStatus(campanha.status)} />
                   </TableCell>
-                  <TableCell>{getOwnerName(campanha.responsavelId)}</TableCell>
+                  <TableCell>{campanha.criador}</TableCell>
                   <TableCell>
-                    <TableActions 
-                      onView={() => {}}
-                      onEdit={() => {}}
-                      onDelete={() => {}}
+                    <TableActions
+                      onView={() => { }}
+                      onEdit={() => { }}
+                      onDelete={() => { }}
                     />
                   </TableCell>
                 </TableRow>
@@ -192,6 +215,15 @@ export default function Campanhas() {
             })}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

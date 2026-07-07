@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { fmtDate } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +11,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { TableActions } from "@/components/TableActions";
 import { Plus, Search, Users, ArrowRight, Target } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { leadsMarketingMock, campanhasMock, canaisMock } from "@/data/marketing-mock";
+import { fetchLeadsMarketing, leadsMarketingQueryKey, fetchCampanhas, campanhasQueryKey, fetchCanais, canaisQueryKey } from "@/services/marketing";
 
 export default function LeadsMarketing() {
   const navigate = useNavigate();
@@ -17,12 +19,30 @@ export default function LeadsMarketing() {
   const [statusFilter, setStatusFilter] = useState("__all__");
   const [canalFilter, setCanalFilter] = useState("__all__");
 
-  const filteredLeads = leadsMarketingMock.filter(lead => {
+  const [currentPage, setCurrentPage] = useState(1);
+  const { data: pageResponse } = useQuery({
+    queryKey: [...leadsMarketingQueryKey, currentPage],
+    queryFn: () => fetchLeadsMarketing(currentPage),
+  });
+  const fetchedLeads = Array.isArray(pageResponse) ? pageResponse : (pageResponse?.results ?? []);
+  const totalCount = Array.isArray(pageResponse) ? pageResponse.length : (pageResponse?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / 5);
+  const { data: campanhasData = [] as any[] } = useQuery({ queryKey: campanhasQueryKey, queryFn: fetchCampanhas });
+  const { data: canaisData = [] as any[] } = useQuery({ queryKey: canaisQueryKey, queryFn: fetchCanais });
+  const [leadsMarketing, setLeadsMarketing] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (fetchedLeads.length > 0) {
+      setLeadsMarketing(fetchedLeads);
+    }
+  }, [fetchedLeads]);
+
+  const filteredLeads = leadsMarketing.filter((lead: any) => {
     const matchSearch = lead.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                       lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                       (lead.empresa?.toLowerCase().includes(searchTerm.toLowerCase()));
+      lead.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (lead.empresa?.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchStatus = statusFilter === "__all__" || lead.status === statusFilter;
-    const matchCanal = canalFilter === "__all__" || lead.canalId === canalFilter;
+    const matchCanal = canalFilter === "__all__" || String(lead.canal_origem) === canalFilter;
     return matchSearch && matchStatus && matchCanal;
   });
 
@@ -48,23 +68,24 @@ export default function LeadsMarketing() {
     return labels[status] || status;
   };
 
-  const getCampanhaNome = (campanhaId?: string) => {
+  const getCampanhaNome = (campanhaId?: number) => {
     if (!campanhaId) return '-';
-    const campanha = campanhasMock.find(c => c.id === campanhaId);
+    const campanha = campanhasData.find((c: any) => c.id === campanhaId);
     return campanha?.nome || '-';
   };
 
-  const getCanalNome = (canalId: string) => {
-    const canal = canaisMock.find(c => c.id === canalId);
+  const getCanalNome = (canalId?: number) => {
+    if (!canalId) return '-';
+    const canal = canaisData.find((c: any) => c.id === canalId);
     return canal?.nome || '-';
   };
 
   // Contadores
   const countByStatus = {
-    lead: leadsMarketingMock.filter(l => l.status === 'lead').length,
-    mql: leadsMarketingMock.filter(l => l.status === 'mql').length,
-    sql: leadsMarketingMock.filter(l => l.status === 'sql').length,
-    convertido: leadsMarketingMock.filter(l => l.status === 'convertido').length,
+    lead: leadsMarketing.filter((l: any) => l.status === 'lead').length,
+    mql: leadsMarketing.filter((l: any) => l.status === 'mql').length,
+    sql: leadsMarketing.filter((l: any) => l.status === 'sql').length,
+    convertido: leadsMarketing.filter((l: any) => l.status === 'convertido').length,
   };
 
   return (
@@ -128,7 +149,7 @@ export default function LeadsMarketing() {
               </SelectContent>
             </Select>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Canal:</span>
             <Select value={canalFilter} onValueChange={setCanalFilter}>
@@ -137,15 +158,15 @@ export default function LeadsMarketing() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todos</SelectItem>
-                {canaisMock.map(canal => (
-                  <SelectItem key={canal.id} value={canal.id}>{canal.nome}</SelectItem>
+                {canaisData.map((canal: any) => (
+                  <SelectItem key={canal.id} value={String(canal.id)}>{canal.nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => {
               setStatusFilter("__all__");
@@ -174,13 +195,13 @@ export default function LeadsMarketing() {
               <TableHead>Canal</TableHead>
               <TableHead>Campanha</TableHead>
               <TableHead>Score</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Data</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-center">Data</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLeads.map((lead) => (
+            {filteredLeads.map((lead: any) => (
               <TableRow key={lead.id} className="hover:bg-muted/50 cursor-pointer">
                 <TableCell>
                   <div className="flex items-center gap-2">
@@ -192,25 +213,24 @@ export default function LeadsMarketing() {
                 </TableCell>
                 <TableCell>{lead.email}</TableCell>
                 <TableCell>{lead.empresa || '-'}</TableCell>
-                <TableCell>{lead.origem}</TableCell>
+                <TableCell>{'-'}</TableCell>
                 <TableCell>
-                  <Badge variant="outline">{getCanalNome(lead.canalId)}</Badge>
+                  <Badge variant="outline">{getCanalNome(lead.canal_origem)}</Badge>
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">
-                  {getCampanhaNome(lead.campanhaId)}
+                  {getCampanhaNome(lead.campanha_origem)}
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
                     <div className="w-10 h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${
-                          lead.score >= 70 ? 'bg-success' : 
-                          lead.score >= 40 ? 'bg-warning' : 'bg-muted-foreground'
-                        }`}
-                        style={{ width: `${lead.score}%` }}
+                      <div
+                        className={`h-full rounded-full ${lead.pontuacao >= 70 ? 'bg-success' :
+                            lead.pontuacao >= 40 ? 'bg-warning' : 'bg-muted-foreground'
+                          }`}
+                        style={{ width: `${lead.pontuacao}%` }}
                       />
                     </div>
-                    <span className="text-sm">{lead.score}</span>
+                    <span className="text-sm">{lead.pontuacao}</span>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -220,20 +240,29 @@ export default function LeadsMarketing() {
                     <StatusBadge status={getStatusBadgeStatus(lead.status)} />
                   </div>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {new Date(lead.createdAt).toLocaleDateString('pt-BR')}
+                <TableCell className="text-center text-muted-foreground">
+                  {fmtDate(lead.criado_em)}
                 </TableCell>
                 <TableCell>
-                  <TableActions 
-                    onView={() => {}}
-                    onEdit={() => {}}
-                    onDelete={() => {}}
+                  <TableActions
+                    onView={() => { }}
+                    onEdit={() => { }}
+                    onDelete={() => { }}
                   />
                 </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+            <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages} ({totalCount} registros)</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>Próxima</Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
