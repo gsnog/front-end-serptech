@@ -30,6 +30,7 @@ const NovaContaBancaria = () => {
     { value: "Investimento", label: "Investimento" },
     { value: "Caixa Pequeno", label: "Caixa Pequeno" },
   ]);
+  const [apelido, setApelido] = useState("");
   const [codigoBanco, setCodigoBanco] = useState("");
   const [banco, setBanco] = useState("");
   const [bancoNaoEncontrado, setBancoNaoEncontrado] = useState(false);
@@ -86,6 +87,7 @@ const NovaContaBancaria = () => {
 
     mutation.mutate({
       unidade: Number(unidade),
+      apelido: apelido.trim(),
       tipo,
       codigo_banco: codigoBanco,
       banco: banco.trim(),
@@ -111,6 +113,22 @@ const NovaContaBancaria = () => {
               <div>
                 <h2 className="text-xl font-semibold text-foreground">Dados da Conta Bancária</h2>
                 <p className="text-sm text-muted-foreground">Preencha as informações abaixo</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Apelido da Conta</Label>
+                <Input
+                  placeholder="Ex.: Santander Matriz"
+                  className="form-input"
+                  value={apelido}
+                  onChange={(e) => setApelido(e.target.value)}
+                  maxLength={100}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Nome exibido nas telas de transferência e conciliação — útil para diferenciar contas do mesmo banco.
+                </p>
               </div>
             </div>
 

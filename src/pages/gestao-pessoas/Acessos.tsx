@@ -70,7 +70,7 @@ const modulosSistema: Modulo[] = [
     id: 'financeiro', nome: 'Financeiro', groups: [
       { label: 'Cadastro', module: 'cadastro_financeiro', features: [
         { id: 'cad_fin_conta_bancaria', nome: 'Conta Bancária',       acoes: ['view', 'create', 'edit', 'delete'] },
-        { id: 'cad_fin_conciliacao',    nome: 'Conciliação Bancária', acoes: ['view', 'create', 'edit', 'delete'] },
+        { id: 'cad_fin_conciliacao',    nome: 'Conciliação Bancária', acoes: ['view', 'create', 'edit', 'delete', 'trash'] },
         { id: 'cad_fin_transferencias', nome: 'Transferências',       acoes: ['view', 'create', 'edit', 'delete'] },
         { id: 'cad_fin_clientes',       nome: 'Clientes',             acoes: ['view', 'create', 'edit', 'delete'] },
         { id: 'cad_fin_centro_custo',   nome: 'Centro de Custo',      acoes: ['view', 'create', 'edit', 'delete'] },
@@ -121,7 +121,7 @@ const modulosSistema: Modulo[] = [
 ];
 
 const acoesLabels: Record<string, string> = {
-  view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', deliver: 'Entregar', buy: 'Comprar', export: 'Exportar', edit_approved: 'Editar Aprovada',
+  view: 'Ver', create: 'Criar', edit: 'Editar', delete: 'Excluir', approve: 'Aprovar', deliver: 'Entregar', buy: 'Comprar', export: 'Exportar', edit_approved: 'Editar Aprovada', trash: 'Lixeira',
 };
 const allAcoes = Object.keys(acoesLabels);
 

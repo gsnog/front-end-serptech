@@ -129,11 +129,15 @@ export default function Relatorios() {
     }
   }
 
+  const fmtParcelas = (pagas?: number, total?: number) =>
+    total ? `${pagas ?? 0}/${total} pagas` : '—'
+
   const contasReceberDisplay = useMemo(() =>
     (reportData as RelatorioContaItem[]).map(cr => ({
       codigo: `CR${String(cr.id).padStart(3, '0')}`,
       cliente: cr.cliente_nome || '—',
-      vencimento: fmtDate(cr.data_de_vencimento),
+      vencimento: fmtDate(cr.proxima_data_vencimento),
+      parcelas: fmtParcelas(cr.parcelas_pagas, cr.parcelas_total),
       faturamento: fmtDate(cr.data_de_faturamento),
       valor: fmt(cr.valor_total ?? 0),
       status: cr.status || '—',
@@ -143,7 +147,8 @@ export default function Relatorios() {
     (reportData as RelatorioContaItem[]).map(cp => ({
       codigo: `CP${String(cp.id).padStart(3, '0')}`,
       beneficiario: cp.fornecedor_nome || '—',
-      vencimento: fmtDate(cp.data_de_vencimento),
+      vencimento: fmtDate(cp.proxima_data_vencimento),
+      parcelas: fmtParcelas(cp.parcelas_pagas, cp.parcelas_total),
       faturamento: fmtDate(cp.data_de_faturamento),
       valor: fmt(cp.valor_total ?? 0),
       status: cp.status || '—',
@@ -282,7 +287,7 @@ export default function Relatorios() {
                     options={clientesList.map((c: any) => ({ value: String(c.id), label: c.nome }))} />
                 )}
                 <SelectFilter label="Conta Bancária:" value={contaBancariaId} onChange={setContaBancariaId}
-                  options={contasBancariasList.map((c: any) => ({ value: String(c.id), label: `${c.banco} - ${c.numero_conta}` }))} />
+                  options={contasBancariasList.map((c: any) => ({ value: String(c.id), label: c.nome_exibicao || `${c.banco} - ${c.numero_conta}` }))} />
                 <SelectFilter label="Classificação:" value={classificacaoId} onChange={setClassificacaoId}
                   options={classificacoesList.map((c: any) => ({ value: String(c.id), label: c.nome }))} />
               </div>
@@ -404,6 +409,7 @@ export default function Relatorios() {
                       <TableHead className="text-foreground font-semibold">Código</TableHead>
                       <TableHead className="text-foreground font-semibold">Cliente</TableHead>
                       <TableHead className="text-foreground font-semibold">Vencimento</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Parcelas</TableHead>
                       <TableHead className="text-foreground font-semibold">Faturamento</TableHead>
                       <TableHead className="text-right text-foreground font-semibold">Valor</TableHead>
                       <TableHead className="text-center text-foreground font-semibold">Status</TableHead>
@@ -415,13 +421,14 @@ export default function Relatorios() {
                         <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                         <TableCell>{item.cliente}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
+                        <TableCell className="text-center">{item.parcelas}</TableCell>
                         <TableCell>{item.faturamento}</TableCell>
                         <TableCell className="text-right font-semibold text-emerald-600">+{item.valor}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                       </TableRow>
                     ))}
                     {contasReceberDisplay.length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -434,6 +441,7 @@ export default function Relatorios() {
                       <TableHead className="text-foreground font-semibold">Código</TableHead>
                       <TableHead className="text-foreground font-semibold">Beneficiário</TableHead>
                       <TableHead className="text-foreground font-semibold">Vencimento</TableHead>
+                      <TableHead className="text-center text-foreground font-semibold">Parcelas</TableHead>
                       <TableHead className="text-foreground font-semibold">Faturamento</TableHead>
                       <TableHead className="text-right text-foreground font-semibold">Valor</TableHead>
                       <TableHead className="text-center text-foreground font-semibold">Status</TableHead>
@@ -445,13 +453,14 @@ export default function Relatorios() {
                         <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
                         <TableCell>{item.beneficiario}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
+                        <TableCell className="text-center">{item.parcelas}</TableCell>
                         <TableCell>{item.faturamento}</TableCell>
                         <TableCell className="text-right font-semibold text-rose-500">-{item.valor}</TableCell>
                         <TableCell className="text-center"><StatusBadge status={item.status} /></TableCell>
                       </TableRow>
                     ))}
                     {contasPagarDisplay.length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>

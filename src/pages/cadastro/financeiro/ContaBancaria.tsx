@@ -46,8 +46,8 @@ const ContaBancaria = () => {
     (c.banco || "").toLowerCase().includes(searchBanco.toLowerCase()) &&
     (c.numero_conta || "").includes(searchConta)
   );
-  const getExportData = () => filtered.map(c => ({ "Código Banco": c.codigo_banco, Banco: c.banco, Agência: c.agencia, Conta: c.numero_conta, Tipo: c.tipo, Saldo: c.saldo }));
-  const openEdit = (c: CB) => { setEditItem(c); setEditData({ codigo_banco: c.codigo_banco, banco: c.banco, agencia: c.agencia, numero_conta: c.numero_conta, tipo: c.tipo }); };
+  const getExportData = () => filtered.map(c => ({ Apelido: c.apelido || "", "Código Banco": c.codigo_banco, Banco: c.banco, Agência: c.agencia, Conta: c.numero_conta, Tipo: c.tipo, Saldo: c.saldo }));
+  const openEdit = (c: CB) => { setEditItem(c); setEditData({ apelido: c.apelido, codigo_banco: c.codigo_banco, banco: c.banco, agencia: c.agencia, numero_conta: c.numero_conta, tipo: c.tipo }); };
   const deleteItem = items.find(i => i.id === deleteId);
 
   return (
@@ -64,6 +64,7 @@ const ContaBancaria = () => {
         <div className="rounded border border-border overflow-hidden">
           <Table>
             <TableHeader><TableRow className="bg-table-header">
+              <TableHead className="font-semibold">Apelido</TableHead>
               <TableHead className="font-semibold">Código do Banco</TableHead>
               <TableHead className="font-semibold">Banco</TableHead>
               <TableHead className="font-semibold">Agência</TableHead>
@@ -74,11 +75,12 @@ const ContaBancaria = () => {
             </TableRow></TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma conta encontrada.</TableCell></TableRow>
               ) : filtered.map((c) => (
                 <TableRow key={c.id} className="hover:bg-table-hover transition-colors">
+                  <TableCell className="font-medium">{c.apelido || "—"}</TableCell>
                   <TableCell >{c.codigo_banco || "—"}</TableCell>
                   <TableCell className="font-medium">{c.banco || "—"}</TableCell>
                   <TableCell >{c.agencia || "—"}</TableCell>
@@ -105,6 +107,7 @@ const ContaBancaria = () => {
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
         <DialogContent><DialogHeader><DialogTitle>{viewItem?.banco}</DialogTitle></DialogHeader>
           {viewItem && <div className="space-y-2 py-2">
+            <InfoRow label="Apelido" value={viewItem.apelido || "—"} />
             <InfoRow label="Código" value={viewItem.codigo_banco || "—"} />
             <InfoRow label="Agência" value={viewItem.agencia || "—"} />
             <InfoRow label="Conta" value={viewItem.numero_conta || "—"} />
@@ -118,6 +121,11 @@ const ContaBancaria = () => {
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Editar Conta Bancária</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label>Apelido da Conta</Label>
+              <Input placeholder="Ex.: Santander Matriz" value={editData.apelido || ""} onChange={e => setEditData(p => ({ ...p, apelido: e.target.value }))} />
+              <p className="text-xs text-muted-foreground">Nome exibido nas telas de transferência e conciliação, para diferenciar contas do mesmo banco.</p>
+            </div>
             <div className="space-y-2"><Label>Código do Banco</Label><Input value={editData.codigo_banco || ""} onChange={e => setEditData(p => ({ ...p, codigo_banco: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Banco</Label><Input value={editData.banco || ""} onChange={e => setEditData(p => ({ ...p, banco: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Agência</Label><Input value={editData.agencia || ""} onChange={e => setEditData(p => ({ ...p, agencia: e.target.value }))} /></div>

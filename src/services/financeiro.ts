@@ -132,6 +132,8 @@ export interface ContaBancaria {
     id: number;
     unidade?: number;
     unidade_nome?: string;
+    apelido?: string;
+    nome_exibicao?: string;           // apelido ou "banco • conta (unidade)" — sempre único
     codigo_banco?: string;
     banco?: string;
     agencia?: string;
@@ -194,6 +196,7 @@ export interface Conciliacao {
     numero_conta: string;
     conciliacao: string;
     conta_nome?: string;
+    excluida_em?: string | null;      // preenchido quando a linha está na lixeira
 }
 
 export interface Transacao {
@@ -522,6 +525,8 @@ export interface ParcelaConciliacao {
     valor: number;
     valor_pago: number | null;
     valor_exibido: number;            // valor_pago se quitada, senão valor
+    diferenca: number | null;         // valor_extrato − valor_parcela (+ = juros, − = desconto)
+    match_exato: boolean;
     status: string;
     status_conciliacao: string;
 }
@@ -549,8 +554,10 @@ export interface ConciliacaoParaConciliar {
 }
 
 // Item selecionado para efetivar: uma parcela ou uma perna de transferência.
+// confirmar_diferenca é exigido pelo backend quando o valor do extrato é MENOR
+// que o da parcela (baixa com desconto precisa de confirmação explícita).
 export type ConciliacaoEfetivarPayload =
-    | { tipo: 'parcela'; parcela_id: number }
+    | { tipo: 'parcela'; parcela_id: number; confirmar_diferenca?: boolean }
     | { tipo: 'transacao'; transacao_id: number };
 
 export const fetchConciliacoes = async (): Promise<Conciliacao[]> => {
@@ -570,8 +577,21 @@ export const efetivarConciliacaoBancaria = async (
     const res = await api.post(`/api/financial/conciliacoes/${conciliacaoId}/conciliar/efetivar/`, payload);
     return res.data;
 };
+/** Descarta uma linha do extrato para a lixeira (soft delete — restaurável por 30 dias). */
 export const deleteConciliacao = async (id: number): Promise<void> => {
     await api.delete(`/api/financial/conciliacoes/${id}/`);
+};
+
+export const lixeiraConciliacoesQueryKey = ['conciliacoes-lixeira'] as const;
+
+export const fetchLixeiraConciliacoes = async (): Promise<Conciliacao[]> => {
+    const res = await api.get('/api/financial/conciliacoes/lixeira/');
+    return res.data;
+};
+
+export const restaurarConciliacao = async (id: number): Promise<Conciliacao> => {
+    const res = await api.post(`/api/financial/conciliacoes/${id}/restaurar/`);
+    return res.data;
 };
 
 // ─── Transferências ───────────────────────────────────────────────────────────
@@ -745,7 +765,9 @@ export interface RelatorioContaItem {
   id: number
   cliente_nome?: string
   fornecedor_nome?: string
-  data_de_vencimento: string | null
+  proxima_data_vencimento: string | null
+  parcelas_pagas: number
+  parcelas_total: number
   data_de_faturamento: string | null
   valor_total: number
   status: string

@@ -5,19 +5,35 @@ import {
   fetchConciliacaoParaConciliar,
   efetivarConciliacaoBancaria,
   importarOfxNovo,
+  deleteConciliacao,
+  fetchLixeiraConciliacoes,
+  restaurarConciliacao,
   conciliacoesQueryKey,
+  lixeiraConciliacoesQueryKey,
   Conciliacao,
   ConciliacaoParaConciliar,
   ConciliacaoEfetivarPayload,
   ParcelaConciliacao,
   TransacaoConciliacao,
 } from "@/services/financeiro";
+import { usePermissions } from "@/contexts/PermissionsContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   FileUp,
   CheckCircle2,
@@ -30,6 +46,8 @@ import {
   Search,
   ArrowUpRight,
   ArrowDownLeft,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { fmtDate } from "@/lib/utils";
 
@@ -40,17 +58,29 @@ const ConciliacaoBancaria = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detalhes, setDetalhes] = useState<ConciliacaoParaConciliar | null>(null);
   const [selectedItem, setSelectedItem] = useState<ConciliacaoEfetivarPayload | null>(null);
+  const [confirmDescontoOpen, setConfirmDescontoOpen] = useState(false);
+  const [descartarId, setDescartarId] = useState<number | null>(null);
+  const [lixeiraOpen, setLixeiraOpen] = useState(false);
 
   const [loadingDetalhes, setLoadingDetalhes] = useState(false);
   const [importing, setImporting] = useState(false);
 
   const { toast } = useToast();
+  const { hasPermission, currentUser } = usePermissions();
+  // Espelho da permissão do backend (CanManageLixeiraConciliacao): ação granular
+  // 'trash' concedida na tela de Acessos, ou papel admin/diretor.
+  const podeGerenciarLixeira =
+    hasPermission("cadastro_financeiro", "cad_fin_conciliacao", "trash") ||
+    currentUser.roles.includes("diretor");
 
   const { data: conciliacoesRaw = [], isLoading: loadingLista } = useQuery({
     queryKey: [...conciliacoesQueryKey],
     queryFn: fetchConciliacoes,
   });
-  const conciliacoes = conciliacoesRaw.filter((c) => c.conciliacao !== "Efetuado");
+  // O backend já devolve só pendentes; o filtro é uma salvaguarda contra cache.
+  const conciliacoes = conciliacoesRaw.filter(
+    (c) => !["Pago", "Efetuado"].includes(c.conciliacao)
+  );
 
   const handleSelecionar = async (id: number) => {
     if (selectedId === id) {
@@ -101,6 +131,41 @@ const ConciliacaoBancaria = () => {
     }
   };
 
+  // ── Lixeira ────────────────────────────────────────────────────────────────
+  const { data: lixeira = [], isLoading: loadingLixeira } = useQuery({
+    queryKey: [...lixeiraConciliacoesQueryKey],
+    queryFn: fetchLixeiraConciliacoes,
+    enabled: lixeiraOpen && podeGerenciarLixeira,
+  });
+
+  const descartarMutation = useMutation({
+    mutationFn: (id: number) => deleteConciliacao(id),
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData<Conciliacao[]>([...conciliacoesQueryKey], (old) =>
+        old ? old.filter((c) => c.id !== id) : old
+      );
+      queryClient.invalidateQueries({ queryKey: [...conciliacoesQueryKey] });
+      queryClient.invalidateQueries({ queryKey: [...lixeiraConciliacoesQueryKey] });
+      if (selectedId === id) {
+        setSelectedId(null);
+        setDetalhes(null);
+        setSelectedItem(null);
+      }
+      toast({ title: "Lançamento movido para a lixeira", description: "Você pode restaurá-lo em até 30 dias." });
+    },
+    onError: () => toast({ title: "Erro ao descartar o lançamento", variant: "destructive" }),
+  });
+
+  const restaurarMutation = useMutation({
+    mutationFn: (id: number) => restaurarConciliacao(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...conciliacoesQueryKey] });
+      queryClient.invalidateQueries({ queryKey: [...lixeiraConciliacoesQueryKey] });
+      toast({ title: "Lançamento restaurado para a fila de pendentes." });
+    },
+    onError: () => toast({ title: "Erro ao restaurar o lançamento", variant: "destructive" }),
+  });
+
   const efetivarMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: ConciliacaoEfetivarPayload }) =>
       efetivarConciliacaoBancaria(id, payload),
@@ -121,9 +186,33 @@ const ConciliacaoBancaria = () => {
     onError: () => toast({ title: "Erro ao efetivar conciliação", variant: "destructive" }),
   });
 
+  // Parcela selecionada com valor do extrato MENOR que o da parcela → o backend
+  // exige confirmação explícita antes de baixar com desconto.
+  const parcelaSelecionada =
+    selectedItem?.tipo === "parcela" && detalhes
+      ? [...detalhes.parcelas_a_receber, ...detalhes.parcelas_a_pagar].find(
+          (p) => p.id === selectedItem.parcela_id
+        )
+      : undefined;
+  const precisaConfirmarDesconto =
+    parcelaSelecionada?.diferenca != null && parcelaSelecionada.diferenca < -0.005;
+
   const handleEfetivar = async () => {
     if (!selectedId || !selectedItem) return;
+    if (precisaConfirmarDesconto) {
+      setConfirmDescontoOpen(true);
+      return;
+    }
     efetivarMutation.mutate({ id: selectedId, payload: selectedItem });
+  };
+
+  const handleConfirmarDesconto = () => {
+    if (!selectedId || !selectedItem || selectedItem.tipo !== "parcela") return;
+    setConfirmDescontoOpen(false);
+    efetivarMutation.mutate({
+      id: selectedId,
+      payload: { ...selectedItem, confirmar_diferenca: true },
+    });
   };
 
   const formatCurrency = (value: number) =>
@@ -136,6 +225,8 @@ const ConciliacaoBancaria = () => {
     const entrada = p.tipo === "receber";
     const isSelected = selectedItem?.tipo === "parcela" && selectedItem.parcela_id === p.id;
     const label = p.favorecido || (entrada ? `Cliente #${p.conta_id}` : `Fornecedor #${p.conta_id}`);
+    const comDiferenca = p.diferenca != null && !p.match_exato;
+    const diferencaJuros = comDiferenca && (p.diferenca as number) > 0;
 
     return (
       <div
@@ -183,6 +274,15 @@ const ConciliacaoBancaria = () => {
               {p.descricao && (
                 <p className="text-xs text-muted-foreground truncate max-w-[260px] mb-0.5">
                   {p.descricao}
+                </p>
+              )}
+
+              {comDiferenca && (
+                <p className="flex items-center gap-1 text-xs font-medium text-amber-600 mb-0.5">
+                  <AlertCircle size={11} />
+                  {diferencaJuros
+                    ? `Extrato maior: +${formatCurrency(p.diferenca as number)} (juros/multa)`
+                    : `Extrato menor: -${formatCurrency(p.diferenca as number)} (desconto)`}
                 </p>
               )}
 
@@ -317,6 +417,13 @@ const ConciliacaoBancaria = () => {
             Importar OFX
           </Button>
 
+          {podeGerenciarLixeira && (
+            <Button variant="outline" className="gap-2" onClick={() => setLixeiraOpen(true)}>
+              <Trash2 className="w-4 h-4" />
+              Lixeira
+            </Button>
+          )}
+
           <Button
             onClick={handleEfetivar}
             disabled={!selectedId || !selectedItem || efetivarMutation.isPending}
@@ -422,20 +529,37 @@ const ConciliacaoBancaria = () => {
                                   <Calendar size={11} />
                                   {fmtDate(c.data)}
                                 </span>
-                                {c.numero_conta && (
-                                  <span className="italic">Conta: {c.numero_conta}</span>
+                                {(c.conta_nome || c.numero_conta) && (
+                                  <span className="italic">
+                                    Conta: {c.conta_nome || c.numero_conta}
+                                  </span>
                                 )}
                               </div>
                             </div>
                           </div>
 
-                          <span
-                            className={`font-bold text-sm ml-2 flex-shrink-0 ${
-                              entrada ? "text-green-600" : "text-red-600"
-                            }`}
-                          >
-                            {entrada ? "+" : "-"} {formatCurrency(Number(c.valor_total))}
-                          </span>
+                          <div className="flex items-start gap-1 ml-2 flex-shrink-0">
+                            <span
+                              className={`font-bold text-sm ${
+                                entrada ? "text-green-600" : "text-red-600"
+                              }`}
+                            >
+                              {entrada ? "+" : "-"} {formatCurrency(Number(c.valor_total))}
+                            </span>
+                            {podeGerenciarLixeira && (
+                              <button
+                                type="button"
+                                title="Descartar para a lixeira"
+                                className="p-1 rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDescartarId(c.id);
+                                }}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -538,7 +662,9 @@ const ConciliacaoBancaria = () => {
                         <p className="text-sm text-center">
                           Nenhuma parcela ou transferência sugerida para esta conciliação.
                           <br />
-                          Verifique se há lançamentos compatíveis no sistema.
+                          São sugeridas parcelas com valor próximo ao do extrato
+                          (a diferença por juros/desconto é indicada). Verifique se há
+                          lançamentos compatíveis no sistema.
                         </p>
                       </div>
                     )}
@@ -549,6 +675,130 @@ const ConciliacaoBancaria = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Confirmação de descarte para a lixeira */}
+      <AlertDialog open={descartarId !== null} onOpenChange={() => setDescartarId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Descartar lançamento do extrato?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O lançamento sai da fila de pendentes e vai para a lixeira, onde pode
+              ser restaurado em até 30 dias. Reimportar o mesmo OFX não o recria.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (descartarId !== null) descartarMutation.mutate(descartarId);
+                setDescartarId(null);
+              }}
+            >
+              Descartar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Lixeira: lançamentos descartados (retenção de 30 dias) */}
+      <Dialog open={lixeiraOpen} onOpenChange={setLixeiraOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Lixeira da Conciliação
+            </DialogTitle>
+            <DialogDescription>
+              Lançamentos descartados são mantidos por 30 dias e depois removidos
+              definitivamente.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-2 pr-2">
+              {loadingLixeira ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : lixeira.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic text-center py-8">
+                  A lixeira está vazia.
+                </p>
+              ) : (
+                lixeira.map((c) => {
+                  const entrada = isEntrada(Number(c.valor_total));
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between gap-3 p-3 rounded-lg border border-border bg-card"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {c.descricao || c.conta_nome || `Conciliação #${c.id}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {fmtDate(c.data)}
+                          {(c.conta_nome || c.numero_conta) &&
+                            ` • ${c.conta_nome || c.numero_conta}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <span
+                          className={`font-semibold text-sm ${
+                            entrada ? "text-green-600" : "text-red-600"
+                          }`}
+                        >
+                          {entrada ? "+" : "-"} {formatCurrency(Number(c.valor_total))}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-1"
+                          disabled={restaurarMutation.isPending}
+                          onClick={() => restaurarMutation.mutate(c.id)}
+                        >
+                          <RotateCcw size={13} /> Restaurar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmação: extrato menor que a parcela → baixa com desconto */}
+      <AlertDialog open={confirmDescontoOpen} onOpenChange={setConfirmDescontoOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Valor do extrato menor que a parcela</AlertDialogTitle>
+            <AlertDialogDescription>
+              A parcela selecionada é de{" "}
+              <strong>{parcelaSelecionada ? formatCurrency(parcelaSelecionada.valor) : ""}</strong>,
+              mas a linha do extrato é de{" "}
+              <strong>
+                {parcelaSelecionada?.diferenca != null
+                  ? formatCurrency(parcelaSelecionada.valor + parcelaSelecionada.diferenca)
+                  : ""}
+              </strong>
+              . Ao confirmar, a parcela será baixada como paga e a diferença de{" "}
+              <strong>
+                {parcelaSelecionada?.diferenca != null
+                  ? formatCurrency(parcelaSelecionada.diferenca)
+                  : ""}
+              </strong>{" "}
+              será registrada como desconto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmarDesconto}>
+              Confirmar baixa com desconto
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

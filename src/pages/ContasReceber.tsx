@@ -746,7 +746,7 @@ const ContasReceber = () => {
                             <Label className="text-[10px] text-muted-foreground">Conta Bancária</Label>
                             <Select value={p.conta_bancaria || undefined} onValueChange={v => setParcelaFull(i, { conta_bancaria: v })}>
                               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
-                              <SelectContent>{contasBancarias.map(cb => <SelectItem key={cb.id} value={String(cb.id)}>{cb.banco} ({cb.numero_conta})</SelectItem>)}</SelectContent>
+                              <SelectContent>{contasBancarias.map(cb => <SelectItem key={cb.id} value={String(cb.id)}>{cb.nome_exibicao || `${cb.banco} (${cb.numero_conta})`}</SelectItem>)}</SelectContent>
                             </Select>
                           </div>
                         </div>

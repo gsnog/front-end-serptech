@@ -39,7 +39,7 @@ const Transferencias = () => {
   const totalPages = Math.ceil(totalCount / 5);
   const { data: contasRaw } = useQuery({ queryKey: ['contasBancarias'], queryFn: fetchContasBancarias });
   const contas = Array.isArray(contasRaw) ? contasRaw : (contasRaw as any)?.results ?? [];
-  const contaLabel = (c: any) => [c.banco, c.numero_conta ? `nº ${c.numero_conta}` : null, c.tipo ? `(${c.tipo})` : null].filter(Boolean).join(' — ');
+  const contaLabel = (c: any) => c.nome_exibicao || [c.banco, c.numero_conta ? `nº ${c.numero_conta}` : null, c.tipo ? `(${c.tipo})` : null].filter(Boolean).join(' — ');
 
   const deleteMutation = useMutation({
     mutationFn: deleteTransferencia,

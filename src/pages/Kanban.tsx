@@ -19,6 +19,8 @@ import {
   Clock,
   AlertCircle,
   List,
+  Paperclip,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,11 +54,16 @@ import { cn } from '@/lib/utils';
 // Kanban types (previously from kanban-mock — defined locally)
 // Items accept both API naming (texto/concluido) and UI naming (text/completed)
 interface KanbanChecklist { id: number | string; titulo?: string; title?: string; items: any[] }
+interface KanbanAttachment {
+  id: number; file: string; original_name: string;
+  uploaded_by?: number | null; uploaded_by_nome?: string | null; uploaded_at?: string;
+}
 interface KanbanCard {
   id: number; titulo?: string; title?: string; descricao?: string; description?: string;
   responsavel_ids?: number[]; assignee?: string; prioridade?: string;
   data_entrega?: string; due_date?: string; tags?: string[];
   checklists?: KanbanChecklist[]; list?: number | string; observations?: string;
+  attachments?: KanbanAttachment[];
 }
 interface KanbanList { id: number; titulo?: string; title?: string; cards: KanbanCard[]; ordem: number; cor?: string; }
 interface KanbanBoard { id: number; titulo: string; descricao?: string; listas: KanbanList[]; }
@@ -532,6 +539,7 @@ export default function Kanban() {
       {/* Card detail modal */}
       {selectedCard && (
         <CardDetailModal
+          key={selectedCard.id}
           card={selectedCard}
           open={showCardModal}
           onClose={() => {
@@ -816,8 +824,15 @@ function KanbanCardItem({
       onClick={onClick}
       className="cursor-pointer hover:shadow-md transition-shadow border-transparent"
     >
-      <CardContent className="p-3 space-y-2">
-        <p className="text-sm font-medium">{card.title}</p>
+      <CardContent className="p-3 space-y-2 min-h-[72px]">
+        {/* Altura padrão: o título quebra linha e é limitado a 2 linhas,
+            então todos os cards da coluna ficam com o mesmo tamanho. */}
+        <p
+          className="text-sm font-medium break-words line-clamp-2 min-h-[2.5rem]"
+          title={card.title}
+        >
+          {card.title}
+        </p>
 
         {/* Info badges */}
         <div className="flex items-center gap-2 flex-wrap text-xs text-muted-foreground">
@@ -887,6 +902,46 @@ function CardDetailModal({
   const [showAddChecklist, setShowAddChecklist] = useState(false);
   // Debounce ref for checklist toggle — prevents API call on every rapid click
   const checklistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Anexos: estado local (o modal remonta por card via key), sincronizado com o
+  // backend a cada upload/remoção; a lista de boards é invalidada em paralelo.
+  const [attachments, setAttachments] = useState<KanbanAttachment[]>(card.attachments || []);
+  const [uploadingAnexo, setUploadingAnexo] = useState(false);
+  const anexoInputRef = useRef<HTMLInputElement | null>(null);
+  const modalQueryClient = useQueryClient();
+  const { toast: anexoToast } = useToast();
+
+  const handleUploadAnexo = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAnexo(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await api.post(`/api/kanban/cards/${card.id}/anexos/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setAttachments((prev) => [...prev, res.data]);
+      modalQueryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+      anexoToast({ title: 'Anexo adicionado.' });
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || 'Não foi possível enviar o anexo.';
+      anexoToast({ title: 'Erro no upload', description: msg, variant: 'destructive' });
+    } finally {
+      setUploadingAnexo(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveAnexo = async (anexoId: number) => {
+    try {
+      await api.delete(`/api/kanban/cards/${card.id}/anexos/${anexoId}/`);
+      setAttachments((prev) => prev.filter((a) => a.id !== anexoId));
+      modalQueryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+    } catch {
+      anexoToast({ title: 'Erro ao remover anexo', variant: 'destructive' });
+    }
+  };
 
   const list = lists.find((l) => l.id === card.list);
   const assignee = card.assignee
@@ -995,9 +1050,80 @@ function CardDetailModal({
                 value={card.description}
                 onChange={(e) => updateField('description', e.target.value)}
                 placeholder="Adicionar descricao..."
-                rows={3}
-                className="resize-none"
+                rows={6}
+                className="resize-y min-h-[120px]"
               />
+            </div>
+
+            {/* Anexos */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Anexos
+                </Label>
+                <input
+                  ref={anexoInputRef}
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  className="hidden"
+                  onChange={handleUploadAnexo}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1 h-7 text-xs"
+                  disabled={uploadingAnexo}
+                  onClick={() => anexoInputRef.current?.click()}
+                >
+                  {uploadingAnexo ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Plus className="h-3 w-3" />
+                  )}
+                  Adicionar anexo
+                </Button>
+              </div>
+
+              {attachments.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">
+                  Nenhum anexo. Aceita prints (PNG/JPG) e PDFs de até 5MB.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {attachments.map((anexo) => (
+                    <div
+                      key={anexo.id}
+                      className="flex items-center justify-between gap-2 p-2 rounded border border-border bg-muted/30"
+                    >
+                      <a
+                        href={anexo.file}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 min-w-0 text-sm text-primary hover:underline"
+                      >
+                        <Paperclip className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="truncate">{anexo.original_name}</span>
+                      </a>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {anexo.uploaded_by_nome && (
+                          <span className="text-xs text-muted-foreground hidden sm:inline">
+                            {anexo.uploaded_by_nome}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          title="Remover anexo"
+                          className="p-1 rounded text-muted-foreground hover:text-destructive"
+                          onClick={() => handleRemoveAnexo(anexo.id)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Checklists */}
