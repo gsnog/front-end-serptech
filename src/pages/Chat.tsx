@@ -98,6 +98,7 @@ interface ChatMessage {
 }
 
 import { PersonHierarchyPanel } from '@/components/chat/PersonHierarchyPanel';
+import { ParticipantPicker } from '@/components/ParticipantPicker';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import { chatSocket } from '@/lib/socket';
@@ -140,6 +141,8 @@ export default function Chat() {
   const [showHierarchyPanel, setShowHierarchyPanel] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [addMemberSelection, setAddMemberSelection] = useState<string[]>([]);
   const [selectedPessoa, setSelectedPessoa] = useState<any | null>(null);
   const [onlineStatus] = useState<Record<string, boolean>>({});
 
@@ -402,6 +405,45 @@ export default function Chat() {
     setNewGroupDesc('');
     setNewGroupMembers([]);
     setNewGroupSearch('');
+  };
+
+  // Mutation: add participants to an existing group
+  const addMembersMutation = useMutation({
+    mutationFn: async ({ groupId, memberIds }: { groupId: string; memberIds: number[] }) => {
+      const res = await api.post(`/api/chat/groups/${groupId}/members/`, { member_ids: memberIds });
+      return res.data;
+    },
+    onSuccess: (group) => {
+      queryClient.invalidateQueries({ queryKey: ['chat-groups'] });
+      setSelectedConversa((prev) =>
+        prev && String(prev.id) === String(group.id)
+          ? {
+              ...prev,
+              participantes: (group.members || []).map((m: any) => ({
+                id: String(m.id),
+                nome: `${m.first_name} ${m.last_name}`.trim() || m.username,
+                iniciais: m.username.slice(0, 2).toUpperCase(),
+                online: onlineStatus[String(m.id)] ?? true,
+              })),
+            }
+          : prev
+      );
+      toast({ title: 'Participante(s) adicionado(s)' });
+      setShowAddMemberModal(false);
+      setAddMemberSelection([]);
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data?.error || 'Erro ao adicionar participante.';
+      toast({ title: msg, variant: 'destructive' });
+    },
+  });
+
+  const handleAddMembers = () => {
+    if (!selectedConversa || addMemberSelection.length === 0) return;
+    addMembersMutation.mutate({
+      groupId: selectedConversa.id,
+      memberIds: addMemberSelection.map(Number),
+    });
   };
 
   const handleFileAttach = () => {
@@ -795,8 +837,24 @@ export default function Chat() {
               </div>
 
               <div>
-                <div className="text-xs font-medium text-muted-foreground mb-2">
-                  Membros ({selectedConversa.participantes.length})
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    Membros ({selectedConversa.participantes.length})
+                  </div>
+                  {selectedConversa.tipo !== 'direto' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs gap-1"
+                      onClick={() => {
+                        setAddMemberSelection([]);
+                        setShowAddMemberModal(true);
+                      }}
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      Adicionar
+                    </Button>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {selectedConversa.participantes.map(p => (
@@ -961,6 +1019,27 @@ export default function Chat() {
             <Button variant="outline" onClick={() => setShowNewGroupModal(false)}>Cancelar</Button>
             <Button onClick={handleCreateGroupFromModal} disabled={!newGroupName.trim() || newGroupMembers.length === 0}>
               Criar Grupo ({newGroupMembers.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Adicionar Participante */}
+      <Dialog open={showAddMemberModal} onOpenChange={setShowAddMemberModal}>
+        <DialogContent className="max-w-sm sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Adicionar Participante</DialogTitle>
+          </DialogHeader>
+          <ParticipantPicker
+            allPeople={pessoasLookup}
+            selected={addMemberSelection}
+            onChange={setAddMemberSelection}
+            excludeIds={selectedConversa?.participantes.map(p => p.id) || []}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddMemberModal(false)}>Cancelar</Button>
+            <Button onClick={handleAddMembers} disabled={addMemberSelection.length === 0 || addMembersMutation.isPending}>
+              {addMembersMutation.isPending ? 'Adicionando...' : `Adicionar (${addMemberSelection.length})`}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -51,6 +51,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { ParticipantPicker } from '@/components/ParticipantPicker';
 // Kanban types (previously from kanban-mock — defined locally)
 // Items accept both API naming (texto/concluido) and UI naming (text/completed)
 interface KanbanChecklist { id: number | string; titulo?: string; title?: string; items: any[] }
@@ -78,6 +79,7 @@ export default function Kanban() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCardModal, setShowCardModal] = useState(false);
   const [showNewBoardModal, setShowNewBoardModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -252,6 +254,21 @@ export default function Kanban() {
       queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
       setShowNewBoardModal(false);
       toast({ title: 'Quadro criado com sucesso' });
+    }
+  });
+
+  const updateBoardMembersMutation = useMutation({
+    mutationFn: async ({ id, members }: { id: number, members: number[] }) => {
+      return await api.patch(`/api/kanban/boards/${id}/`, { members });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['kanbanBoards'] });
+      setShowMembersModal(false);
+      toast({ title: 'Participantes atualizados' });
+    },
+    onError: (error: any) => {
+      const msg = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+      toast({ title: 'Erro ao atualizar participantes', description: msg, variant: 'destructive' });
     }
   });
 
@@ -479,7 +496,12 @@ export default function Kanban() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setShowMembersModal(true)}
+            >
               <Users className="h-4 w-4" />
               {selectedBoard.members.length} Participantes
             </Button>
@@ -558,7 +580,25 @@ export default function Kanban() {
         open={showNewBoardModal}
         onClose={() => setShowNewBoardModal(false)}
         onCreate={handleCreateBoard}
+        allPeople={systemUsers}
       />
+
+      {/* Board members modal */}
+      {selectedBoard && (
+        <BoardMembersModal
+          open={showMembersModal}
+          onClose={() => setShowMembersModal(false)}
+          board={selectedBoard}
+          allPeople={systemUsers}
+          onSave={(memberIds) =>
+            updateBoardMembersMutation.mutate({
+              id: selectedBoard.id,
+              members: memberIds.map(Number),
+            })
+          }
+          isSaving={updateBoardMembersMutation.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -1397,34 +1437,16 @@ function NewBoardModal({
   open,
   onClose,
   onCreate,
+  allPeople,
 }: {
   open: boolean;
   onClose: () => void;
   onCreate: (title: string, description: string, members: string[]) => void;
+  allPeople: any[];
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
-
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['systemUsers'],
-    queryFn: async () => {
-      const response = await api.get('/api/chat/contacts/');
-      return response.data.map((u: any) => ({
-        id: String(u.id),
-        nome: `${u.first_name} ${u.last_name}`.trim() || u.username,
-        iniciais: (u.first_name || u.username).slice(0, 2).toUpperCase(),
-        cargo: u.cargo || '',
-        setor: u.setor || '',
-      }));
-    },
-  });
-
-  const toggleMember = (id: string) => {
-    setSelectedMembers((prev) =>
-      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
-    );
-  };
 
   const handleCreate = () => {
     if (!title.trim()) return;
@@ -1467,42 +1489,11 @@ function NewBoardModal({
 
           <div className="space-y-2">
             <Label className="text-sm font-medium">Participantes</Label>
-            <ScrollArea className="h-48 border rounded p-2">
-              <div className="space-y-1">
-                {allUsers
-                  .map((pessoa) => (
-                    <div
-                      key={pessoa.id}
-                      className={cn(
-                        'flex items-center gap-3 p-2 rounded cursor-pointer transition-colors',
-                        selectedMembers.includes(pessoa.id)
-                          ? 'bg-primary/10'
-                          : 'hover:bg-muted'
-                      )}
-                      onClick={() => toggleMember(pessoa.id)}
-                    >
-                      <Checkbox
-                        checked={selectedMembers.includes(pessoa.id)}
-                        onCheckedChange={() => toggleMember(pessoa.id)}
-                      />
-                      <div className="w-6 h-6 rounded bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-                        {pessoa.iniciais}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm truncate block">{pessoa.nome}</span>
-                        <span className="text-xs text-muted-foreground truncate block">
-                          {pessoa.cargo} - {pessoa.setor}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </ScrollArea>
-            {selectedMembers.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {selectedMembers.length} participante(s) selecionado(s)
-              </p>
-            )}
+            <ParticipantPicker
+              allPeople={allPeople}
+              selected={selectedMembers}
+              onChange={setSelectedMembers}
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -1513,6 +1504,58 @@ function NewBoardModal({
               Criar Quadro
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============ BOARD MEMBERS MODAL ============
+function BoardMembersModal({
+  open,
+  onClose,
+  board,
+  allPeople,
+  onSave,
+  isSaving,
+}: {
+  open: boolean;
+  onClose: () => void;
+  board: any;
+  allPeople: any[];
+  onSave: (memberIds: string[]) => void;
+  isSaving: boolean;
+}) {
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedMembers((board.members || []).map(String));
+    }
+  }, [open, board]);
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Participantes do Quadro</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-2 mt-2">
+          <ParticipantPicker
+            allPeople={allPeople}
+            selected={selectedMembers}
+            onChange={setSelectedMembers}
+          />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            Cancelar
+          </Button>
+          <Button onClick={() => onSave(selectedMembers)} disabled={isSaving}>
+            {isSaving ? 'Salvando...' : 'Salvar'}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
