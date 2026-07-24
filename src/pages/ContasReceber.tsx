@@ -198,7 +198,7 @@ const ContasReceber = () => {
     onSuccess: () => {
       invalidateContasReceber();
       setDeleteId(null);
-      toast({ title: "Removida", description: "Conta a receber excluída." });
+      toast({ title: "Removida", description: "Entrada financeira excluída." });
     },
     onError: () => toast({ title: "Erro", description: "Falha ao excluir.", variant: "destructive" }),
   });
@@ -614,7 +614,7 @@ const ContasReceber = () => {
       <Dialog open={!!editItem} onOpenChange={() => { setEditItem(null); setShowReparcelar(false); setEditNfPdf(null); setEditNfXml(null); }}>
         <DialogContent className="max-w-4xl max-h-[88vh] flex flex-col gap-0 p-0">
           <div className="px-6 pt-6 pb-4">
-            <DialogHeader><DialogTitle>Editar Conta a Receber</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Editar Entrada Financeira</DialogTitle></DialogHeader>
           </div>
           <Separator />
           <div className="overflow-y-auto flex-1 px-6 py-4 space-y-4">

@@ -181,7 +181,7 @@ export default function NovaContaReceber() {
       if (nfPdfFile) {
         await anexarNotaFiscal("receber", (conta as any).id, nfPdfFile, nfXmlFile);
       }
-      toast({ title: "Conta a receber salva com sucesso!" });
+      toast({ title: "Entrada financeira salva com sucesso!" });
       navigate("/financeiro/contas-receber");
     } catch {
       toast({ title: "Erro ao salvar", description: "Não foi possível salvar a conta.", variant: "destructive" });
@@ -191,7 +191,7 @@ export default function NovaContaReceber() {
   };
 
   return (
-    <SimpleFormWizard title="Nova Conta a Receber">
+    <SimpleFormWizard title="Nova Entrada Financeira">
       <Card className="border-border shadow-lg">
         <CardContent className="p-6 md:p-8">
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -200,7 +200,7 @@ export default function NovaContaReceber() {
                 <Receipt className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground">Dados da Conta a Receber</h2>
+                <h2 className="text-xl font-semibold text-foreground">Dados da Entrada Financeira</h2>
                 <p className="text-sm text-muted-foreground">Preencha as informações abaixo</p>
               </div>
             </div>

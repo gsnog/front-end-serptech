@@ -187,7 +187,7 @@ export default function NovaContaPagar() {
           return;
         }
       }
-      toast({ title: "Conta a pagar salva com sucesso!" });
+      toast({ title: "Saída financeira salva com sucesso!" });
       navigate("/financeiro/contas-pagar");
     } catch {
       // Compensating delete: if parcela creation fails, remove the orphaned ContaPagar
@@ -201,7 +201,7 @@ export default function NovaContaPagar() {
   };
 
   return (
-    <SimpleFormWizard title="Nova Conta a Pagar">
+    <SimpleFormWizard title="Nova Saída Financeira">
       <Card className="border-border shadow-lg">
         <CardContent className="p-6 md:p-8">
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -210,7 +210,7 @@ export default function NovaContaPagar() {
                 <CreditCard className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-foreground">Dados da Conta a Pagar</h2>
+                <h2 className="text-xl font-semibold text-foreground">Dados da Saída Financeira</h2>
                 <p className="text-sm text-muted-foreground">Preencha as informações abaixo</p>
               </div>
             </div>

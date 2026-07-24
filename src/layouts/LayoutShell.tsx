@@ -85,14 +85,14 @@ const pageTitles: Record<string, { title: string; description?: string }> = {
   "/estoque/ordem-servico/nova": { title: "Ordem de Serviço", description: "Nova Ordem de Serviço" },
   
   // Financeiro - Páginas principais
-  "/financeiro/contas-receber": { title: "Contas a Receber", description: "Gerenciamento de contas a receber" },
-  "/financeiro/contas-pagar": { title: "Contas a Pagar", description: "Gerenciamento de contas a pagar" },
+  "/financeiro/contas-receber": { title: "Entradas Financeiras", description: "Gerenciamento de entradas financeiras" },
+  "/financeiro/contas-pagar": { title: "Saídas Financeiras", description: "Gerenciamento de saídas financeiras" },
   "/financeiro/fluxo-caixa": { title: "Fluxo de Caixa", description: "Controle de fluxo de caixa" },
   "/financeiro/xml": { title: "Notas Fiscais", description: "Gerenciamento de notas fiscais eletrônicas" },
   
   // Financeiro - Subpáginas
-  "/financeiro/contas-receber/nova": { title: "Contas a Receber", description: "Nova Conta a Receber" },
-  "/financeiro/contas-pagar/nova": { title: "Contas a Pagar", description: "Nova Conta a Pagar" },
+  "/financeiro/contas-receber/nova": { title: "Entradas Financeiras", description: "Nova Entrada Financeira" },
+  "/financeiro/contas-pagar/nova": { title: "Saídas Financeiras", description: "Nova Saída Financeira" },
   "/financeiro/fluxo-caixa/relatorio": { title: "Fluxo de Caixa", description: "Relatório de Fluxo de Caixa" },
   
   // Patrimônio (under Estoque)

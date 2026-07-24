@@ -134,7 +134,6 @@ export default function Relatorios() {
 
   const contasReceberDisplay = useMemo(() =>
     (reportData as RelatorioContaItem[]).map(cr => ({
-      codigo: `CR${String(cr.id).padStart(3, '0')}`,
       cliente: cr.cliente_nome || '—',
       vencimento: fmtDate(cr.proxima_data_vencimento),
       parcelas: fmtParcelas(cr.parcelas_pagas, cr.parcelas_total),
@@ -145,7 +144,6 @@ export default function Relatorios() {
 
   const contasPagarDisplay = useMemo(() =>
     (reportData as RelatorioContaItem[]).map(cp => ({
-      codigo: `CP${String(cp.id).padStart(3, '0')}`,
       beneficiario: cp.fornecedor_nome || '—',
       vencimento: fmtDate(cp.proxima_data_vencimento),
       parcelas: fmtParcelas(cp.parcelas_pagas, cp.parcelas_total),
@@ -185,7 +183,7 @@ export default function Relatorios() {
   const reportTotalPages = Math.ceil(getData().length / REPORT_PAGE_SIZE)
 
   const handleExport = (format: 'pdf' | 'csv' | 'excel') => {
-    const label = tipo === "contas-receber" ? "Contas a Receber" : tipo === "contas-pagar" ? "Contas a Pagar" : "Fluxo de Caixa"
+    const label = tipo === "contas-receber" ? "Entradas Financeiras" : tipo === "contas-pagar" ? "Saídas Financeiras" : "Fluxo de Caixa"
     const exportable = getData().map(({ ...item }: any) => {
       delete item._entradaVal; delete item._saidaVal; return item
     })
@@ -214,8 +212,8 @@ export default function Relatorios() {
             {/* Filtros principais */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <SelectFilter label="Tipo:" value={tipo} onChange={(v) => setTipo(v as TipoRelatorio)} options={[
-                { value: "contas-receber", label: "Contas a Receber" },
-                { value: "contas-pagar", label: "Contas a Pagar" },
+                { value: "contas-receber", label: "Entradas Financeiras" },
+                { value: "contas-pagar", label: "Saídas Financeiras" },
                 { value: "fluxo-caixa", label: "Fluxo de Caixa" },
               ]} />
               <SelectFilter label="Data:" value={tipoData} onChange={(v) => setTipoData(v as TipoData)} options={[
@@ -329,7 +327,7 @@ export default function Relatorios() {
             <div className="flex items-center justify-between p-6 border-b border-border">
               <div>
                 <h3 className="text-lg font-bold text-foreground">
-                  Relatório - {tipo === "contas-receber" ? "Contas a Receber" : tipo === "contas-pagar" ? "Contas a Pagar" : "Fluxo de Caixa"}
+                  Relatório - {tipo === "contas-receber" ? "Entradas Financeiras" : tipo === "contas-pagar" ? "Saídas Financeiras" : "Fluxo de Caixa"}
                 </h3>
                 <p className="text-sm text-muted-foreground">
                   {filtroTempo === "anual" ? `Ano ${ano}`
@@ -406,7 +404,6 @@ export default function Relatorios() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
-                      <TableHead className="text-foreground font-semibold">Código</TableHead>
                       <TableHead className="text-foreground font-semibold">Cliente</TableHead>
                       <TableHead className="text-foreground font-semibold">Vencimento</TableHead>
                       <TableHead className="text-center text-foreground font-semibold">Parcelas</TableHead>
@@ -416,9 +413,8 @@ export default function Relatorios() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(getPagedData() as typeof contasReceberDisplay).map((item) => (
-                      <TableRow key={item.codigo}>
-                        <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
+                    {(getPagedData() as typeof contasReceberDisplay).map((item, i) => (
+                      <TableRow key={i}>
                         <TableCell>{item.cliente}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
                         <TableCell className="text-center">{item.parcelas}</TableCell>
@@ -428,7 +424,7 @@ export default function Relatorios() {
                       </TableRow>
                     ))}
                     {contasReceberDisplay.length === 0 && (
-                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -438,7 +434,6 @@ export default function Relatorios() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-[hsl(var(--sidebar-bg))] hover:bg-[hsl(var(--sidebar-bg))]">
-                      <TableHead className="text-foreground font-semibold">Código</TableHead>
                       <TableHead className="text-foreground font-semibold">Beneficiário</TableHead>
                       <TableHead className="text-foreground font-semibold">Vencimento</TableHead>
                       <TableHead className="text-center text-foreground font-semibold">Parcelas</TableHead>
@@ -448,9 +443,8 @@ export default function Relatorios() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(getPagedData() as typeof contasPagarDisplay).map((item) => (
-                      <TableRow key={item.codigo}>
-                        <TableCell className="font-medium text-xs">{item.codigo}</TableCell>
+                    {(getPagedData() as typeof contasPagarDisplay).map((item, i) => (
+                      <TableRow key={i}>
                         <TableCell>{item.beneficiario}</TableCell>
                         <TableCell>{item.vencimento}</TableCell>
                         <TableCell className="text-center">{item.parcelas}</TableCell>
@@ -460,7 +454,7 @@ export default function Relatorios() {
                       </TableRow>
                     ))}
                     {contasPagarDisplay.length === 0 && (
-                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum registro encontrado para o período selecionado.</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>

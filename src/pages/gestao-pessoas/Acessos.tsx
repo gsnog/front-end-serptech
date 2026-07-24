@@ -80,8 +80,8 @@ const modulosSistema: Modulo[] = [
         { id: 'cad_fin_plano_contas',   nome: 'Plano de Contas',      acoes: ['view', 'create', 'edit', 'delete'] },
       ]},
       { label: 'Operacional', module: 'financeiro', features: [
-        { id: 'fin_contas_receber', nome: 'Contas a Receber', acoes: ['view', 'create', 'edit', 'delete', 'export'] },
-        { id: 'fin_contas_pagar',   nome: 'Contas a Pagar',   acoes: ['view', 'create', 'edit', 'delete', 'export'] },
+        { id: 'fin_contas_receber', nome: 'Entradas Financeiras', acoes: ['view', 'create', 'edit', 'delete', 'export'] },
+        { id: 'fin_contas_pagar',   nome: 'Saídas Financeiras',   acoes: ['view', 'create', 'edit', 'delete', 'export'] },
         { id: 'fin_fluxo_caixa',    nome: 'Fluxo de Caixa',   acoes: ['view', 'export'] },
         { id: 'fin_notas_fiscais',  nome: 'Notas Fiscais',     acoes: ['view', 'create', 'edit', 'delete', 'export'] },
       ]},
