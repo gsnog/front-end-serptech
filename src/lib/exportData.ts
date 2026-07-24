@@ -2,13 +2,33 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from '@/hooks/use-toast';
+import logoDlc from '@/assets/logo-dlc.png';
+import logoSerp from '@/assets/logo-serp-light.png';
 
 export type ExportFormat = 'excel' | 'csv' | 'pdf';
+
+async function loadImageAsDataUrl(url: string): Promise<{ dataUrl: string; width: number; height: number }> {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+  return { dataUrl, width, height };
+}
 
 /**
  * Exporta dados para Excel (.xlsx), CSV (.csv) ou PDF
  */
-export function exportData(
+export async function exportData(
   data: Record<string, unknown>[],
   fileName: string,
   format: ExportFormat = 'excel',
@@ -50,20 +70,27 @@ export function exportData(
     const doc = new jsPDF({ orientation: data.length > 0 && Object.keys(data[0]).length > 5 ? 'landscape' : 'portrait' });
     const columns = Object.keys(data[0]);
     const rows = data.map(row => columns.map(col => String(row[col] ?? '')));
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
-    // Brand identity DLC: Azul escuro #1A2D60 e Azul claro #65A3C6
-    const primaryColor: [number, number, number] = [101, 163, 198]; // Azul claro
-    const darkColor: [number, number, number] = [26, 45, 96]; // Azul escuro
+    const [dlcLogo, serpLogo] = await Promise.all([
+      loadImageAsDataUrl(logoDlc),
+      loadImageAsDataUrl(logoSerp),
+    ]);
 
-    // Header bar
-    doc.setFillColor(...darkColor);
-    doc.rect(0, 0, doc.internal.pageSize.getWidth(), 30, 'F');
+    // Layout econômico em tinta: sem tarjas ou preenchimentos coloridos, só os símbolos da marca
+    const dlcLogoH = 16;
+    const dlcLogoW = dlcLogoH * (dlcLogo.width / dlcLogo.height);
+    doc.addImage(dlcLogo.dataUrl, 'PNG', pageWidth - 14 - dlcLogoW, 8, dlcLogoW, dlcLogoH);
+
     doc.setFontSize(16);
-    doc.setTextColor(...primaryColor);
+    doc.setTextColor(0, 0, 0);
     doc.text(fileName, 14, 18);
     doc.setFontSize(9);
-    doc.setTextColor(180, 180, 180);
+    doc.setTextColor(90, 90, 90);
     doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`, 14, 26);
+    doc.setDrawColor(0, 0, 0);
+    doc.line(14, 30, pageWidth - 14, 30);
 
     doc.setTextColor(0, 0, 0);
 
@@ -71,10 +98,19 @@ export function exportData(
       head: [columns],
       body: rows,
       startY: 36,
-      styles: { fontSize: 8, cellPadding: 3, textColor: [30, 30, 30] },
-      headStyles: { fillColor: darkColor, textColor: primaryColor, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [245, 245, 240] },
+      styles: { fontSize: 8, cellPadding: 3, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
+      headStyles: { fillColor: false, textColor: [0, 0, 0], fontStyle: 'bold', lineWidth: 0.1 },
+      alternateRowStyles: { fillColor: false },
     });
+
+    // Símbolo da SerpTech no rodapé de cada página, como no rodapé da aplicação
+    const serpLogoH = 8;
+    const serpLogoW = serpLogoH * (serpLogo.width / serpLogo.height);
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.addImage(serpLogo.dataUrl, 'PNG', (pageWidth - serpLogoW) / 2, pageHeight - serpLogoH - 6, serpLogoW, serpLogoH);
+    }
 
     doc.save(`${fileName}.pdf`);
     toast({

@@ -360,8 +360,8 @@ const DashboardGeral = () => {
           <FadeIn delay={1}>
             <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest mb-3">Financeiro</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <GradientCard title="Total a Receber"     value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.receber || 0)} icon={ArrowUpRight}  variant="success"  helpText="Total de contas a receber em aberto" delay={1} />
-              <GradientCard title="Total a Pagar"       value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.pagar   || 0)} icon={ArrowDownRight} variant="danger"   helpText="Total de contas a pagar em aberto" delay={2} />
+              <GradientCard title="Total a Receber"     value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.receber || 0)} icon={ArrowUpRight}  variant="success"  helpText="Total de entradas financeiras em aberto" delay={1} />
+              <GradientCard title="Total a Pagar"       value={formatCurrency(dash.contasStatusData?.find((s: any) => s.status === 'Em Aberto')?.pagar   || 0)} icon={ArrowDownRight} variant="danger"   helpText="Total de saídas financeiras em aberto" delay={2} />
               <GradientCard title="Entradas"            value={formatCurrency(estatisticasFinanceiras?.entradas ?? 0)}                                                                icon={TrendingUp}  variant="info"   helpText="Total de receitas no período selecionado" delay={3} />
               <GradientCard title="Saídas"              value={formatCurrency(estatisticasFinanceiras?.saidas   ?? 0)}                                                                icon={TrendingDown} variant="warning" helpText="Total de despesas no período selecionado" delay={4} />
               <GradientCard title="Resultado do Período" value={formatCurrency((estatisticasFinanceiras?.entradas ?? 0) - (estatisticasFinanceiras?.saidas ?? 0))}                   icon={TrendingUp}  variant="success" helpText="Entradas menos saídas no período selecionado" delay={5} />
@@ -423,8 +423,8 @@ const DashboardGeral = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <AlertCard title="Contas a Pagar em Aberto" count={contasPagarAbertas} type="danger" delay={5} />
-            <AlertCard title="Contas a Receber em Aberto" count={contasReceberAbertas} type="warning" delay={6} />
+            <AlertCard title="Saídas Financeiras em Aberto" count={contasPagarAbertas} type="danger" delay={5} />
+            <AlertCard title="Entradas Financeiras em Aberto" count={contasReceberAbertas} type="warning" delay={6} />
           </div>
 
           <FadeIn delay={7}>
@@ -716,7 +716,7 @@ const DashboardFinanceiro = () => {
 
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <ChartCard title="Contas a Receber por Status" delay={3}>
+        <ChartCard title="Entradas Financeiras por Status" delay={3}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={contasStatusData}>
               <defs>
@@ -733,7 +733,7 @@ const DashboardFinanceiro = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Contas a Pagar por Status" delay={4}>
+        <ChartCard title="Saídas Financeiras por Status" delay={4}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={contasStatusData}>
               <defs>
@@ -768,7 +768,7 @@ const DashboardFinanceiro = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FadeIn delay={6}>
           <div className="bg-card rounded-2xl shadow-sm shadow-black/[0.04] dark:shadow-black/20 overflow-hidden">
-            <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Contas a Receber</h3></div>
+            <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Entradas Financeiras</h3></div>
             <div className="px-6 pb-6">
               <Table>
                 <TableHeader><TableRow>
@@ -806,7 +806,7 @@ const DashboardFinanceiro = () => {
 
         <FadeIn delay={7}>
           <div className="bg-card rounded-2xl shadow-sm shadow-black/[0.04] dark:shadow-black/20 overflow-hidden">
-            <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Contas a Pagar</h3></div>
+            <div className="p-6 pb-2"><h3 className="text-sm font-semibold">Saídas Financeiras</h3></div>
             <div className="px-6 pb-6">
               <Table>
                 <TableHeader><TableRow>

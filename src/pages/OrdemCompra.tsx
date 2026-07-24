@@ -540,7 +540,7 @@ const OrdemCompraPage = () => {
                 <FileUp className="h-4 w-4" /> XML da NF-e (opcional)
               </Label>
               <p className="text-xs text-muted-foreground">
-                Se informado, o XML será processado automaticamente — fornecedor, itens e contas a pagar serão criados a partir dele. Os campos manuais abaixo serão ignorados.
+                Se informado, o XML será processado automaticamente — fornecedor, itens e saídas financeiras serão criados a partir dele. Os campos manuais abaixo serão ignorados.
               </p>
               <div className="flex items-center gap-3">
                 <Input
